@@ -3,6 +3,7 @@ import type { AccountBase, Transaction as PlaidTransaction, TransactionStream } 
 import { decrypt } from "@/lib/crypto";
 import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
+import { selectTransactionsToNotify, formatTransactionNotification } from "@/lib/plaid-notify-format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -105,65 +106,57 @@ function mapTransactionRow(t: PlaidTransaction, accountIdMap: Map<string, string
   };
 }
 
-function formatCurrency(amount: number, currency: string | null): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency ?? "USD",
-  }).format(amount);
-}
-
 /**
- * Notifies on newly *added*, non-pending transactions only. Pending
- * transactions commonly change amount/merchant before they settle (Plaid
- * either modifies them in place or replaces them with a new settled
- * transaction), so notifying on a pending transaction risks showing the
- * user a number that's about to change — better to notify once, when the
- * transaction is final.
+ * Notifies on every newly *added* transaction, pending or not — a pending
+ * charge is often exactly what someone wants to know about right away —
+ * except settles of an already-notified pending transaction, which are
+ * marked handled but not re-pushed. See selectTransactionsToNotify.
  */
 async function notifyNewTransactions(
   admin: AdminClient,
   itemDbId: string,
-  added: PlaidTransaction[]
+  added: PlaidTransaction[],
+  previouslyNotifiedIds: Set<string>
 ): Promise<number> {
-  const candidates = added.filter((t) => !t.pending);
-  if (candidates.length === 0) return 0;
+  if (added.length === 0) return 0;
 
-  const { data: accountRows } = await admin
-    .from("accounts")
-    .select("plaid_account_id, name, mask")
-    .eq("item_id", itemDbId);
+  const { toPush } = selectTransactionsToNotify(added, previouslyNotifiedIds);
 
-  const accountByPlaidId = new Map((accountRows ?? []).map((a) => [a.plaid_account_id, a]));
+  if (toPush.length > 0) {
+    const { data: accountRows } = await admin
+      .from("accounts")
+      .select("plaid_account_id, name, mask")
+      .eq("item_id", itemDbId);
 
-  if (candidates.length > NOTIFY_BATCH_THRESHOLD) {
-    await sendNotification(
-      `${candidates.length} new transactions`,
-      `Synced ${candidates.length} new transactions across your accounts.`
-    );
-  } else {
-    for (const t of candidates) {
-      const account = accountByPlaidId.get(t.account_id);
-      const accountLabel = account
-        ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}`
-        : "your account";
-      const merchant = t.merchant_name ?? t.name;
-      const isDebit = t.amount >= 0; // Plaid: positive = money out, negative = money in
-      const amountStr = formatCurrency(Math.abs(t.amount), t.iso_currency_code);
+    const accountByPlaidId = new Map((accountRows ?? []).map((a) => [a.plaid_account_id, a]));
 
-      const subtitle = isDebit ? `${amountStr} at ${merchant}` : `+${amountStr} from ${merchant}`;
-      const body = `${isDebit ? "Debit" : "Credit"} on ${accountLabel}`;
-
-      await sendNotification(subtitle, body);
+    if (toPush.length > NOTIFY_BATCH_THRESHOLD) {
+      await sendNotification(
+        `${toPush.length} new transactions`,
+        `Synced ${toPush.length} new transactions across your accounts.`
+      );
+    } else {
+      for (const t of toPush) {
+        const account = accountByPlaidId.get(t.account_id);
+        const accountLabel = account
+          ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}`
+          : "your account";
+        const { subtitle, body } = formatTransactionNotification(t, accountLabel);
+        await sendNotification(subtitle, body);
+      }
     }
   }
 
-  const ids = candidates.map((t) => t.transaction_id);
+  // Every added transaction is "handled" now, whether it was pushed or
+  // deduped as a settle of one already notified — mark all of them so a
+  // future re-sync never reconsiders them.
+  const allIds = added.map((t) => t.transaction_id);
   await admin
     .from("transactions")
     .update({ notified_at: new Date().toISOString() })
-    .in("plaid_transaction_id", ids);
+    .in("plaid_transaction_id", allIds);
 
-  return candidates.length;
+  return toPush.length;
 }
 
 async function applyPlaidSyncError(
@@ -235,6 +228,25 @@ export async function syncItemTransactions(itemDbId: string): Promise<Transactio
 
   const accountIdMap = await getAccountIdMap(admin, itemDbId);
 
+  // Must run before the upsert/delete below: a pending transaction that
+  // settled into a new transaction_id shows up in `removed` this same sync,
+  // so its notified_at has to be read now or it's gone by the time
+  // notifyNewTransactions needs it.
+  const referencedIds = new Set<string>();
+  for (const t of added) {
+    referencedIds.add(t.transaction_id);
+    if (t.pending_transaction_id) referencedIds.add(t.pending_transaction_id);
+  }
+  let previouslyNotifiedIds = new Set<string>();
+  if (referencedIds.size > 0) {
+    const { data: alreadyNotifiedRows } = await admin
+      .from("transactions")
+      .select("plaid_transaction_id")
+      .in("plaid_transaction_id", Array.from(referencedIds))
+      .not("notified_at", "is", null);
+    previouslyNotifiedIds = new Set((alreadyNotifiedRows ?? []).map((r) => r.plaid_transaction_id));
+  }
+
   const upsertRows = [...added, ...modified]
     .map((t) => mapTransactionRow(t, accountIdMap))
     .filter((r): r is NonNullable<typeof r> => r !== null);
@@ -289,7 +301,7 @@ export async function syncItemTransactions(itemDbId: string): Promise<Transactio
     })
     .eq("id", itemDbId);
 
-  const notified = await notifyNewTransactions(admin, itemDbId, added);
+  const notified = await notifyNewTransactions(admin, itemDbId, added, previouslyNotifiedIds);
 
   const recurringResult = await syncItemRecurring(itemDbId, accessToken);
   if (!recurringResult.ok) {
