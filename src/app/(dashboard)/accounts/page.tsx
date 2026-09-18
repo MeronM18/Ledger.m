@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { SyncNowButton } from "@/components/sync-now-button";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AccountRow = {
@@ -19,6 +20,8 @@ type ItemRow = {
   id: string;
   institution_name: string | null;
   status: string;
+  error_code: string | null;
+  last_synced_at: string | null;
   accounts: AccountRow[];
 };
 
@@ -30,12 +33,18 @@ function formatBalance(amount: number | null, currency: string | null) {
   }).format(amount);
 }
 
+function statusBadgeVariant(status: string): "default" | "destructive" | "secondary" {
+  if (status === "active") return "default";
+  if (status === "requires_reauth" || status === "error") return "destructive";
+  return "secondary";
+}
+
 export default async function AccountsPage() {
   const admin = createAdminClient();
   const { data: items, error } = await admin
     .from("items")
     .select(
-      "id, institution_name, status, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, iso_currency_code)"
+      "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, iso_currency_code)"
     )
     .order("created_at", { ascending: false });
 
@@ -62,10 +71,19 @@ export default async function AccountsPage() {
         {rows.map((item) => (
           <Card key={item.id}>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>{item.institution_name ?? "Unknown institution"}</CardTitle>
-              <Badge variant={item.status === "active" ? "default" : "destructive"}>
-                {item.status}
-              </Badge>
+              <div className="flex flex-col gap-1">
+                <CardTitle>{item.institution_name ?? "Unknown institution"}</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  {item.last_synced_at
+                    ? `Last synced ${new Date(item.last_synced_at).toLocaleString()}`
+                    : "Never synced"}
+                  {item.error_code ? ` · ${item.error_code}` : ""}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={statusBadgeVariant(item.status)}>{item.status}</Badge>
+                <SyncNowButton itemId={item.id} />
+              </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {item.accounts.map((account) => (
