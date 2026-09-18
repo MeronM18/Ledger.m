@@ -26,7 +26,7 @@ export function Sidebar() {
 
   return (
     <aside className="w-56 shrink-0 border-r bg-muted/30 p-4">
-      <div className="mb-6 px-2 text-lg font-semibold">Ledger</div>
+      <div className="mb-6 px-2 text-lg font-semibold">Ledger.m</div>
       <nav className="flex flex-col gap-1">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
           const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);

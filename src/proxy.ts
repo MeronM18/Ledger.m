@@ -40,6 +40,11 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// Excludes /api/* entirely: every route under it does its own auth
+// (requireApiUser(), a CRON_SECRET bearer check, or — for the Plaid webhook —
+// signature verification) and none of them have a browser session to redirect.
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

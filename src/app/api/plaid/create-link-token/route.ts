@@ -9,7 +9,7 @@ export async function POST() {
 
   try {
     const response = await plaidClient.linkTokenCreate({
-      client_name: "Ledger",
+      client_name: "Ledger.m",
       language: "en",
       country_codes: PLAID_COUNTRY_CODES,
       products: PLAID_PRODUCTS,

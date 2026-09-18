@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await sendNotification("Ledger test", "This is a test notification from Ledger.");
+    await sendNotification("Test notification", "This is a test notification from Ledger.m.");
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("Failed to send test notification", err);

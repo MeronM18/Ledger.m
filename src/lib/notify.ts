@@ -1,16 +1,25 @@
 import "server-only";
 import { env } from "@/lib/env";
 
-export async function sendNotification(title: string, body: string): Promise<void> {
-  const url = `${env.NTFY_SERVER.replace(/\/$/, "")}/${env.NTFY_TOPIC}`;
+const APP_NAME = "Ledger.m";
 
-  const response = await fetch(url, {
+/**
+ * `subtitle` is the part after the app name, e.g. sendNotification("$14.99 at
+ * Netflix", ...) produces the ntfy title "Ledger.m · $14.99 at Netflix".
+ *
+ * Uses ntfy's JSON publish format (rather than the Title/X-Title header)
+ * since header values aren't reliably UTF-8-safe across clients, and the
+ * title includes a non-ASCII middle dot.
+ */
+export async function sendNotification(subtitle: string, body: string): Promise<void> {
+  const response = await fetch(env.NTFY_SERVER, {
     method: "POST",
-    headers: {
-      Title: title,
-      "Content-Type": "text/plain; charset=utf-8",
-    },
-    body,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      topic: env.NTFY_TOPIC,
+      title: `${APP_NAME} · ${subtitle}`,
+      message: body,
+    }),
   });
 
   if (!response.ok) {
