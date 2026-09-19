@@ -3,18 +3,15 @@
 import { useMemo, useState } from "react";
 import { Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { humanizeCategory } from "@/lib/plaid-categories";
+import {
+  accountLabel,
+  FilterBar,
+  type AccountOption,
+  type DateRangeKey,
+} from "@/components/filter-bar";
 
 export type TransactionRow = {
   id: string;
@@ -29,19 +26,6 @@ export type TransactionRow = {
   account: { id: string; name: string; mask: string | null } | null;
 };
 
-type AccountOption = { id: string; name: string; mask: string | null };
-
-const DATE_RANGES = [
-  { key: "30", label: "Last 30 days" },
-  { key: "90", label: "Last 90 days" },
-  { key: "all", label: "All" },
-] as const;
-
-function accountLabel(account: AccountOption | null): string {
-  if (!account) return "Unknown account";
-  return account.mask ? `${account.name} ••${account.mask}` : account.name;
-}
-
 export function TransactionsExplorer({
   transactions,
   accounts,
@@ -52,12 +36,14 @@ export function TransactionsExplorer({
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<(typeof DATE_RANGES)[number]["key"]>("all");
+  const [dateRange, setDateRange] = useState<DateRangeKey>("all");
 
   const categories = useMemo(() => {
     const present = new Set<string>();
     for (const t of transactions) present.add(t.pfc_primary ?? "(uncategorized)");
-    return Array.from(present).sort();
+    return Array.from(present)
+      .sort()
+      .map((c) => ({ value: c, label: c === "(uncategorized)" ? "Uncategorized" : humanizeCategory(c) }));
   }, [transactions]);
 
   // NOTE: filtering/searching happens entirely client-side, which is fine at
@@ -89,55 +75,18 @@ export function TransactionsExplorer({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="Search merchant or description..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
-
-        <Select value={accountFilter} onValueChange={setAccountFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Account" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All accounts</SelectItem>
-            {accounts.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {accountLabel(a)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Category" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All categories</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c === "(uncategorized)" ? "Uncategorized" : humanizeCategory(c)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex gap-1">
-          {DATE_RANGES.map((r) => (
-            <Button
-              key={r.key}
-              size="sm"
-              variant={dateRange === r.key ? "secondary" : "ghost"}
-              onClick={() => setDateRange(r.key)}
-            >
-              {r.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        accounts={accounts}
+        accountValue={accountFilter}
+        onAccountChange={setAccountFilter}
+        categories={categories}
+        categoryValue={categoryFilter}
+        onCategoryChange={setCategoryFilter}
+        dateRangeValue={dateRange}
+        onDateRangeChange={setDateRange}
+      />
 
       {filtered.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
