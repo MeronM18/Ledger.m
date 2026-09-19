@@ -75,6 +75,44 @@ export default async function SpendingPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Refunds</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {refunds.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No refunds recorded.</p>
+          ) : (
+            <div className="flex flex-col">
+              {refunds.map((r, i) => (
+                <div
+                  key={`${r.date}-${r.merchant}-${i}`}
+                  className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{r.merchant}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(`${r.date}T00:00:00`).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                      })}{" "}
+                      · {r.categoryLabel}
+                    </p>
+                  </div>
+                  <Money
+                    amount={r.amount}
+                    currency={currency}
+                    tone="positive"
+                    showSign
+                    className="text-sm font-medium"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
