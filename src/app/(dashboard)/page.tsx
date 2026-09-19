@@ -6,6 +6,7 @@ import { Money } from "@/components/money";
 import { computeNetWorth } from "@/lib/net-worth";
 import { categoryTotalsForMonth, filterSpendingTransactions } from "@/lib/spending-aggregation";
 import { summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
+import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type RecentTransaction = {
@@ -152,7 +153,7 @@ export default async function OverviewPage() {
             <div className="flex flex-col">
               {recent.map((t) => {
                 const isDebit = t.amount >= 0; // Plaid: positive = money out
-                const merchant = t.merchant_name ?? t.name ?? "Unknown";
+                const merchant = humanizeTransactionName(t);
 
                 return (
                   <div

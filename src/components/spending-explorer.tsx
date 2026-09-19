@@ -13,6 +13,7 @@ import {
   topMerchants,
   type SpendingTransaction,
 } from "@/lib/spending-aggregation";
+import { effectiveCategory } from "@/lib/transaction-display";
 
 export type SpendingRow = SpendingTransaction & {
   account: { id: string; name: string; mask: string | null } | null;
@@ -35,7 +36,7 @@ export function SpendingExplorer({
 
   const categories = useMemo(() => {
     const present = new Set<string>();
-    for (const t of transactions) present.add(t.pfc_primary ?? "OTHER");
+    for (const t of transactions) present.add(effectiveCategory(t) ?? "OTHER");
     return Array.from(present)
       .sort()
       .map((c) => ({ value: c, label: humanizeCategory(c === "OTHER" ? null : c) }));
@@ -44,7 +45,7 @@ export function SpendingExplorer({
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
       if (accountFilter !== "all" && t.account?.id !== accountFilter) return false;
-      if (categoryFilter !== "all" && (t.pfc_primary ?? "OTHER") !== categoryFilter) return false;
+      if (categoryFilter !== "all" && (effectiveCategory(t) ?? "OTHER") !== categoryFilter) return false;
       return true;
     });
   }, [transactions, accountFilter, categoryFilter]);

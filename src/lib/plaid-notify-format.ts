@@ -1,4 +1,5 @@
 import type { Transaction as PlaidTransaction } from "plaid";
+import { humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure logic only — no server-only, no DB/network access — so this module
 // can be unit tested directly (e.g. with `node --experimental-strip-types`)
@@ -52,7 +53,7 @@ export function formatTransactionNotification(
   t: PlaidTransaction,
   accountLabel: string
 ): { subtitle: string; body: string } {
-  const merchant = t.merchant_name ?? t.name;
+  const merchant = humanizeTransactionName(t);
   const isDebit = t.amount >= 0; // Plaid: positive = money out, negative = money in
   const amountStr = formatCurrency(Math.abs(t.amount), t.iso_currency_code);
 

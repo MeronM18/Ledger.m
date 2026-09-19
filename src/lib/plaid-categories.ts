@@ -5,12 +5,17 @@
 // (moving money between your own accounts), and LOAN_PAYMENTS (debt
 // principal/interest — a real obligation, but not discretionary/necessary
 // consumption spending, and lumping it in would dwarf every other category).
+// TRANSFER isn't a real Plaid value — it's the synthetic category
+// transaction-display.ts's overrideCategory() produces for a detected P2P
+// transfer that Plaid mis-tagged (e.g. a PayPal transfer landing in
+// LOAN_DISBURSEMENTS), so it needs the same exclusion.
 const NON_SPENDING_PFC_PRIMARY = new Set([
   "INCOME",
   "LOAN_DISBURSEMENTS",
   "LOAN_PAYMENTS",
   "TRANSFER_IN",
   "TRANSFER_OUT",
+  "TRANSFER",
 ]);
 
 export function isSpendingCategory(pfcPrimary: string | null): boolean {

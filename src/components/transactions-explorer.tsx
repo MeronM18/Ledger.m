@@ -5,13 +5,14 @@ import { Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { humanizeCategory } from "@/lib/plaid-categories";
 import {
   accountLabel,
   FilterBar,
   type AccountOption,
   type DateRangeKey,
 } from "@/components/filter-bar";
+import { humanizeCategory } from "@/lib/plaid-categories";
+import { effectiveCategory, humanizeTransaction } from "@/lib/transaction-display";
 
 export type TransactionRow = {
   id: string;
@@ -40,7 +41,7 @@ export function TransactionsExplorer({
 
   const categories = useMemo(() => {
     const present = new Set<string>();
-    for (const t of transactions) present.add(t.pfc_primary ?? "(uncategorized)");
+    for (const t of transactions) present.add(effectiveCategory(t) ?? "(uncategorized)");
     return Array.from(present)
       .sort()
       .map((c) => ({ value: c, label: c === "(uncategorized)" ? "Uncategorized" : humanizeCategory(c) }));
@@ -61,12 +62,12 @@ export function TransactionsExplorer({
 
     return transactions.filter((t) => {
       if (accountFilter !== "all" && t.account?.id !== accountFilter) return false;
-      if (categoryFilter !== "all" && (t.pfc_primary ?? "(uncategorized)") !== categoryFilter) {
+      if (categoryFilter !== "all" && (effectiveCategory(t) ?? "(uncategorized)") !== categoryFilter) {
         return false;
       }
       if (cutoff && new Date(t.date) < cutoff) return false;
       if (q) {
-        const haystack = `${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
+        const haystack = `${humanizeTransaction(t).displayName} ${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
@@ -106,7 +107,7 @@ export function TransactionsExplorer({
           <TableBody>
             {filtered.map((t) => {
               const isDebit = t.amount >= 0; // Plaid: positive = money out
-              const merchant = t.merchant_name ?? t.name ?? "Unknown";
+              const { displayName, displayCategoryLabel } = humanizeTransaction(t);
 
               return (
                 <TableRow key={t.id}>
@@ -132,7 +133,7 @@ export function TransactionsExplorer({
                         </span>
                       )}
                       <span className="flex items-center gap-2">
-                        {merchant}
+                        {displayName}
                         {t.pending && (
                           <Badge variant="secondary" className="text-[10px]">
                             Pending
@@ -145,7 +146,7 @@ export function TransactionsExplorer({
                     {accountLabel(t.account)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {humanizeCategory(t.pfc_primary)}
+                    {displayCategoryLabel}
                   </TableCell>
                   <TableCell className="text-right">
                     <Money

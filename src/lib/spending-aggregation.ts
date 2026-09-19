@@ -1,4 +1,5 @@
 import { categoryColorSlot, humanizeCategory, isSpendingCategory } from "@/lib/plaid-categories";
+import { effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure aggregation logic, no DB/network — kept separate from the page so the
 // math can be exercised directly (e.g. with a quick script against real
@@ -26,11 +27,18 @@ export type RefundEntry = {
 
 const OTHER_SLOT = 8;
 
-/** Excludes pending transactions and non-spending categories (transfers, income, loan payments). */
+/**
+ * Excludes pending transactions and non-spending categories (transfers,
+ * income, loan payments) — using each transaction's *effective* category
+ * (transaction-display.ts's override layer, e.g. a PayPal transfer Plaid
+ * mis-tagged as LOAN_DISBURSEMENTS still needs to be excluded correctly),
+ * not just the raw pfc_primary, so this stays consistent with what the
+ * display layer shows.
+ */
 export function filterSpendingTransactions(
   transactions: SpendingTransaction[]
 ): SpendingTransaction[] {
-  return transactions.filter((t) => !t.pending && isSpendingCategory(t.pfc_primary));
+  return transactions.filter((t) => !t.pending && isSpendingCategory(effectiveCategory(t)));
 }
 
 /**
@@ -57,7 +65,7 @@ export function categoryTotalsForMonth(
   for (const t of transactions) {
     const d = new Date(`${t.date}T00:00:00`);
     if (d.getFullYear() !== year || d.getMonth() !== month) continue;
-    const key = t.pfc_primary ?? "OTHER";
+    const key = effectiveCategory(t) ?? "OTHER";
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }
 
@@ -98,7 +106,7 @@ export function topMerchants(transactions: SpendingTransaction[], limit = 10): M
   const totals = new Map<string, { amount: number; count: number }>();
 
   for (const t of transactions) {
-    const key = t.merchant_name ?? t.name ?? "Unknown";
+    const key = humanizeTransactionName(t);
     const entry = totals.get(key) ?? { amount: 0, count: 0 };
     entry.amount += t.amount;
     entry.count += 1;
@@ -126,9 +134,9 @@ export function refundTransactions(transactions: SpendingTransaction[]): RefundE
     .filter((t) => t.amount < 0)
     .map((t) => ({
       date: t.date,
-      merchant: t.merchant_name ?? t.name ?? "Unknown",
-      category: t.pfc_primary ?? "OTHER",
-      categoryLabel: humanizeCategory(t.pfc_primary),
+      merchant: humanizeTransactionName(t),
+      category: effectiveCategory(t) ?? "OTHER",
+      categoryLabel: humanizeCategory(effectiveCategory(t)),
       amount: Math.abs(t.amount),
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
