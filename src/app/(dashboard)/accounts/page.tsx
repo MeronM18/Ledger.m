@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/money";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
+import { SyncAllButton } from "@/components/sync-all-button";
 import { SyncNowButton } from "@/components/sync-now-button";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -53,7 +54,10 @@ export default async function AccountsPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h1 className="font-serif text-2xl font-semibold text-bone">Accounts</h1>
-        <PlaidLinkButton />
+        <div className="flex items-center gap-2">
+          <SyncAllButton items={rows.map((item) => ({ id: item.id, institution_name: item.institution_name }))} />
+          <PlaidLinkButton />
+        </div>
       </div>
 
       {rows.length === 0 && (
