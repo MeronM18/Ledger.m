@@ -1,7 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ManualAssetsManager, type ManualAsset } from "@/components/manual-assets-manager";
+import {
+  PreciousMetalsManager,
+  type MetalPriceRow,
+  type PreciousMetalHolding,
+} from "@/components/precious-metals-manager";
 import { Money } from "@/components/money";
 import { computeNetWorth, isLiabilityAccount } from "@/lib/net-worth";
+import { holdingValue } from "@/lib/precious-metals";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AccountRow = {
@@ -17,28 +23,51 @@ type AccountRow = {
 export default async function AssetsPage() {
   const admin = createAdminClient();
 
-  const [{ data: accountsData, error: acctError }, { data: manualData, error: manualError }] =
-    await Promise.all([
-      admin
-        .from("accounts")
-        .select("id, name, mask, type, subtype, current_balance, iso_currency_code")
-        .order("name"),
-      admin
-        .from("manual_assets")
-        .select("id, name, category, value, is_liability, notes")
-        .order("created_at", { ascending: false }),
-    ]);
+  const [
+    { data: accountsData, error: acctError },
+    { data: manualData, error: manualError },
+    { data: holdingsData, error: holdingsError },
+    { data: pricesData, error: pricesError },
+  ] = await Promise.all([
+    admin
+      .from("accounts")
+      .select("id, name, mask, type, subtype, current_balance, iso_currency_code")
+      .order("name"),
+    admin
+      .from("manual_assets")
+      .select("id, name, category, value, is_liability, notes")
+      .order("created_at", { ascending: false }),
+    admin
+      .from("precious_metal_holdings")
+      .select("id, metal, weight, weight_unit, purity, notes")
+      .order("created_at", { ascending: false }),
+    admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
+  ]);
 
   if (acctError) console.error("Failed to load accounts", acctError);
   if (manualError) console.error("Failed to load manual assets", manualError);
+  if (holdingsError) console.error("Failed to load precious metal holdings", holdingsError);
+  if (pricesError) console.error("Failed to load metal prices", pricesError);
 
   const accounts = (accountsData ?? []) as AccountRow[];
   const manualAssets = (manualData ?? []) as ManualAsset[];
+  const holdings = (holdingsData ?? []) as PreciousMetalHolding[];
+  const prices = (pricesData ?? []) as MetalPriceRow[];
 
   const plaidAssetAccounts = accounts.filter((a) => !isLiabilityAccount(a.type));
   const plaidLiabilityAccounts = accounts.filter((a) => isLiabilityAccount(a.type));
 
-  const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(accounts, manualAssets);
+  const priceByMetal = new Map(prices.map((p) => [p.metal, p.price_per_troy_oz_usd]));
+  const preciousMetalsValue = holdings.reduce((sum, h) => {
+    const value = holdingValue(h.weight, h.weight_unit, h.purity, priceByMetal.get(h.metal) ?? null);
+    return sum + (value ?? 0);
+  }, 0);
+
+  const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(
+    accounts,
+    manualAssets,
+    preciousMetalsValue
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -161,6 +190,12 @@ export default async function AssetsPage() {
       <Card>
         <CardContent className="pt-6">
           <ManualAssetsManager assets={manualAssets} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <PreciousMetalsManager holdings={holdings} prices={prices} />
         </CardContent>
       </Card>
     </div>

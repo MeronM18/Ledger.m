@@ -24,7 +24,13 @@ export function isLiabilityAccount(type: string): boolean {
 
 export function computeNetWorth(
   accounts: NetWorthAccount[],
-  manualAssets: NetWorthManualAsset[]
+  manualAssets: NetWorthManualAsset[],
+  // Pre-computed sum of precious-metal holding values (see
+  // precious-metals.ts's holdingValue) — passed in rather than computed
+  // here, since that needs unit/purity conversion and a live price this
+  // module has no business knowing about. Always an asset, never a
+  // liability, like everything else in this parameter.
+  preciousMetalsValue = 0
 ): { totalAssets: number; totalLiabilities: number; netWorth: number } {
   const totalPlaidAssets = accounts
     .filter((a) => !isLiabilityAccount(a.type))
@@ -40,7 +46,7 @@ export function computeNetWorth(
     .filter((a) => a.is_liability)
     .reduce((sum, a) => sum + a.value, 0);
 
-  const totalAssets = totalPlaidAssets + totalManualAssets;
+  const totalAssets = totalPlaidAssets + totalManualAssets + preciousMetalsValue;
   const totalLiabilities = totalPlaidLiabilities + totalManualLiabilities;
 
   return { totalAssets, totalLiabilities, netWorth: totalAssets - totalLiabilities };
