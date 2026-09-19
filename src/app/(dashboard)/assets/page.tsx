@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ManualAssetsManager, type ManualAsset } from "@/components/manual-assets-manager";
 import { Money } from "@/components/money";
+import { computeNetWorth, isLiabilityAccount } from "@/lib/net-worth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AccountRow = {
@@ -12,17 +13,6 @@ type AccountRow = {
   current_balance: number | null;
   iso_currency_code: string | null;
 };
-
-// Plaid AccountType: investment, credit, depository, loan, brokerage, other.
-// credit/loan balances are amounts owed (liabilities); everything else is a
-// balance you hold (an asset). "other" defaults to asset — there's no
-// general rule for it, and most real "other" accounts (e.g. prepaid) behave
-// like an asset.
-const LIABILITY_TYPES = new Set(["credit", "loan"]);
-
-function isLiabilityAccount(type: string): boolean {
-  return LIABILITY_TYPES.has(type);
-}
 
 export default async function AssetsPage() {
   const admin = createAdminClient();
@@ -48,22 +38,7 @@ export default async function AssetsPage() {
   const plaidAssetAccounts = accounts.filter((a) => !isLiabilityAccount(a.type));
   const plaidLiabilityAccounts = accounts.filter((a) => isLiabilityAccount(a.type));
 
-  const totalPlaidAssets = plaidAssetAccounts.reduce((sum, a) => sum + (a.current_balance ?? 0), 0);
-  const totalPlaidLiabilities = plaidLiabilityAccounts.reduce(
-    (sum, a) => sum + (a.current_balance ?? 0),
-    0
-  );
-
-  const totalManualAssets = manualAssets
-    .filter((a) => !a.is_liability)
-    .reduce((sum, a) => sum + a.value, 0);
-  const totalManualLiabilities = manualAssets
-    .filter((a) => a.is_liability)
-    .reduce((sum, a) => sum + a.value, 0);
-
-  const totalAssets = totalPlaidAssets + totalManualAssets;
-  const totalLiabilities = totalPlaidLiabilities + totalManualLiabilities;
-  const netWorth = totalAssets - totalLiabilities;
+  const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(accounts, manualAssets);
 
   return (
     <div className="flex flex-col gap-6">
@@ -91,7 +66,7 @@ export default async function AssetsPage() {
           </CardContent>
         </Card>
         {/* The one large hero number in the app: Bodoni Moda instead of
-            mono, still sage/brick by sign. */}
+            mono, still moss/oxblood by sign. */}
         <Card className="border-champagne/40">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Net worth</CardTitle>
@@ -99,7 +74,7 @@ export default async function AssetsPage() {
           <CardContent>
             <span
               className={`font-serif text-3xl font-semibold tabular-nums ${
-                netWorth < 0 ? "text-brick" : "text-sage"
+                netWorth < 0 ? "text-oxblood" : "text-moss"
               }`}
             >
               {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
