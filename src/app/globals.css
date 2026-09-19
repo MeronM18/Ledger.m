@@ -57,7 +57,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   /* Brand palette as first-class Tailwind utilities (bg-onyx, text-champagne,
-     border-slate-ash, text-sage, text-brick, etc). */
+     border-slate-ash, text-moss, text-oxblood, etc). */
   --color-onyx: var(--onyx);
   --color-smoke: var(--smoke);
   --color-charcoal: var(--charcoal);
@@ -67,8 +67,8 @@
   --color-umbra: var(--umbra);
   --color-champagne: var(--champagne);
   --color-champagne-shadow: var(--champagne-shadow);
-  --color-sage: var(--muted-sage);
-  --color-brick: var(--muted-brick);
+  --color-moss: var(--moss);
+  --color-oxblood: var(--oxblood);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -91,8 +91,8 @@
   --umbra: #5c5852;
   --champagne: #c9bfa8;
   --champagne-shadow: #a69c82;
-  --muted-sage: #7a9b7e;
-  --muted-brick: #a85d5d;
+  --moss: #8c9b7a;
+  --oxblood: #9b5548;
 
   /* Semantic tokens, mapped to the brand palette */
   --background: var(--onyx);
@@ -109,7 +109,7 @@
   --muted-foreground: var(--ash-grey);
   --accent: var(--charcoal);
   --accent-foreground: var(--bone);
-  --destructive: var(--muted-brick);
+  --destructive: var(--oxblood);
   --destructive-foreground: var(--bone);
   --border: var(--slate-ash);
   --input: var(--slate-ash);

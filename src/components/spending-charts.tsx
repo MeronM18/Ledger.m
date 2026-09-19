@@ -23,7 +23,7 @@ import type { CategoryTotal, MonthTotal } from "@/lib/spending-aggregation";
 // (--viz-1..8) — see the dataviz skill's references/palette.md. Slot
 // assignment is fixed per category (src/lib/plaid-categories.ts), never
 // reassigned by rank, so a category is always the same color. Independent
-// of the site's champagne/sage/brick chrome theme — this palette encodes
+// of the site's champagne/moss/oxblood chrome theme — this palette encodes
 // category identity, not a money-in/money-out signal.
 const vizColor = (slot: number) => `var(--viz-${slot})`;
 
@@ -133,9 +133,9 @@ export function SpendingCharts({
                   labelStyle={tooltipLabelStyle}
                   itemStyle={tooltipItemStyle}
                 />
-                {/* Always a spend total (never inflow), so this uses brick
+                {/* Always a spend total (never inflow), so this uses oxblood
                     rather than the categorical --viz palette above. */}
-                <Bar dataKey="amount" fill="var(--muted-brick)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Bar dataKey="amount" fill="var(--oxblood)" radius={[4, 4, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
           )}

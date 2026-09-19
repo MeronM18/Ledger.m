@@ -34,14 +34,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
-          // Sage/brick, not sonner's default green/red — same money-signal
+          // Moss/oxblood, not sonner's default green/red — same money-signal
           // colors carry "this worked" / "this failed" too.
           "--success-bg": "var(--popover)",
-          "--success-border": "var(--muted-sage)",
-          "--success-text": "var(--muted-sage)",
+          "--success-border": "var(--moss)",
+          "--success-text": "var(--moss)",
           "--error-bg": "var(--popover)",
-          "--error-border": "var(--muted-brick)",
-          "--error-text": "var(--muted-brick)",
+          "--error-border": "var(--oxblood)",
+          "--error-text": "var(--oxblood)",
         } as React.CSSProperties
       }
       toastOptions={{
