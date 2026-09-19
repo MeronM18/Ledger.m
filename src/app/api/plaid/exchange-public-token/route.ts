@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
 import { encrypt } from "@/lib/crypto";
 import { plaidClient } from "@/lib/plaid";
+import { syncItemTransactions } from "@/lib/plaid-sync";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const bodySchema = z.object({
@@ -38,7 +39,6 @@ export async function POST(request: Request) {
           institution_id,
           institution_name,
           status: "active",
-          last_synced_at: new Date().toISOString(),
         },
         { onConflict: "plaid_item_id" }
       )
@@ -71,6 +71,15 @@ export async function POST(request: Request) {
 
     if (accountsError) {
       throw accountsError;
+    }
+
+    // Pull the initial transaction/recurring history right away instead of
+    // waiting for the next cron tick (once daily) — otherwise a newly linked
+    // item sits with accounts but zero transactions until then, even though
+    // `last_synced_at` above makes it look already synced.
+    const syncResult = await syncItemTransactions(item.id);
+    if (!syncResult.ok) {
+      console.error(`Initial sync failed for newly linked item ${item.id}: ${syncResult.error}`);
     }
 
     return NextResponse.json({ ok: true, accounts_linked: accountRows.length });
