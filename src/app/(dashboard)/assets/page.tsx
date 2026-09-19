@@ -7,7 +7,7 @@ import {
 } from "@/components/precious-metals-manager";
 import { Money } from "@/components/money";
 import { computeNetWorth, isLiabilityAccount } from "@/lib/net-worth";
-import { holdingValue } from "@/lib/precious-metals";
+import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AccountRow = {
@@ -57,11 +57,7 @@ export default async function AssetsPage() {
   const plaidAssetAccounts = accounts.filter((a) => !isLiabilityAccount(a.type));
   const plaidLiabilityAccounts = accounts.filter((a) => isLiabilityAccount(a.type));
 
-  const priceByMetal = new Map(prices.map((p) => [p.metal, p.price_per_troy_oz_usd]));
-  const preciousMetalsValue = holdings.reduce((sum, h) => {
-    const value = holdingValue(h.weight, h.weight_unit, h.purity, priceByMetal.get(h.metal) ?? null);
-    return sum + (value ?? 0);
-  }, 0);
+  const preciousMetalsValue = totalPreciousMetalsValue(holdings, prices);
 
   const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(
     accounts,

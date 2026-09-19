@@ -25,6 +25,39 @@ export function holdingValue(
   return toTroyOunces(weight, unit) * purity * pricePerTroyOz;
 }
 
+export type Metal = "gold" | "silver";
+
+export type HoldingLike = {
+  metal: Metal;
+  weight: number;
+  weight_unit: WeightUnit;
+  purity: number;
+};
+
+export type MetalPriceLike = {
+  metal: Metal;
+  price_per_troy_oz_usd: number;
+};
+
+/**
+ * Sums holdingValue() across every holding, feeding computeNetWorth()'s
+ * preciousMetalsValue parameter. Pulled out as its own function rather than
+ * left as an inline reduce in each page, specifically because that's what
+ * drifted before: /assets computed this sum and passed it to
+ * computeNetWorth(), /overview never computed it at all and silently
+ * defaulted to 0. One function, called from both places, closes that gap
+ * for good — a future caller can't "forget" the reduce logic, only forget
+ * to call the function (which is a much smaller, more obvious mistake to
+ * catch).
+ */
+export function totalPreciousMetalsValue(holdings: HoldingLike[], prices: MetalPriceLike[]): number {
+  const priceByMetal = new Map(prices.map((p) => [p.metal, p.price_per_troy_oz_usd]));
+  return holdings.reduce((sum, h) => {
+    const value = holdingValue(h.weight, h.weight_unit, h.purity, priceByMetal.get(h.metal) ?? null);
+    return sum + (value ?? 0);
+  }, 0);
+}
+
 // A cached price older than this is shown with a visible "as of [date]"
 // staleness indicator rather than silently presented as current — the feed
 // not updating (rate limited, endpoint shape change, etc.) should be

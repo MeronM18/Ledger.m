@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/money";
 import { computeNetWorth } from "@/lib/net-worth";
+import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { categoryTotalsForMonth, filterSpendingTransactions } from "@/lib/spending-aggregation";
 import { summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
@@ -37,6 +38,8 @@ export default async function OverviewPage() {
   const [
     { data: accountsData, error: acctError },
     { data: manualData, error: manualError },
+    { data: holdingsData, error: holdingsError },
+    { data: pricesData, error: pricesError },
     { data: txData, error: txError },
     { data: streamsData, error: streamsError },
     { data: manualSubsData, error: manualSubsError },
@@ -44,6 +47,8 @@ export default async function OverviewPage() {
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance"),
     admin.from("manual_assets").select("value, is_liability"),
+    admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
+    admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),
     admin
       .from("transactions")
       .select("date, amount, pfc_primary, merchant_name, name, pending, iso_currency_code"),
@@ -61,12 +66,15 @@ export default async function OverviewPage() {
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
   if (manualError) console.error("Failed to load manual assets for overview", manualError);
+  if (holdingsError) console.error("Failed to load precious metal holdings for overview", holdingsError);
+  if (pricesError) console.error("Failed to load metal prices for overview", pricesError);
   if (txError) console.error("Failed to load transactions for overview", txError);
   if (streamsError) console.error("Failed to load recurring streams for overview", streamsError);
   if (manualSubsError) console.error("Failed to load manual subscriptions for overview", manualSubsError);
   if (recentError) console.error("Failed to load recent transactions for overview", recentError);
 
-  const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? []);
+  const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
+  const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
 
   const allTransactions = txData ?? [];
   const currency = allTransactions[0]?.iso_currency_code ?? "USD";
