@@ -3,7 +3,13 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { CancelSubscriptionSwitch } from "@/components/cancel-subscription-switch";
+import {
+  AddManualSubscriptionButton,
+  ManualSubscriptionRowActions,
+  type ManualSubscription,
+} from "@/components/manual-subscription-form";
 import { Money } from "@/components/money";
 import { FilterBar, type AccountOption } from "@/components/filter-bar";
 import { humanizeFrequency } from "@/lib/plaid-categories";
@@ -20,6 +26,22 @@ export type StreamRow = {
   is_active: boolean;
   user_marked_cancelled: boolean;
   account: { id: string; name: string; mask: string | null } | null;
+};
+
+// The shape summarizeSubscriptions() needs, common to both a Plaid stream
+// and a manually-entered subscription — a manual entry has no separate
+// user_marked_cancelled concept (its own is_active is the only flag), so it
+// normalizes with user_marked_cancelled: false, making
+// `is_active && !user_marked_cancelled` collapse to just `is_active`.
+type RowItem = {
+  key: string;
+  source: "plaid" | "manual";
+  average_amount: number | null;
+  frequency: string | null;
+  is_active: boolean;
+  user_marked_cancelled: boolean;
+  plaidStream?: StreamRow;
+  manualSub?: ManualSubscription;
 };
 
 function formatDate(d: string | null): string {
@@ -56,28 +78,94 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
   );
 }
 
+function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubscription }) {
+  return (
+    <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
+      <div>
+        <p className="flex items-center gap-2 text-sm font-medium">
+          {subscription.name}
+          <Badge variant="secondary" className="text-[10px]">
+            Manual
+          </Badge>
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {humanizeFrequency(subscription.frequency)}
+          {subscription.next_billing_date
+            ? ` · next ~${formatDate(subscription.next_billing_date)}`
+            : ""}
+          {subscription.notes ? ` · ${subscription.notes}` : ""}
+        </p>
+      </div>
+      <div className="flex items-center gap-4">
+        <Money amount={subscription.amount} tone="negative" className="text-sm font-medium" />
+        <ManualSubscriptionRowActions subscription={subscription} />
+      </div>
+    </div>
+  );
+}
+
 export function SubscriptionsExplorer({
   streams,
+  manualSubscriptions,
   accounts,
 }: {
   streams: StreamRow[];
+  manualSubscriptions: ManualSubscription[];
   accounts: AccountOption[];
 }) {
   const [accountFilter, setAccountFilter] = useState<string>("all");
 
-  const filtered = useMemo(() => {
-    if (accountFilter === "all") return streams;
-    return streams.filter((s) => s.account?.id === accountFilter);
-  }, [streams, accountFilter]);
+  const items = useMemo<RowItem[]>(() => {
+    // Manual subscriptions aren't tied to any connected account, so an
+    // account-scoped filter excludes them entirely; "all accounts" includes
+    // both.
+    const plaidItems: RowItem[] = streams
+      .filter((s) => accountFilter === "all" || s.account?.id === accountFilter)
+      .map((s) => ({
+        key: `plaid-${s.id}`,
+        source: "plaid",
+        average_amount: s.average_amount,
+        frequency: s.frequency,
+        is_active: s.is_active,
+        user_marked_cancelled: s.user_marked_cancelled,
+        plaidStream: s,
+      }));
+
+    const manualItems: RowItem[] =
+      accountFilter === "all"
+        ? manualSubscriptions.map((m) => ({
+            key: `manual-${m.id}`,
+            source: "manual",
+            average_amount: m.amount,
+            frequency: m.frequency,
+            is_active: m.is_active,
+            user_marked_cancelled: false,
+            manualSub: m,
+          }))
+        : [];
+
+    return [...plaidItems, ...manualItems];
+  }, [streams, manualSubscriptions, accountFilter]);
 
   const { active, inactive, monthlyTotal, annualTotal } = useMemo(
-    () => summarizeSubscriptions(filtered),
-    [filtered]
+    () => summarizeSubscriptions(items),
+    [items]
   );
+
+  function renderRow(item: RowItem) {
+    return item.source === "plaid" ? (
+      <StreamRowView key={item.key} stream={item.plaidStream!} />
+    ) : (
+      <ManualSubscriptionRowView key={item.key} subscription={item.manualSub!} />
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
-      <FilterBar accounts={accounts} accountValue={accountFilter} onAccountChange={setAccountFilter} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <FilterBar accounts={accounts} accountValue={accountFilter} onAccountChange={setAccountFilter} />
+        <AddManualSubscriptionButton />
+      </div>
 
       <Card>
         <CardHeader>
@@ -106,7 +194,7 @@ export function SubscriptionsExplorer({
               {active.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No active subscriptions detected yet.</p>
               ) : (
-                active.map((s) => <StreamRowView key={s.id} stream={s} />)
+                active.map(renderRow)
               )}
             </CardContent>
           </Card>
@@ -117,7 +205,7 @@ export function SubscriptionsExplorer({
               {inactive.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nothing here.</p>
               ) : (
-                inactive.map((s) => <StreamRowView key={s.id} stream={s} />)
+                inactive.map(renderRow)
               )}
             </CardContent>
           </Card>

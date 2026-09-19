@@ -39,6 +39,7 @@ export default async function OverviewPage() {
     { data: manualData, error: manualError },
     { data: txData, error: txError },
     { data: streamsData, error: streamsError },
+    { data: manualSubsData, error: manualSubsError },
     { data: recentData, error: recentError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance"),
@@ -50,6 +51,7 @@ export default async function OverviewPage() {
       .from("recurring_streams")
       .select("average_amount, frequency, is_active, user_marked_cancelled")
       .eq("direction", "outflow"),
+    admin.from("manual_subscriptions").select("amount, frequency, is_active"),
     admin
       .from("transactions")
       .select("id, date, name, merchant_name, logo_url, amount, iso_currency_code, pending")
@@ -61,6 +63,7 @@ export default async function OverviewPage() {
   if (manualError) console.error("Failed to load manual assets for overview", manualError);
   if (txError) console.error("Failed to load transactions for overview", txError);
   if (streamsError) console.error("Failed to load recurring streams for overview", streamsError);
+  if (manualSubsError) console.error("Failed to load manual subscriptions for overview", manualSubsError);
   if (recentError) console.error("Failed to load recent transactions for overview", recentError);
 
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? []);
@@ -74,7 +77,16 @@ export default async function OverviewPage() {
   const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
   const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-  const { active, monthlyTotal } = summarizeSubscriptions(streamsData ?? []);
+  const manualSubsAsStreams = (manualSubsData ?? []).map((m) => ({
+    average_amount: m.amount,
+    frequency: m.frequency,
+    is_active: m.is_active,
+    user_marked_cancelled: false,
+  }));
+  const { active, monthlyTotal } = summarizeSubscriptions([
+    ...(streamsData ?? []),
+    ...manualSubsAsStreams,
+  ]);
 
   const recent = (recentData ?? []) as RecentTransaction[];
 
