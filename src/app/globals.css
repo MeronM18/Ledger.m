@@ -1,14 +1,22 @@
+@import url("https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap");
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Kept defined but never activated (no .dark class is ever applied — this
+   is a dark-only theme, see :root below). This neutralizes any inert
+   `dark:` utility classes still present in generated shadcn primitives
+   without needing to strip them file by file; if this line were removed
+   entirely, Tailwind would fall back to `prefers-color-scheme`-based dark
+   matching for those classes, which could still fire unexpectedly. */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: "Switzer", ui-sans-serif, sans-serif;
+  --font-serif: var(--font-bodoni);
+  --font-mono: var(--font-ibm-plex-mono);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -35,6 +43,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -47,6 +56,19 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Brand palette as first-class Tailwind utilities (bg-onyx, text-champagne,
+     border-slate-ash, text-sage, text-brick, etc). */
+  --color-onyx: var(--onyx);
+  --color-smoke: var(--smoke);
+  --color-charcoal: var(--charcoal);
+  --color-slate-ash: var(--slate-ash);
+  --color-bone: var(--bone);
+  --color-ash-grey: var(--ash-grey);
+  --color-umbra: var(--umbra);
+  --color-champagne: var(--champagne);
+  --color-champagne-shadow: var(--champagne-shadow);
+  --color-sage: var(--muted-sage);
+  --color-brick: var(--muted-brick);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -56,32 +78,51 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Dark-only theme — there is no light variant and no toggle. All tokens are
+   defined once here rather than split across :root/.dark. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Brand palette */
+  --onyx: #0a0a0b;
+  --smoke: #141416;
+  --charcoal: #1c1c1f;
+  --slate-ash: #2a2a2e;
+  --bone: #edebe6;
+  --ash-grey: #9a9690;
+  --umbra: #5c5852;
+  --champagne: #c9bfa8;
+  --champagne-shadow: #a69c82;
+  --muted-sage: #7a9b7e;
+  --muted-brick: #a85d5d;
+
+  /* Semantic tokens, mapped to the brand palette */
+  --background: var(--onyx);
+  --foreground: var(--bone);
+  --card: var(--smoke);
+  --card-foreground: var(--bone);
+  --popover: var(--charcoal);
+  --popover-foreground: var(--bone);
+  --primary: var(--champagne);
+  --primary-foreground: var(--onyx);
+  --secondary: var(--charcoal);
+  --secondary-foreground: var(--bone);
+  --muted: var(--charcoal);
+  --muted-foreground: var(--ash-grey);
+  --accent: var(--charcoal);
+  --accent-foreground: var(--bone);
+  --destructive: var(--muted-brick);
+  --destructive-foreground: var(--bone);
+  --border: var(--slate-ash);
+  --input: var(--slate-ash);
+  --ring: var(--champagne);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   /* Validated categorical palette (dataviz skill references/palette.md) —
-     fixed hue order, do not reassign per-chart or cycle. */
+     fixed hue order, do not reassign per-chart or cycle. Used only for the
+     spending-by-category donut's category identity; unrelated to the site
+     chrome theme above. */
   --viz-1: #2a78d6; /* blue */
   --viz-2: #eb6834; /* orange */
   --viz-3: #1baf7a; /* aqua */
@@ -91,56 +132,14 @@
   --viz-7: #4a3aa7; /* violet */
   --viz-8: #e34948; /* red */
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-}
-
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --viz-1: #3987e5;
-  --viz-2: #d95926;
-  --viz-3: #199e70;
-  --viz-4: #c98500;
-  --viz-5: #d55181;
-  --viz-6: #008300;
-  --viz-7: #9085e9;
-  --viz-8: #e66767;
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: var(--onyx);
+  --sidebar-foreground: var(--bone);
+  --sidebar-primary: var(--champagne);
+  --sidebar-primary-foreground: var(--onyx);
+  --sidebar-accent: var(--charcoal);
+  --sidebar-accent-foreground: var(--bone);
+  --sidebar-border: var(--slate-ash);
+  --sidebar-ring: var(--champagne);
 }
 
 @layer base {

@@ -16,6 +16,13 @@ export type SpendingTransaction = {
 export type CategoryTotal = { category: string; label: string; amount: number; colorSlot: number };
 export type MonthTotal = { month: string; label: string; amount: number };
 export type MerchantTotal = { merchant: string; amount: number; count: number };
+export type RefundEntry = {
+  date: string;
+  merchant: string;
+  category: string;
+  categoryLabel: string;
+  amount: number; // positive dollar amount refunded (money back)
+};
 
 const OTHER_SLOT = 8;
 
@@ -28,11 +35,17 @@ export function filterSpendingTransactions(
 
 /**
  * Category totals for one calendar month. Net amount per category (a refund
- * reduces its category's total rather than appearing as separate spend);
- * categories that net to zero or negative (fully refunded) are dropped since
- * a pie/donut can't show a non-positive slice. Null/"OTHER" pfc_primary
- * share one "Other" bucket. Sorted by the fixed color-slot order (not by
- * value) so pie adjacency matches the validated palette ordering.
+ * reduces its category's total — this is the economically correct "what did
+ * I actually spend" figure); categories that net to zero or negative (fully
+ * refunded) are dropped since a pie/donut can't show a non-positive slice.
+ * Null/"OTHER" pfc_primary share one "Other" bucket. Sorted by the fixed
+ * color-slot order (not by value) so pie adjacency matches the validated
+ * palette ordering.
+ *
+ * Netting here is intentional, not silent: refundTransactions() below
+ * surfaces every individual refund as its own visible line, so a refund's
+ * effect on a total is always traceable, even though the total itself
+ * stays net.
  */
 export function categoryTotalsForMonth(
   transactions: SpendingTransaction[],
@@ -97,4 +110,26 @@ export function topMerchants(transactions: SpendingTransaction[], limit = 10): M
     .filter((m) => m.amount > 0)
     .sort((a, b) => b.amount - a.amount)
     .slice(0, limit);
+}
+
+/**
+ * Every individual refund (a negative-amount transaction within an
+ * otherwise-"spending" category — e.g. a merchant credit, a fee waiver, a
+ * rewards redemption) as its own visible row, most recent first. This is
+ * what keeps categoryTotalsForMonth/monthlyTotals/topMerchants' netting
+ * honest: those totals fold a refund into the relevant total (correct for
+ * "what did I actually spend"), and this list is where that reduction is
+ * traceable back to a specific transaction instead of disappearing.
+ */
+export function refundTransactions(transactions: SpendingTransaction[]): RefundEntry[] {
+  return transactions
+    .filter((t) => t.amount < 0)
+    .map((t) => ({
+      date: t.date,
+      merchant: t.merchant_name ?? t.name ?? "Unknown",
+      category: t.pfc_primary ?? "OTHER",
+      categoryLabel: humanizeCategory(t.pfc_primary),
+      amount: Math.abs(t.amount),
+    }))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }

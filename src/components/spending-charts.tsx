@@ -1,5 +1,6 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -14,14 +15,28 @@ import {
   YAxis,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/money";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { CategoryTotal, MonthTotal } from "@/lib/spending-aggregation";
 
 // Categorical colors are the fixed, validated 8-slot palette in globals.css
 // (--viz-1..8) — see the dataviz skill's references/palette.md. Slot
 // assignment is fixed per category (src/lib/plaid-categories.ts), never
-// reassigned by rank, so a category is always the same color.
+// reassigned by rank, so a category is always the same color. Independent
+// of the site's champagne/sage/brick chrome theme — this palette encodes
+// category identity, not a money-in/money-out signal.
 const vizColor = (slot: number) => `var(--viz-${slot})`;
+
+const tooltipContentStyle: CSSProperties = {
+  background: "var(--popover)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius-md)",
+  color: "var(--popover-foreground)",
+  fontSize: 12,
+};
+const tooltipLabelStyle: CSSProperties = { color: "var(--bone)" };
+const tooltipItemStyle: CSSProperties = { color: "var(--popover-foreground)" };
+const legendStyle: CSSProperties = { fontSize: 12, color: "var(--ash-grey)" };
 
 export function SpendingCharts({
   categoryTotals,
@@ -64,8 +79,13 @@ export function SpendingCharts({
                       <Cell key={c.category} fill={vizColor(c.colorSlot)} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatCurrency(Number(value), currency)} />
-                  <Legend verticalAlign="bottom" height={48} wrapperStyle={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(value) => formatCurrency(Number(value), currency)}
+                    contentStyle={tooltipContentStyle}
+                    labelStyle={tooltipLabelStyle}
+                    itemStyle={tooltipItemStyle}
+                  />
+                  <Legend verticalAlign="bottom" height={48} wrapperStyle={legendStyle} />
                 </PieChart>
               </ResponsiveContainer>
               <div
@@ -73,7 +93,7 @@ export function SpendingCharts({
                 style={{ height: 300 - 48 }}
               >
                 <span className="text-xs text-muted-foreground">Total</span>
-                <span className="text-xl font-semibold">{formatCurrency(monthTotal, currency)}</span>
+                <Money amount={monthTotal} currency={currency} tone="negative" className="text-xl font-semibold" />
               </div>
             </div>
           )}
@@ -109,8 +129,13 @@ export function SpendingCharts({
                 <Tooltip
                   formatter={(value) => formatCurrency(Number(value), currency)}
                   cursor={{ fill: "var(--muted)" }}
+                  contentStyle={tooltipContentStyle}
+                  labelStyle={tooltipLabelStyle}
+                  itemStyle={tooltipItemStyle}
                 />
-                <Bar dataKey="amount" fill="var(--viz-1)" radius={[4, 4, 0, 0]} maxBarSize={32} />
+                {/* Always a spend total (never inflow), so this uses brick
+                    rather than the categorical --viz palette above. */}
+                <Bar dataKey="amount" fill="var(--muted-brick)" radius={[4, 4, 0, 0]} maxBarSize={32} />
               </BarChart>
             </ResponsiveContainer>
           )}

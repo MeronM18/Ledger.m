@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { formatCurrency } from "@/lib/format";
+import { Money } from "@/components/money";
 
 export type ManualAsset = {
   id: string;
@@ -144,7 +144,9 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">Manual entries</h3>
+        <h3 className="text-xs font-medium tracking-[0.08em] text-ash-grey uppercase">
+          Manual entries
+        </h3>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button size="sm" variant="outline" onClick={openCreate}>
@@ -246,11 +248,11 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <p
-                  className={`text-sm font-medium ${asset.is_liability ? "text-destructive" : ""}`}
-                >
-                  {formatCurrency(asset.value, "USD")}
-                </p>
+                <Money
+                  amount={asset.value}
+                  tone={asset.is_liability ? "negative" : "positive"}
+                  className="text-sm font-medium"
+                />
                 <Button size="icon" variant="ghost" onClick={() => openEdit(asset)}>
                   <Pencil className="size-3.5" />
                 </Button>

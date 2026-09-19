@@ -37,7 +37,9 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Ledger.m</CardTitle>
+          <CardTitle className="font-serif text-2xl font-bold tracking-tight text-champagne">
+            Ledger.m
+          </CardTitle>
           <CardDescription>Sign in with a magic link sent to your email.</CardDescription>
         </CardHeader>
         <CardContent>

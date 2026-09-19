@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ManualAssetsManager, type ManualAsset } from "@/components/manual-assets-manager";
-import { formatCurrency } from "@/lib/format";
+import { Money } from "@/components/money";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AccountRow = {
@@ -67,7 +67,7 @@ export default async function AssetsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Assets</h1>
+      <h1 className="font-serif text-2xl font-semibold text-bone">Assets</h1>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>
@@ -77,7 +77,7 @@ export default async function AssetsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">{formatCurrency(totalAssets, "USD")}</p>
+            <Money amount={totalAssets} tone="positive" className="text-2xl font-semibold" />
           </CardContent>
         </Card>
         <Card>
@@ -87,15 +87,25 @@ export default async function AssetsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">{formatCurrency(totalLiabilities, "USD")}</p>
+            <Money amount={totalLiabilities} tone="negative" className="text-2xl font-semibold" />
           </CardContent>
         </Card>
-        <Card>
+        {/* The one large hero number in the app: Bodoni Moda instead of
+            mono, still sage/brick by sign. */}
+        <Card className="border-champagne/40">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Net worth</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-semibold">{formatCurrency(netWorth, "USD")}</p>
+            <span
+              className={`font-serif text-3xl font-semibold tabular-nums ${
+                netWorth < 0 ? "text-brick" : "text-sage"
+              }`}
+            >
+              {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
+                netWorth
+              )}
+            </span>
           </CardContent>
         </Card>
       </div>
@@ -106,7 +116,7 @@ export default async function AssetsPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
           <div>
-            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Assets</h3>
+            <h3 className="mb-2 text-xs font-medium tracking-[0.08em] text-ash-grey uppercase">Assets</h3>
             {plaidAssetAccounts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No asset accounts connected.</p>
             ) : (
@@ -114,7 +124,7 @@ export default async function AssetsPage() {
                 {plaidAssetAccounts.map((a) => (
                   <div
                     key={a.id}
-                    className="flex items-center justify-between border-t py-3 first:border-t-0 first:pt-0"
+                    className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
                   >
                     <div>
                       <p className="text-sm font-medium">
@@ -126,9 +136,12 @@ export default async function AssetsPage() {
                         {a.subtype ? ` · ${a.subtype}` : ""}
                       </p>
                     </div>
-                    <p className="text-sm font-medium">
-                      {formatCurrency(a.current_balance ?? 0, a.iso_currency_code)}
-                    </p>
+                    <Money
+                      amount={a.current_balance ?? 0}
+                      currency={a.iso_currency_code}
+                      tone="positive"
+                      className="text-sm font-medium"
+                    />
                   </div>
                 ))}
               </div>
@@ -136,7 +149,7 @@ export default async function AssetsPage() {
           </div>
 
           <div>
-            <h3 className="mb-2 text-sm font-medium text-muted-foreground">Liabilities</h3>
+            <h3 className="mb-2 text-xs font-medium tracking-[0.08em] text-ash-grey uppercase">Liabilities</h3>
             {plaidLiabilityAccounts.length === 0 ? (
               <p className="text-sm text-muted-foreground">No liability accounts connected.</p>
             ) : (
@@ -144,7 +157,7 @@ export default async function AssetsPage() {
                 {plaidLiabilityAccounts.map((a) => (
                   <div
                     key={a.id}
-                    className="flex items-center justify-between border-t py-3 first:border-t-0 first:pt-0"
+                    className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
                   >
                     <div>
                       <p className="text-sm font-medium">
@@ -156,9 +169,12 @@ export default async function AssetsPage() {
                         {a.subtype ? ` · ${a.subtype}` : ""}
                       </p>
                     </div>
-                    <p className="text-sm font-medium text-destructive">
-                      {formatCurrency(a.current_balance ?? 0, a.iso_currency_code)}
-                    </p>
+                    <Money
+                      amount={a.current_balance ?? 0}
+                      currency={a.iso_currency_code}
+                      tone="negative"
+                      className="text-sm font-medium"
+                    />
                   </div>
                 ))}
               </div>

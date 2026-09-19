@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/money";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { SyncNowButton } from "@/components/sync-now-button";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,13 +26,7 @@ type ItemRow = {
   accounts: AccountRow[];
 };
 
-function formatBalance(amount: number | null, currency: string | null) {
-  if (amount === null) return "—";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: currency ?? "USD",
-  }).format(amount);
-}
+const LIABILITY_TYPES = new Set(["credit", "loan"]);
 
 function statusBadgeVariant(status: string): "default" | "destructive" | "secondary" {
   if (status === "active") return "default";
@@ -57,7 +52,7 @@ export default async function AccountsPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Accounts</h1>
+        <h1 className="font-serif text-2xl font-semibold text-bone">Accounts</h1>
         <PlaidLinkButton />
       </div>
 
@@ -89,7 +84,7 @@ export default async function AccountsPage() {
               {item.accounts.map((account) => (
                 <div
                   key={account.id}
-                  className="flex items-center justify-between border-t pt-3 first:border-t-0 first:pt-0"
+                  className="flex items-center justify-between border-t border-border pt-3 first:border-t-0 first:pt-0"
                 >
                   <div>
                     <p className="text-sm font-medium">
@@ -101,9 +96,16 @@ export default async function AccountsPage() {
                       {account.subtype ? ` · ${account.subtype}` : ""}
                     </p>
                   </div>
-                  <p className="text-sm font-medium">
-                    {formatBalance(account.current_balance, account.iso_currency_code)}
-                  </p>
+                  {account.current_balance === null ? (
+                    <span className="font-mono text-sm text-muted-foreground">—</span>
+                  ) : (
+                    <Money
+                      amount={account.current_balance}
+                      currency={account.iso_currency_code}
+                      tone={LIABILITY_TYPES.has(account.type) ? "negative" : "positive"}
+                      className="text-sm font-medium"
+                    />
+                  )}
                 </div>
               ))}
             </CardContent>

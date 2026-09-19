@@ -1,10 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/money";
 import { SpendingCharts } from "@/components/spending-charts";
-import { formatCurrency } from "@/lib/format";
 import {
   categoryTotalsForMonth,
   filterSpendingTransactions,
   monthlyTotals,
+  refundTransactions,
   topMerchants,
   type SpendingTransaction,
 } from "@/lib/spending-aggregation";
@@ -31,10 +32,11 @@ export default async function SpendingPage() {
   const categoryTotals = categoryTotalsForMonth(spending, now.getFullYear(), now.getMonth());
   const months = monthlyTotals(spending);
   const merchants = topMerchants(spending, 10);
+  const refunds = refundTransactions(spending);
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Spending</h1>
+      <h1 className="font-serif text-2xl font-semibold text-bone">Spending</h1>
 
       <SpendingCharts
         categoryTotals={categoryTotals}
@@ -55,10 +57,10 @@ export default async function SpendingPage() {
               {merchants.map((m, i) => (
                 <div
                   key={m.merchant}
-                  className="flex items-center justify-between border-t py-3 first:border-t-0 first:pt-0"
+                  className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="w-5 text-sm text-muted-foreground">{i + 1}</span>
+                    <span className="w-5 font-mono text-sm text-muted-foreground">{i + 1}</span>
                     <div>
                       <p className="text-sm font-medium">{m.merchant}</p>
                       <p className="text-xs text-muted-foreground">
@@ -66,7 +68,7 @@ export default async function SpendingPage() {
                       </p>
                     </div>
                   </div>
-                  <p className="text-sm font-medium">{formatCurrency(m.amount, currency)}</p>
+                  <Money amount={m.amount} currency={currency} tone="negative" className="text-sm font-medium" />
                 </div>
               ))}
             </div>

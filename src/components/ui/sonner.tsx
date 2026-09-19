@@ -1,15 +1,15 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
 
+// Dark-only app, no theme provider/toggle — force sonner's own dark
+// defaults rather than reading next-themes (which has no provider wired up
+// and would otherwise fall back to "system").
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
-
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme="dark"
       className="toaster group"
       icons={{
         success: (
@@ -34,6 +34,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
+          // Sage/brick, not sonner's default green/red — same money-signal
+          // colors carry "this worked" / "this failed" too.
+          "--success-bg": "var(--popover)",
+          "--success-border": "var(--muted-sage)",
+          "--success-text": "var(--muted-sage)",
+          "--error-bg": "var(--popover)",
+          "--error-border": "var(--muted-brick)",
+          "--error-text": "var(--muted-brick)",
         } as React.CSSProperties
       }
       toastOptions={{

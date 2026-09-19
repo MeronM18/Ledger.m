@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CancelSubscriptionSwitch } from "@/components/cancel-subscription-switch";
-import { formatCurrency } from "@/lib/format";
+import { Money } from "@/components/money";
 import { humanizeFrequency, monthlyFactorForFrequency } from "@/lib/plaid-categories";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -34,7 +34,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
     : "Unknown account";
 
   return (
-    <div className="flex items-center justify-between border-t py-3 first:border-t-0 first:pt-0">
+    <div className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0">
       <div>
         <p className="text-sm font-medium">{label}</p>
         <p className="text-xs text-muted-foreground">
@@ -43,7 +43,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
         </p>
       </div>
       <div className="flex items-center gap-4">
-        <p className="text-sm font-medium">{formatCurrency(stream.average_amount ?? 0, "USD")}</p>
+        <Money amount={stream.average_amount ?? 0} tone="negative" className="text-sm font-medium" />
         {stream.is_active && (
           <CancelSubscriptionSwitch streamId={stream.id} cancelled={stream.user_marked_cancelled} />
         )}
@@ -85,7 +85,7 @@ export default async function SubscriptionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Subscriptions</h1>
+      <h1 className="font-serif text-2xl font-semibold text-bone">Subscriptions</h1>
 
       <Card>
         <CardHeader>
@@ -94,11 +94,11 @@ export default async function SubscriptionsPage() {
         <CardContent className="flex gap-8">
           <div>
             <p className="text-xs text-muted-foreground">Monthly</p>
-            <p className="text-2xl font-semibold">{formatCurrency(monthlyTotal, "USD")}</p>
+            <Money amount={monthlyTotal} tone="negative" className="text-2xl font-semibold" />
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Annualized</p>
-            <p className="text-2xl font-semibold">{formatCurrency(annualTotal, "USD")}</p>
+            <Money amount={annualTotal} tone="negative" className="text-2xl font-semibold" />
           </div>
         </CardContent>
       </Card>

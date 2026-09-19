@@ -12,8 +12,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Money } from "@/components/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/format";
 import { humanizeCategory } from "@/lib/plaid-categories";
 
 export type TransactionRow = {
@@ -198,13 +198,14 @@ export function TransactionsExplorer({
                   <TableCell className="text-muted-foreground">
                     {humanizeCategory(t.pfc_primary)}
                   </TableCell>
-                  <TableCell
-                    className={`text-right font-medium ${
-                      isDebit ? "text-destructive" : "text-green-600 dark:text-green-500"
-                    }`}
-                  >
-                    {isDebit ? "-" : "+"}
-                    {formatCurrency(Math.abs(t.amount), t.iso_currency_code)}
+                  <TableCell className="text-right">
+                    <Money
+                      amount={t.amount}
+                      currency={t.iso_currency_code}
+                      tone={isDebit ? "negative" : "positive"}
+                      showSign
+                      className="font-medium"
+                    />
                   </TableCell>
                 </TableRow>
               );

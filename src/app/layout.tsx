@@ -1,15 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Bodoni_Moda, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Switzer isn't on Google Fonts, so next/font/google can't load it — pulled
+// from Fontshare's CDN via a <link> tag instead (React 19 hoists it to
+// <head> automatically). A plain CSS `@import url(...)` in globals.css was
+// tried first but Turbopack's CSS pipeline silently drops remote @import
+// rules — confirmed via the compiled output containing no @font-face for
+// Switzer and no network request for it at all.
+const FONTSHARE_SWITZER_URL =
+  "https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap";
+
+const bodoniModa = Bodoni_Moda({
+  variable: "--font-bodoni",
   subsets: ["latin"],
+  weight: ["500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const ibmPlexMono = IBM_Plex_Mono({
+  variable: "--font-ibm-plex-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
@@ -21,8 +32,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${bodoniModa.variable} ${ibmPlexMono.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="stylesheet" href={FONTSHARE_SWITZER_URL} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
