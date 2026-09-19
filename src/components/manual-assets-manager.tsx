@@ -238,7 +238,7 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
           {assets.map((asset) => (
             <div
               key={asset.id}
-              className="flex items-center justify-between border-t py-3 first:border-t-0 first:pt-0"
+              className="flex items-center justify-between border-t py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40"
             >
               <div>
                 <p className="text-sm font-medium">{asset.name}</p>

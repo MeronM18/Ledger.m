@@ -38,7 +38,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
     : "Unknown account";
 
   return (
-    <div className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0">
+    <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
       <div>
         <p className="text-sm font-medium">{label}</p>
         <p className="text-xs text-muted-foreground">

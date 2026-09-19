@@ -153,3 +153,68 @@
     @apply font-sans;
   }
 }
+
+/* Restrained motion language: weight and precision, not decoration. A door
+   opening, not a page loading. Two variants —
+   .animate-entrance (the once-per-session login "door opening" moment: a
+   fade + slight upward settle) and .animate-page-in (the frequent,
+   fire-on-every-navigation crossfade — opacity only, no translate, since
+   any movement on every single click would read as sliding, not settling).
+   Both are pure CSS, no animation library. */
+@keyframes entrance {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Longhand, not the `animation` shorthand: a stagger is applied via a
+   separate `[animation-delay:…]` utility on specific elements, and the
+   shorthand's implicit `animation-delay: 0s` would silently win over that
+   utility depending on CSS source order — confirmed live (the form's
+   130ms delay was being reset to 0s). Longhand properties don't have that
+   conflict. */
+.animate-entrance {
+  animation-name: entrance;
+  animation-duration: 500ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.animate-page-in {
+  animation-name: page-in;
+  animation-duration: 200ms;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-entrance,
+  .animate-page-in {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0s !important;
+  }
+
+  /* Covers every other added transition too (row hover, button
+     hover/press) — not just the two keyframe animations above. Scoped to
+     `transition-duration` only, so instant color/opacity feedback on
+     hover/press still happens, just without the eased ramp. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+  }
+}
