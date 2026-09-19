@@ -1,0 +1,217 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { Store } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCurrency } from "@/lib/format";
+import { humanizeCategory } from "@/lib/plaid-categories";
+
+export type TransactionRow = {
+  id: string;
+  date: string;
+  name: string | null;
+  merchant_name: string | null;
+  logo_url: string | null;
+  pfc_primary: string | null;
+  amount: number;
+  iso_currency_code: string | null;
+  pending: boolean;
+  account: { id: string; name: string; mask: string | null } | null;
+};
+
+type AccountOption = { id: string; name: string; mask: string | null };
+
+const DATE_RANGES = [
+  { key: "30", label: "Last 30 days" },
+  { key: "90", label: "Last 90 days" },
+  { key: "all", label: "All" },
+] as const;
+
+function accountLabel(account: AccountOption | null): string {
+  if (!account) return "Unknown account";
+  return account.mask ? `${account.name} ••${account.mask}` : account.name;
+}
+
+export function TransactionsExplorer({
+  transactions,
+  accounts,
+}: {
+  transactions: TransactionRow[];
+  accounts: AccountOption[];
+}) {
+  const [search, setSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<(typeof DATE_RANGES)[number]["key"]>("all");
+
+  const categories = useMemo(() => {
+    const present = new Set<string>();
+    for (const t of transactions) present.add(t.pfc_primary ?? "(uncategorized)");
+    return Array.from(present).sort();
+  }, [transactions]);
+
+  // NOTE: filtering/searching happens entirely client-side, which is fine at
+  // this volume (~100 rows). At meaningfully higher transaction counts this
+  // should move to server-side search + pagination (a Supabase query with
+  // ilike/range instead of filtering an already-fetched array).
+  const filtered = useMemo(() => {
+    const now = new Date();
+    const cutoff =
+      dateRange === "all"
+        ? null
+        : new Date(now.getFullYear(), now.getMonth(), now.getDate() - Number(dateRange));
+
+    const q = search.trim().toLowerCase();
+
+    return transactions.filter((t) => {
+      if (accountFilter !== "all" && t.account?.id !== accountFilter) return false;
+      if (categoryFilter !== "all" && (t.pfc_primary ?? "(uncategorized)") !== categoryFilter) {
+        return false;
+      }
+      if (cutoff && new Date(t.date) < cutoff) return false;
+      if (q) {
+        const haystack = `${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [transactions, accountFilter, categoryFilter, dateRange, search]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Input
+          placeholder="Search merchant or description..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="max-w-xs"
+        />
+
+        <Select value={accountFilter} onValueChange={setAccountFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Account" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All accounts</SelectItem>
+            {accounts.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {accountLabel(a)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c === "(uncategorized)" ? "Uncategorized" : humanizeCategory(c)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="flex gap-1">
+          {DATE_RANGES.map((r) => (
+            <Button
+              key={r.key}
+              size="sm"
+              variant={dateRange === r.key ? "secondary" : "ghost"}
+              onClick={() => setDateRange(r.key)}
+            >
+              {r.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">
+          No transactions match these filters.
+        </p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Merchant</TableHead>
+              <TableHead>Account</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead className="text-right">Amount</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((t) => {
+              const isDebit = t.amount >= 0; // Plaid: positive = money out
+              const merchant = t.merchant_name ?? t.name ?? "Unknown";
+
+              return (
+                <TableRow key={t.id}>
+                  <TableCell className="whitespace-nowrap text-muted-foreground">
+                    {new Date(`${t.date}T00:00:00`).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {t.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- external Plaid-hosted logo, small avatar, not worth next/image config for a single-user app
+                        <img
+                          src={t.logo_url}
+                          alt=""
+                          className="size-6 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <Store className="size-3.5" />
+                        </span>
+                      )}
+                      <span className="flex items-center gap-2">
+                        {merchant}
+                        {t.pending && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Pending
+                          </Badge>
+                        )}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {accountLabel(t.account)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {humanizeCategory(t.pfc_primary)}
+                  </TableCell>
+                  <TableCell
+                    className={`text-right font-medium ${
+                      isDebit ? "text-destructive" : "text-green-600 dark:text-green-500"
+                    }`}
+                  >
+                    {isDebit ? "-" : "+"}
+                    {formatCurrency(Math.abs(t.amount), t.iso_currency_code)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}
