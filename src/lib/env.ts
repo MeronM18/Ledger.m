@@ -33,6 +33,8 @@ const serverEnvSchema = z.object({
   NTFY_SERVER: z.string().url().default("https://ntfy.sh"),
 
   CRON_SECRET: z.string().min(16, "CRON_SECRET must be at least 16 characters"),
+
+  GOLDAPI_KEY: z.string().min(1, "GOLDAPI_KEY is required"),
 });
 
 type ServerEnv = z.infer<typeof serverEnvSchema>;

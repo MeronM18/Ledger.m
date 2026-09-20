@@ -341,7 +341,7 @@ function HoldingRow({
           <p className="text-xs text-muted-foreground">
             {price ? (
               <>
-                futures price: ${price.price_per_troy_oz_usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}/oz
+                spot price: ${price.price_per_troy_oz_usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}/oz
                 {stale ? (
                   <span className="text-oxblood">
                     {" "}
