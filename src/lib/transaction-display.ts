@@ -118,8 +118,10 @@ function detectService(raw: string): { label: string } | null {
 
 // "UNITED MORTGAGE PAYROLL 925644358895XMS 091526" -> captures "UNITED
 // MORTGAGE" as the company, discarding PAYROLL and everything after it
-// (reference numbers, date stamps) in one shot.
-function detectPayrollCompany(raw: string): string | null {
+// (reference numbers, date stamps) in one shot. Exported so
+// spending-aggregation.ts's income-by-source split can reuse the same
+// detection instead of re-parsing the raw name with its own regex.
+export function detectPayrollCompany(raw: string): string | null {
   const match = raw.match(/^(.*?)\s+PAYROLL\b/i);
   const company = match?.[1]?.trim();
   return company ? company : null;

@@ -6,11 +6,14 @@ import { GreetingHeader } from "@/components/greeting-header";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth } from "@/lib/net-worth";
+import { formatCurrency } from "@/lib/format";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import {
   categoryTotalsForMonth,
   filterSpendingTransactions,
+  incomeBySourceForMonth,
   manualTransactionToSpendingTransaction,
+  monthlyIncomeVsSpending,
 } from "@/lib/spending-aggregation";
 import { summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
@@ -104,6 +107,8 @@ export default async function OverviewPage() {
   const monthTotal = categoryTotals.reduce((sum, c) => sum + c.amount, 0);
   const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
   const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const incomeBySource = incomeBySourceForMonth(allTransactions, now.getFullYear(), now.getMonth());
+  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.getFullYear(), now.getMonth());
 
   const manualSubsAsStreams = (manualSubsData ?? []).map((m) => ({
     average_amount: m.amount,
@@ -220,6 +225,46 @@ export default async function OverviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{monthLabel} income</CardTitle>
+          <SectionLink href="/transactions" />
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {spendingError ? (
+            <QueryErrorState message="Couldn't load income." />
+          ) : incomeVsSpending.income === 0 ? (
+            <p className="text-sm text-muted-foreground">No income recorded yet this month.</p>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-end justify-between gap-4">
+                <Money amount={incomeVsSpending.income} currency={currency} tone="positive" className="text-2xl font-semibold" />
+                <p className="text-sm text-muted-foreground">
+                  {formatCurrency(incomeVsSpending.income, currency)} in ·{" "}
+                  {formatCurrency(incomeVsSpending.spending, currency)} out · net{" "}
+                  <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood"}>
+                    {formatCurrency(incomeVsSpending.net, currency)}
+                  </span>
+                </p>
+              </div>
+              {incomeBySource.length > 0 && (
+                <div className="flex flex-col">
+                  {incomeBySource.map((s) => (
+                    <div
+                      key={s.source}
+                      className="flex items-center justify-between border-t border-border py-2 first:border-t-0 first:pt-0"
+                    >
+                      <span className="text-sm text-muted-foreground">{s.source}</span>
+                      <Money amount={s.amount} currency={currency} tone="positive" className="text-sm font-medium" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">

@@ -1,5 +1,5 @@
 import { categoryColorSlot, humanizeCategory, isSpendingCategory } from "@/lib/plaid-categories";
-import { effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
+import { detectPayrollCompany, effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure aggregation logic, no DB/network — kept separate from the page so the
 // math can be exercised directly (e.g. with a quick script against real
@@ -174,4 +174,78 @@ export function refundTransactions(transactions: SpendingTransaction[]): RefundE
       amount: Math.abs(t.amount),
     }))
     .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+// --- Income ---------------------------------------------------------------
+//
+// The mirror image of the spending functions above: everything up there
+// exists specifically to EXCLUDE the INCOME category (filterSpendingTransactions
+// drops it via isSpendingCategory); these two functions are the same class
+// of "totals for one calendar month, grouped and summed" logic, just scoped
+// TO that one excluded category instead of excluding it — same effectiveCategory
+// resolution, same date-in-month check, same non-pending filter, so the two
+// views can never silently disagree about which transactions belong to a
+// given month. Money-in transactions are negative (Plaid convention), so
+// amounts are negated here into the "$X received" figure the UI wants.
+
+export type IncomeSourceTotal = { source: "Paycheck" | "Other income"; amount: number };
+export type MonthlyIncomeVsSpending = { income: number; spending: number; net: number };
+
+function isInCalendarMonth(dateStr: string, year: number, month: number): boolean {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return d.getFullYear() === year && d.getMonth() === month;
+}
+
+/**
+ * Income for one calendar month, split into "Paycheck" (payroll detected
+ * via the same detectPayrollCompany() heuristic humanizeTransactionName
+ * already uses to render "X Paycheck") vs. everything else tagged INCOME
+ * (a manual entry, a 1099 payment, a detected P2P transfer that landed in
+ * INCOME, etc). Sorted largest first; zero/negative buckets dropped, same
+ * convention as categoryTotalsForMonth.
+ */
+export function incomeBySourceForMonth(
+  transactions: SpendingTransaction[],
+  year: number,
+  month: number
+): IncomeSourceTotal[] {
+  const totals = new Map<"Paycheck" | "Other income", number>();
+
+  for (const t of transactions) {
+    if (t.pending) continue;
+    if (effectiveCategory(t) !== "INCOME") continue;
+    if (!isInCalendarMonth(t.date, year, month)) continue;
+
+    const source = detectPayrollCompany(t.name ?? "") ? "Paycheck" : "Other income";
+    totals.set(source, (totals.get(source) ?? 0) - t.amount);
+  }
+
+  return Array.from(totals.entries())
+    .map(([source, amount]) => ({ source, amount }))
+    .filter((s) => s.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
+
+/** "$X in, $Y out, $Z net" for one calendar month. */
+export function monthlyIncomeVsSpending(
+  transactions: SpendingTransaction[],
+  year: number,
+  month: number
+): MonthlyIncomeVsSpending {
+  let income = 0;
+  let spending = 0;
+
+  for (const t of transactions) {
+    if (t.pending) continue;
+    if (!isInCalendarMonth(t.date, year, month)) continue;
+
+    const category = effectiveCategory(t);
+    if (category === "INCOME") {
+      income += -t.amount;
+    } else if (isSpendingCategory(category)) {
+      spending += t.amount;
+    }
+  }
+
+  return { income, spending, net: income - spending };
 }
