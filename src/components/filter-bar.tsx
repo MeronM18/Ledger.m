@@ -8,18 +8,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
 
 export type AccountOption = { id: string; name: string; mask: string | null };
 export type CategoryOption = { value: string; label: string };
-
-export const DATE_RANGES = [
-  { key: "30", label: "Last 30 days" },
-  { key: "90", label: "Last 90 days" },
-  { key: "all", label: "All" },
-] as const;
-
-export type DateRangeKey = (typeof DATE_RANGES)[number]["key"];
+// value is "YYYY-MM"; the "all" sentinel is added by FilterBar itself, same
+// as the "All accounts"/"All categories" entries below.
+export type MonthOption = { value: string; label: string };
 
 export function accountLabel(account: AccountOption | null): string {
   if (!account) return "Unknown account";
@@ -42,8 +36,9 @@ export function FilterBar({
   categories,
   categoryValue,
   onCategoryChange,
-  dateRangeValue,
-  onDateRangeChange,
+  months,
+  monthValue,
+  onMonthChange,
 }: {
   search?: string;
   onSearchChange?: (value: string) => void;
@@ -53,8 +48,9 @@ export function FilterBar({
   categories?: CategoryOption[];
   categoryValue?: string;
   onCategoryChange?: (value: string) => void;
-  dateRangeValue?: DateRangeKey;
-  onDateRangeChange?: (value: DateRangeKey) => void;
+  months?: MonthOption[];
+  monthValue?: string;
+  onMonthChange?: (value: string) => void;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -99,19 +95,20 @@ export function FilterBar({
         </Select>
       )}
 
-      {onDateRangeChange && (
-        <div className="flex gap-1">
-          {DATE_RANGES.map((r) => (
-            <Button
-              key={r.key}
-              size="sm"
-              variant={dateRangeValue === r.key ? "secondary" : "ghost"}
-              onClick={() => onDateRangeChange(r.key)}
-            >
-              {r.label}
-            </Button>
-          ))}
-        </div>
+      {months && onMonthChange && (
+        <Select value={monthValue} onValueChange={onMonthChange}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Month" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All time</SelectItem>
+            {months.map((m) => (
+              <SelectItem key={m.value} value={m.value}>
+                {m.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
     </div>
   );

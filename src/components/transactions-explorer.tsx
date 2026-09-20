@@ -1,18 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Store } from "lucide-react";
+import { ArrowDown, ArrowUp, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  accountLabel,
-  FilterBar,
-  type AccountOption,
-  type DateRangeKey,
-} from "@/components/filter-bar";
+import { accountLabel, FilterBar, type AccountOption } from "@/components/filter-bar";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import { effectiveCategory, humanizeTransaction } from "@/lib/transaction-display";
+
+type SortDirection = "asc" | "desc" | null;
 
 export type TransactionRow = {
   id: string;
@@ -37,7 +34,8 @@ export function TransactionsExplorer({
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [dateRange, setDateRange] = useState<DateRangeKey>("all");
+  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
 
   const categories = useMemo(() => {
     const present = new Set<string>();
@@ -47,17 +45,28 @@ export function TransactionsExplorer({
       .map((c) => ({ value: c, label: c === "(uncategorized)" ? "Uncategorized" : humanizeCategory(c) }));
   }, [transactions]);
 
+  // Distinct statement months actually present in the data — "September
+  // 2026", not a generic date-range input, so this feels like flipping
+  // through statement periods rather than typing dates.
+  const months = useMemo(() => {
+    const present = new Set<string>();
+    for (const t of transactions) present.add(t.date.slice(0, 7));
+    return Array.from(present)
+      .sort((a, b) => b.localeCompare(a))
+      .map((m) => ({
+        value: m,
+        label: new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", {
+          month: "long",
+          year: "numeric",
+        }),
+      }));
+  }, [transactions]);
+
   // NOTE: filtering/searching happens entirely client-side, which is fine at
   // this volume (~100 rows). At meaningfully higher transaction counts this
   // should move to server-side search + pagination (a Supabase query with
   // ilike/range instead of filtering an already-fetched array).
   const filtered = useMemo(() => {
-    const now = new Date();
-    const cutoff =
-      dateRange === "all"
-        ? null
-        : new Date(now.getFullYear(), now.getMonth(), now.getDate() - Number(dateRange));
-
     const q = search.trim().toLowerCase();
 
     return transactions.filter((t) => {
@@ -65,14 +74,30 @@ export function TransactionsExplorer({
       if (categoryFilter !== "all" && (effectiveCategory(t) ?? "(uncategorized)") !== categoryFilter) {
         return false;
       }
-      if (cutoff && new Date(t.date) < cutoff) return false;
+      if (monthFilter !== "all" && t.date.slice(0, 7) !== monthFilter) return false;
       if (q) {
         const haystack = `${humanizeTransaction(t).displayName} ${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       return true;
     });
-  }, [transactions, accountFilter, categoryFilter, dateRange, search]);
+  }, [transactions, accountFilter, categoryFilter, monthFilter, search]);
+
+  // Sort works together with the filters above, applied on top of the
+  // already-filtered set rather than replacing it. Toggles between
+  // desc/asc on repeated header clicks; no "unsorted" state to cycle back
+  // to — the query's own date-desc order is what you get before the first
+  // click, matching the header carrying no arrow until then.
+  const sorted = useMemo(() => {
+    if (!sortDirection) return filtered;
+    const copy = [...filtered];
+    copy.sort((a, b) => (sortDirection === "asc" ? a.amount - b.amount : b.amount - a.amount));
+    return copy;
+  }, [filtered, sortDirection]);
+
+  function toggleSort() {
+    setSortDirection((d) => (d === "desc" ? "asc" : "desc"));
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -85,11 +110,12 @@ export function TransactionsExplorer({
         categories={categories}
         categoryValue={categoryFilter}
         onCategoryChange={setCategoryFilter}
-        dateRangeValue={dateRange}
-        onDateRangeChange={setDateRange}
+        months={months}
+        monthValue={monthFilter}
+        onMonthChange={setMonthFilter}
       />
 
-      {filtered.length === 0 ? (
+      {sorted.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No transactions match these filters.
         </p>
@@ -101,11 +127,21 @@ export function TransactionsExplorer({
               <TableHead>Merchant</TableHead>
               <TableHead>Account</TableHead>
               <TableHead>Category</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
+              <TableHead className="text-right">
+                <button
+                  type="button"
+                  onClick={toggleSort}
+                  className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                >
+                  Amount
+                  {sortDirection === "asc" && <ArrowUp className="size-3" />}
+                  {sortDirection === "desc" && <ArrowDown className="size-3" />}
+                </button>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.map((t) => {
+            {sorted.map((t) => {
               const isDebit = t.amount >= 0; // Plaid: positive = money out
               const { displayName, displayCategoryLabel } = humanizeTransaction(t);
 
