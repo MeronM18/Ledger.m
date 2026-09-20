@@ -45,3 +45,26 @@ export function hasPriceIncrease(averageAmount: number | null, lastAmount: numbe
   if (averageAmount === null || lastAmount === null || averageAmount <= 0) return false;
   return lastAmount > averageAmount * PRICE_INCREASE_THRESHOLD;
 }
+
+// A week-plus past the predicted date is a real gap, not just Plaid's own
+// prediction being a day or two off from the actual billing date (a
+// monthly subscription billed on the 3rd one month and the 5th the next is
+// normal jitter, not a lapse).
+const LAPSED_THRESHOLD_DAYS = 10;
+
+/**
+ * True when a subscription's predicted next charge date is more than
+ * LAPSED_THRESHOLD_DAYS in the past. For a Plaid-sourced stream this is
+ * effectively "no new matching transaction has appeared since" — Plaid's
+ * own recurring-transaction sync (syncItemRecurring) is what moves
+ * predicted_next_date forward whenever a new matching charge lands, so a
+ * predicted_next_date still stuck in the past means that hasn't happened.
+ * Applies the same way to a manual subscription's next_billing_date, which
+ * is just the user's own expectation of the next charge.
+ */
+export function hasLapsed(predictedNextDate: string | null, referenceDate: Date = new Date()): boolean {
+  if (!predictedNextDate) return false;
+  const predicted = new Date(`${predictedNextDate}T00:00:00`);
+  const daysPast = (referenceDate.getTime() - predicted.getTime()) / (1000 * 60 * 60 * 24);
+  return daysPast > LAPSED_THRESHOLD_DAYS;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { TrendingUp } from "lucide-react";
+import { AlertTriangle, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +14,7 @@ import {
 import { Money } from "@/components/money";
 import { FilterBar, type AccountOption } from "@/components/filter-bar";
 import { humanizeFrequency } from "@/lib/plaid-categories";
-import { hasPriceIncrease, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
+import { hasLapsed, hasPriceIncrease, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 
 export type StreamRow = {
   id: string;
@@ -62,6 +62,8 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
     : "Unknown account";
   const priceIncreased =
     stream.is_active && !stream.user_marked_cancelled && hasPriceIncrease(stream.average_amount, stream.last_amount);
+  const lapsed =
+    stream.is_active && !stream.user_marked_cancelled && hasLapsed(stream.predicted_next_date);
 
   return (
     <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
@@ -74,6 +76,12 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
               Price increased
             </Badge>
           )}
+          {lapsed && (
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+              <AlertTriangle className="size-3" />
+              Hasn&apos;t charged recently
+            </Badge>
+          )}
         </p>
         <p className="text-xs text-muted-foreground">
           {accountLabel} · {humanizeFrequency(stream.frequency)} · last {formatDate(stream.last_date)}
@@ -81,6 +89,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
           {priceIncreased
             ? ` · last charged $${stream.last_amount?.toFixed(2)} (avg $${stream.average_amount?.toFixed(2)})`
             : ""}
+          {lapsed ? " · may have lapsed" : ""}
         </p>
       </div>
       <div className="flex items-center gap-4">
@@ -94,6 +103,8 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
 }
 
 function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubscription }) {
+  const lapsed = subscription.is_active && hasLapsed(subscription.next_billing_date);
+
   return (
     <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
       <div>
@@ -102,6 +113,12 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
           <Badge variant="secondary" className="text-[10px]">
             Manual
           </Badge>
+          {lapsed && (
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+              <AlertTriangle className="size-3" />
+              Hasn&apos;t charged recently
+            </Badge>
+          )}
         </p>
         <p className="text-xs text-muted-foreground">
           {humanizeFrequency(subscription.frequency)}
@@ -109,6 +126,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
             ? ` · next ~${formatDate(subscription.next_billing_date)}`
             : ""}
           {subscription.notes ? ` · ${subscription.notes}` : ""}
+          {lapsed ? " · may have lapsed" : ""}
         </p>
       </div>
       <div className="flex items-center gap-4">
