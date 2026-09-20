@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/env";
 
 const PUBLIC_PATHS = ["/login", "/auth/callback"];
 
@@ -31,7 +32,16 @@ export async function proxy(request: NextRequest) {
 
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
 
-  if (!user && !isPublicPath) {
+  // Defense-in-depth: this app has exactly one legitimate user. Checking
+  // only "is there a session" would let a real-but-wrong-email Supabase
+  // account (see requireApiUser()'s ALLOWED_EMAIL check) straight through
+  // proxy and rely entirely on (dashboard)/layout.tsx's requireUser() to
+  // catch it — fine today, but a future page added outside that layout
+  // would silently skip the check. Enforcing ALLOWED_EMAIL here too means
+  // that can never happen, even if the layout-level check is ever forgotten.
+  const isAllowedUser = !!user && user.email === env.ALLOWED_EMAIL;
+
+  if (!isAllowedUser && !isPublicPath) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/login";
     return NextResponse.redirect(loginUrl);

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "cn";
 import {
   Select,
   SelectContent,
@@ -179,19 +180,35 @@ function ManualTransactionDialog({
 
           <div className="flex flex-col gap-1.5">
             <Label>Direction</Label>
-            <div className="flex gap-2">
+            {/* A segmented toggle, not two independent buttons: one shared
+                border draws the outer boundary, divide-x draws the seam
+                between segments, and the active side is a solid champagne
+                fill (same bg-primary/text-primary-foreground pairing used
+                for primary actions elsewhere) so selected vs. unselected is
+                unambiguous against the dark theme. */}
+            <div className="flex divide-x divide-border overflow-hidden rounded-lg border border-border">
               <Button
                 type="button"
-                variant={form.direction === "out" ? "secondary" : "outline"}
-                className="flex-1"
+                variant="ghost"
+                className={cn(
+                  "flex-1 rounded-none",
+                  form.direction === "out"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/80"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
                 onClick={() => setForm((f) => ({ ...f, direction: "out" }))}
               >
                 Money out
               </Button>
               <Button
                 type="button"
-                variant={form.direction === "in" ? "secondary" : "outline"}
-                className="flex-1"
+                variant="ghost"
+                className={cn(
+                  "flex-1 rounded-none",
+                  form.direction === "in"
+                    ? "bg-primary text-primary-foreground hover:bg-primary/80"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
                 onClick={() => setForm((f) => ({ ...f, direction: "in" }))}
               >
                 Money in
