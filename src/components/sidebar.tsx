@@ -10,6 +10,7 @@ import {
   Wallet,
   Landmark,
 } from "lucide-react";
+import { SignOutButton } from "@/components/sign-out-button";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
@@ -25,7 +26,7 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 shrink-0 border-r border-border bg-background p-4">
+    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-background p-4">
       <div className="mb-6 px-2 font-serif text-lg font-bold tracking-tight text-champagne">
         Ledger.m
       </div>
@@ -49,6 +50,9 @@ export function Sidebar() {
           );
         })}
       </nav>
+      <div className="mt-auto border-t border-border pt-2">
+        <SignOutButton />
+      </div>
     </aside>
   );
 }
