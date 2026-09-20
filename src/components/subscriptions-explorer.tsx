@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +14,7 @@ import {
 import { Money } from "@/components/money";
 import { FilterBar, type AccountOption } from "@/components/filter-bar";
 import { humanizeFrequency } from "@/lib/plaid-categories";
-import { summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
+import { hasPriceIncrease, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 
 export type StreamRow = {
   id: string;
@@ -21,6 +22,7 @@ export type StreamRow = {
   merchant_name: string | null;
   frequency: string | null;
   average_amount: number | null;
+  last_amount: number | null;
   last_date: string | null;
   predicted_next_date: string | null;
   is_active: boolean;
@@ -58,14 +60,27 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
   const accountLabel = stream.account
     ? `${stream.account.name}${stream.account.mask ? ` ••${stream.account.mask}` : ""}`
     : "Unknown account";
+  const priceIncreased =
+    stream.is_active && !stream.user_marked_cancelled && hasPriceIncrease(stream.average_amount, stream.last_amount);
 
   return (
     <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
       <div>
-        <p className="text-sm font-medium">{label}</p>
+        <p className="flex items-center gap-2 text-sm font-medium">
+          {label}
+          {priceIncreased && (
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+              <TrendingUp className="size-3" />
+              Price increased
+            </Badge>
+          )}
+        </p>
         <p className="text-xs text-muted-foreground">
           {accountLabel} · {humanizeFrequency(stream.frequency)} · last {formatDate(stream.last_date)}
           {stream.predicted_next_date ? ` · next ~${formatDate(stream.predicted_next_date)}` : ""}
+          {priceIncreased
+            ? ` · last charged $${stream.last_amount?.toFixed(2)} (avg $${stream.average_amount?.toFixed(2)})`
+            : ""}
         </p>
       </div>
       <div className="flex items-center gap-4">

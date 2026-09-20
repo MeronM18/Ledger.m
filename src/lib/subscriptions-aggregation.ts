@@ -29,3 +29,19 @@ export function summarizeSubscriptions<T extends SubscriptionStream>(
 
   return { active, inactive, monthlyTotal, annualTotal: monthlyTotal * 12 };
 }
+
+// >10% above the rolling average counts as a real increase, not just normal
+// per-charge variance (tax, a slightly different billing date, etc.) —
+// e.g. a Plaid-tracked average of $9.99 that just charged $12.99 (+30%)
+// should flag; a $9.99 average that charged $10.49 (+5%) shouldn't.
+const PRICE_INCREASE_THRESHOLD = 1.1;
+
+/**
+ * True when the most recent charge (last_amount) is meaningfully higher
+ * than the rolling average Plaid has tracked for this stream — the data to
+ * detect this (both fields) was already being stored, just never compared.
+ */
+export function hasPriceIncrease(averageAmount: number | null, lastAmount: number | null): boolean {
+  if (averageAmount === null || lastAmount === null || averageAmount <= 0) return false;
+  return lastAmount > averageAmount * PRICE_INCREASE_THRESHOLD;
+}

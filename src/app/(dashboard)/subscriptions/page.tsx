@@ -13,7 +13,7 @@ export default async function SubscriptionsPage() {
       admin
         .from("recurring_streams")
         .select(
-          "id, description, merchant_name, frequency, average_amount, last_date, predicted_next_date, is_active, user_marked_cancelled, account:accounts(id, name, mask)"
+          "id, description, merchant_name, frequency, average_amount, last_amount, last_date, predicted_next_date, is_active, user_marked_cancelled, account:accounts(id, name, mask)"
         )
         .eq("direction", "outflow"),
       admin
