@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Store } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -17,6 +18,7 @@ import {
   ManualTransactionRowActions,
   type ManualTransaction,
 } from "@/components/manual-transaction-form";
+import { downloadCsv, toCsv } from "@/lib/csv";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import { effectiveCategory, humanizeTransaction } from "@/lib/transaction-display";
 
@@ -126,6 +128,27 @@ export function TransactionsExplorer({
 
   const accountOptions = useMemo(() => [...accounts, MANUAL_ACCOUNT_OPTION], [accounts]);
 
+  // Exports exactly what's on screen — `sorted` already reflects every
+  // active filter (search/account/category/month) and the current sort, so
+  // this never silently exports the full unfiltered history.
+  function exportCsv() {
+    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Pending", "Source"];
+    const rows = sorted.map((t) => {
+      const { displayName, displayCategoryLabel } = humanizeTransaction(t);
+      return [
+        t.date,
+        displayName,
+        displayCategoryLabel,
+        t.isManual ? "Cash / Manual" : accountLabel(t.account),
+        t.amount.toFixed(2),
+        t.pending ? "Yes" : "No",
+        t.isManual ? "Manual" : "Plaid",
+      ];
+    });
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
+    downloadCsv(`ledger-transactions-${today}.csv`, toCsv(headers, rows));
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -142,7 +165,13 @@ export function TransactionsExplorer({
           monthValue={monthFilter}
           onMonthChange={setMonthFilter}
         />
-        <AddManualTransactionButton />
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={exportCsv}>
+            <Download className="size-3.5" />
+            Export CSV
+          </Button>
+          <AddManualTransactionButton />
+        </div>
       </div>
 
       {sorted.length === 0 ? (
