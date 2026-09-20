@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
+import { adjustCashAsset, cashDeltaForTransaction } from "@/lib/cash-asset-sync";
 import { ALL_PFC_CATEGORIES } from "@/lib/plaid-categories";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -33,6 +34,11 @@ export async function POST(request: Request) {
     console.error("Failed to create manual transaction", error);
     return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }
+
+  await adjustCashAsset(
+    admin,
+    cashDeltaForTransaction(parsed.data.amount, parsed.data.payment_method)
+  );
 
   return NextResponse.json({ transaction: data });
 }
