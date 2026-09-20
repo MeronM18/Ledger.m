@@ -1,5 +1,5 @@
 import "server-only";
-import type { AccountBase, Transaction as PlaidTransaction, TransactionStream } from "plaid";
+import type { Transaction as PlaidTransaction, TransactionStream } from "plaid";
 import { decrypt } from "@/lib/crypto";
 import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
@@ -204,7 +204,6 @@ export async function syncItemTransactions(itemDbId: string): Promise<Transactio
   const added: PlaidTransaction[] = [];
   const modified: PlaidTransaction[] = [];
   const removed: { transaction_id: string }[] = [];
-  let latestAccounts: AccountBase[] = [];
   let hasMore = true;
 
   try {
@@ -217,7 +216,6 @@ export async function syncItemTransactions(itemDbId: string): Promise<Transactio
       added.push(...response.data.added);
       modified.push(...response.data.modified);
       removed.push(...response.data.removed);
-      latestAccounts = response.data.accounts;
       cursor = response.data.next_cursor;
       hasMore = response.data.has_more;
     }
@@ -274,21 +272,30 @@ export async function syncItemTransactions(itemDbId: string): Promise<Transactio
       );
   }
 
-  // Update balances from whatever accounts came back on the sync response.
-  // TODO(phase-3): accounts with no transaction activity this sync won't
-  // appear in `latestAccounts` and their balances can go stale; refresh via
-  // accountsGet on a slower cadence (e.g. once per cron run) if that matters.
-  for (const acct of latestAccounts) {
-    const ourAccountId = accountIdMap.get(acct.account_id);
-    if (!ourAccountId) continue;
-    await admin
-      .from("accounts")
-      .update({
-        current_balance: acct.balances.current,
-        available_balance: acct.balances.available,
-        credit_limit: acct.balances.limit,
-      })
-      .eq("id", ourAccountId);
+  // Explicit accountsGet for every account on the item, not just the ones
+  // that happened to appear in this sync's transaction delta — an account
+  // with no new activity (e.g. a savings account nobody touched today)
+  // previously never got a fresh balance here at all, only whatever it had
+  // from its last sync with actual activity, silently going stale. A
+  // balance-refresh failure doesn't fail the whole sync — the transactions
+  // above already synced successfully, so log and keep going rather than
+  // losing that.
+  try {
+    const accountsResponse = await plaidClient.accountsGet({ access_token: accessToken });
+    for (const acct of accountsResponse.data.accounts) {
+      const ourAccountId = accountIdMap.get(acct.account_id);
+      if (!ourAccountId) continue;
+      await admin
+        .from("accounts")
+        .update({
+          current_balance: acct.balances.current,
+          available_balance: acct.balances.available,
+          credit_limit: acct.balances.limit,
+        })
+        .eq("id", ourAccountId);
+    }
+  } catch (err) {
+    console.error(`Failed to refresh account balances for item ${itemDbId}`, err);
   }
 
   await admin
