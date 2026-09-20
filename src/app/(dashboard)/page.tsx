@@ -15,7 +15,7 @@ import {
   manualTransactionToSpendingTransaction,
   monthlyIncomeVsSpending,
 } from "@/lib/spending-aggregation";
-import { summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
+import { isWithinNextDays, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -67,9 +67,13 @@ export default async function OverviewPage() {
     admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
     admin
       .from("recurring_streams")
-      .select("average_amount, frequency, is_active, user_marked_cancelled")
+      .select(
+        "id, merchant_name, description, average_amount, frequency, predicted_next_date, is_active, user_marked_cancelled"
+      )
       .eq("direction", "outflow"),
-    admin.from("manual_subscriptions").select("amount, frequency, is_active"),
+    admin
+      .from("manual_subscriptions")
+      .select("id, name, amount, frequency, next_billing_date, is_active"),
     admin
       .from("transactions")
       .select("id, date, name, merchant_name, logo_url, amount, iso_currency_code, pending")
@@ -120,6 +124,32 @@ export default async function OverviewPage() {
     ...(streamsData ?? []),
     ...manualSubsAsStreams,
   ]);
+
+  // "What's about to charge" — active, not cancelled, with a predicted date
+  // in the near future. A charge whose predicted date has already passed
+  // belongs to the lapsed-flag treatment on /subscriptions, not here.
+  const UPCOMING_WINDOW_DAYS = 14;
+  type UpcomingCharge = { key: string; label: string; amount: number; date: string; isManual: boolean };
+  const upcoming: UpcomingCharge[] = [
+    ...(streamsData ?? [])
+      .filter((s) => s.is_active && !s.user_marked_cancelled && isWithinNextDays(s.predicted_next_date, UPCOMING_WINDOW_DAYS))
+      .map((s) => ({
+        key: `plaid-${s.id}`,
+        label: s.merchant_name || s.description || "Unknown",
+        amount: s.average_amount ?? 0,
+        date: s.predicted_next_date as string,
+        isManual: false,
+      })),
+    ...(manualSubsData ?? [])
+      .filter((m) => m.is_active && isWithinNextDays(m.next_billing_date, UPCOMING_WINDOW_DAYS))
+      .map((m) => ({
+        key: `manual-${m.id}`,
+        label: m.name,
+        amount: m.amount,
+        date: m.next_billing_date as string,
+        isManual: true,
+      })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
 
   // Merge the two sources' own top-5s, then re-take the top 5 overall —
   // fetching 5 from each and re-slicing guarantees correctness even when a
@@ -262,6 +292,46 @@ export default async function OverviewPage() {
                 </div>
               )}
             </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Upcoming</CardTitle>
+          <SectionLink href="/subscriptions" />
+        </CardHeader>
+        <CardContent>
+          {subscriptionsError ? (
+            <QueryErrorState message="Couldn't load upcoming charges." />
+          ) : upcoming.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing predicted to charge in the next {UPCOMING_WINDOW_DAYS} days.
+            </p>
+          ) : (
+            <div className="flex flex-col">
+              {upcoming.map((u) => (
+                <div
+                  key={u.key}
+                  className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{u.label}</span>
+                    {u.isManual && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Manual
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(`${u.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </span>
+                    <Money amount={u.amount} tone="negative" className="text-sm font-medium" />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

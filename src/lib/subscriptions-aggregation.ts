@@ -62,9 +62,36 @@ const LAPSED_THRESHOLD_DAYS = 10;
  * Applies the same way to a manual subscription's next_billing_date, which
  * is just the user's own expectation of the next charge.
  */
+// Truncates to that calendar day's midnight — both hasLapsed and
+// isWithinNextDays below compare whole days, so a `referenceDate` carrying
+// a time-of-day (the normal case, since both default to `new Date()`)
+// must not shift the day-count by a fraction of a day near a boundary, and
+// must not exclude "today" from isWithinNextDays just because "now" is
+// later than midnight.
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
 export function hasLapsed(predictedNextDate: string | null, referenceDate: Date = new Date()): boolean {
   if (!predictedNextDate) return false;
   const predicted = new Date(`${predictedNextDate}T00:00:00`);
-  const daysPast = (referenceDate.getTime() - predicted.getTime()) / (1000 * 60 * 60 * 24);
+  const daysPast = (startOfDay(referenceDate).getTime() - predicted.getTime()) / (1000 * 60 * 60 * 24);
   return daysPast > LAPSED_THRESHOLD_DAYS;
+}
+
+/**
+ * True when `date` falls within [today, today + days] inclusive — the
+ * shared window check behind /overview's "Upcoming" preview. A date
+ * already in the past (predicted-but-missed, see hasLapsed above) doesn't
+ * count as upcoming.
+ */
+export function isWithinNextDays(
+  date: string | null,
+  days: number,
+  referenceDate: Date = new Date()
+): boolean {
+  if (!date) return false;
+  const target = new Date(`${date}T00:00:00`);
+  const daysUntil = (target.getTime() - startOfDay(referenceDate).getTime()) / (1000 * 60 * 60 * 24);
+  return daysUntil >= 0 && daysUntil <= days;
 }
