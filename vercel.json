@@ -8,6 +8,10 @@
     {
       "path": "/api/metal-prices/refresh",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/net-worth/snapshot",
+      "schedule": "5 6 * * *"
     }
   ]
 }

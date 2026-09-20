@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ManualAssetsManager, type ManualAsset } from "@/components/manual-assets-manager";
+import { NetWorthChart } from "@/components/net-worth-chart";
 import {
   PreciousMetalsManager,
   type MetalPriceRow,
@@ -29,6 +30,7 @@ export default async function AssetsPage() {
     { data: manualData, error: manualError },
     { data: holdingsData, error: holdingsError },
     { data: pricesData, error: pricesError },
+    { data: snapshotsData, error: snapshotsError },
   ] = await Promise.all([
     admin
       .from("accounts")
@@ -43,12 +45,14 @@ export default async function AssetsPage() {
       .select("id, metal, weight, weight_unit, purity, notes")
       .order("created_at", { ascending: false }),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
+    admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
   ]);
 
   if (acctError) console.error("Failed to load accounts", acctError);
   if (manualError) console.error("Failed to load manual assets", manualError);
   if (holdingsError) console.error("Failed to load precious metal holdings", holdingsError);
   if (pricesError) console.error("Failed to load metal prices", pricesError);
+  if (snapshotsError) console.error("Failed to load net worth snapshots", snapshotsError);
 
   const accounts = (accountsData ?? []) as AccountRow[];
   const manualAssets = (manualData ?? []) as ManualAsset[];
@@ -66,7 +70,7 @@ export default async function AssetsPage() {
     preciousMetalsValue
   );
 
-  const hasError = Boolean(acctError || manualError || holdingsError || pricesError);
+  const hasError = Boolean(acctError || manualError || holdingsError || pricesError || snapshotsError);
 
   return (
     <div className="flex flex-col gap-6">
@@ -116,6 +120,10 @@ export default async function AssetsPage() {
               </CardContent>
             </Card>
           </div>
+
+          <NetWorthChart
+            snapshots={(snapshotsData ?? []).map((s) => ({ date: s.date, netWorth: s.net_worth }))}
+          />
 
           <Card>
             <CardHeader>
