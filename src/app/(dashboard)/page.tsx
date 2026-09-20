@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Store } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { GreetingHeader } from "@/components/greeting-header";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth } from "@/lib/net-worth";
@@ -105,7 +106,7 @@ export default async function OverviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-bone">Overview</h1>
+      <GreetingHeader />
 
       <Card className="border-champagne/40">
         <CardHeader className="flex flex-row items-center justify-between">
