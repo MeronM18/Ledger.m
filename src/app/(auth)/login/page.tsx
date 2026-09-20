@@ -4,29 +4,33 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Goes through our own /api/auth/request-magic-link instead of calling
+  // supabase.auth.signInWithOtp() directly from the browser — that route
+  // checks the email against ALLOWED_EMAIL server-side and never contacts
+  // Supabase at all for anyone else, and returns the same message either
+  // way so the response itself can't be used to test which emails are
+  // allowed.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
     setErrorMessage("");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+    const res = await fetch("/api/auth/request-magic-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
     });
 
-    if (error) {
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
       setStatus("error");
-      setErrorMessage(error.message);
+      setErrorMessage(data.error ?? "Something went wrong");
       return;
     }
 
