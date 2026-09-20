@@ -18,6 +18,32 @@ const NON_SPENDING_PFC_PRIMARY = new Set([
   "TRANSFER",
 ]);
 
+// Every PFC primary category actually seen across all three connected
+// institutions (confirmed against live data) — used as the fixed dropdown
+// for manually-entered transactions/subscriptions rather than free text, so
+// a manual entry aggregates into the exact same category buckets as a
+// Plaid-sourced one instead of creating an ungrouped one-off category.
+export const ALL_PFC_CATEGORIES = [
+  "BANK_FEES",
+  "ENTERTAINMENT",
+  "FOOD_AND_DRINK",
+  "GENERAL_MERCHANDISE",
+  "GENERAL_SERVICES",
+  "GOVERNMENT_AND_NON_PROFIT",
+  "HOME_IMPROVEMENT",
+  "INCOME",
+  "LOAN_DISBURSEMENTS",
+  "LOAN_PAYMENTS",
+  "MEDICAL",
+  "OTHER",
+  "PERSONAL_CARE",
+  "RENT_AND_UTILITIES",
+  "TRANSFER_IN",
+  "TRANSFER_OUT",
+  "TRANSPORTATION",
+  "TRAVEL",
+] as const;
+
 export function isSpendingCategory(pfcPrimary: string | null): boolean {
   if (!pfcPrimary) return true; // uncategorized transactions still count as spending
   return !NON_SPENDING_PFC_PRIMARY.has(pfcPrimary);

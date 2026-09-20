@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/money";
 import { SpendingCharts } from "@/components/spending-charts";
-import { FilterBar, type AccountOption } from "@/components/filter-bar";
+import { FilterBar, MANUAL_ACCOUNT_ID, MANUAL_ACCOUNT_OPTION, type AccountOption } from "@/components/filter-bar";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import {
   categoryTotalsForMonth,
@@ -44,11 +44,17 @@ export function SpendingExplorer({
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
-      if (accountFilter !== "all" && t.account?.id !== accountFilter) return false;
+      if (accountFilter === MANUAL_ACCOUNT_ID) {
+        if (t.account !== null) return false;
+      } else if (accountFilter !== "all" && t.account?.id !== accountFilter) {
+        return false;
+      }
       if (categoryFilter !== "all" && (effectiveCategory(t) ?? "OTHER") !== categoryFilter) return false;
       return true;
     });
   }, [transactions, accountFilter, categoryFilter]);
+
+  const accountOptions = useMemo(() => [...accounts, MANUAL_ACCOUNT_OPTION], [accounts]);
 
   const now = new Date();
   const categoryTotals = categoryTotalsForMonth(filtered, now.getFullYear(), now.getMonth());
@@ -59,7 +65,7 @@ export function SpendingExplorer({
   return (
     <div className="flex flex-col gap-6">
       <FilterBar
-        accounts={accounts}
+        accounts={accountOptions}
         accountValue={accountFilter}
         onAccountChange={setAccountFilter}
         categories={categories}

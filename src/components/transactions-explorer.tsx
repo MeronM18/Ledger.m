@@ -5,7 +5,18 @@ import { ArrowDown, ArrowUp, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/money";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { accountLabel, FilterBar, type AccountOption } from "@/components/filter-bar";
+import {
+  accountLabel,
+  FilterBar,
+  MANUAL_ACCOUNT_ID,
+  MANUAL_ACCOUNT_OPTION,
+  type AccountOption,
+} from "@/components/filter-bar";
+import {
+  AddManualTransactionButton,
+  ManualTransactionRowActions,
+  type ManualTransaction,
+} from "@/components/manual-transaction-form";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import { effectiveCategory, humanizeTransaction } from "@/lib/transaction-display";
 
@@ -22,6 +33,10 @@ export type TransactionRow = {
   iso_currency_code: string | null;
   pending: boolean;
   account: { id: string; name: string; mask: string | null } | null;
+  isManual?: boolean;
+  // Only present when isManual is true — carries payment_method/notes for
+  // the edit dialog, which TransactionRow's own shape doesn't have room for.
+  manualSource?: ManualTransaction;
 };
 
 export function TransactionsExplorer({
@@ -70,7 +85,11 @@ export function TransactionsExplorer({
     const q = search.trim().toLowerCase();
 
     return transactions.filter((t) => {
-      if (accountFilter !== "all" && t.account?.id !== accountFilter) return false;
+      if (accountFilter === MANUAL_ACCOUNT_ID) {
+        if (t.account !== null) return false;
+      } else if (accountFilter !== "all" && t.account?.id !== accountFilter) {
+        return false;
+      }
       if (categoryFilter !== "all" && (effectiveCategory(t) ?? "(uncategorized)") !== categoryFilter) {
         return false;
       }
@@ -99,21 +118,26 @@ export function TransactionsExplorer({
     setSortDirection((d) => (d === "desc" ? "asc" : "desc"));
   }
 
+  const accountOptions = useMemo(() => [...accounts, MANUAL_ACCOUNT_OPTION], [accounts]);
+
   return (
     <div className="flex flex-col gap-4">
-      <FilterBar
-        search={search}
-        onSearchChange={setSearch}
-        accounts={accounts}
-        accountValue={accountFilter}
-        onAccountChange={setAccountFilter}
-        categories={categories}
-        categoryValue={categoryFilter}
-        onCategoryChange={setCategoryFilter}
-        months={months}
-        monthValue={monthFilter}
-        onMonthChange={setMonthFilter}
-      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <FilterBar
+          search={search}
+          onSearchChange={setSearch}
+          accounts={accountOptions}
+          accountValue={accountFilter}
+          onAccountChange={setAccountFilter}
+          categories={categories}
+          categoryValue={categoryFilter}
+          onCategoryChange={setCategoryFilter}
+          months={months}
+          monthValue={monthFilter}
+          onMonthChange={setMonthFilter}
+        />
+        <AddManualTransactionButton />
+      </div>
 
       {sorted.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
@@ -138,6 +162,7 @@ export function TransactionsExplorer({
                   {sortDirection === "desc" && <ArrowDown className="size-3" />}
                 </button>
               </TableHead>
+              <TableHead className="w-16" />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -170,6 +195,11 @@ export function TransactionsExplorer({
                       )}
                       <span className="flex items-center gap-2">
                         {displayName}
+                        {t.isManual && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Manual
+                          </Badge>
+                        )}
                         {t.pending && (
                           <Badge variant="secondary" className="text-[10px]">
                             Pending
@@ -179,7 +209,7 @@ export function TransactionsExplorer({
                     </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {accountLabel(t.account)}
+                    {t.isManual ? "Cash / Manual" : accountLabel(t.account)}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {displayCategoryLabel}
@@ -192,6 +222,11 @@ export function TransactionsExplorer({
                       showSign
                       className="font-medium"
                     />
+                  </TableCell>
+                  <TableCell>
+                    {t.isManual && t.manualSource && (
+                      <ManualTransactionRowActions transaction={t.manualSource} />
+                    )}
                   </TableCell>
                 </TableRow>
               );

@@ -11,6 +11,19 @@ import {
 
 export type AccountOption = { id: string; name: string; mask: string | null };
 export type CategoryOption = { value: string; label: string };
+
+// Manually-entered transactions/subscriptions aren't tied to any connected
+// Plaid account. Rather than let them silently disappear whenever a
+// specific account filter is applied (or only surface via "All accounts"),
+// pages that mix the two sources add this as a real, explicit filter
+// option — same sentinel value everywhere it's used, so the filtering
+// predicate in each explorer checks against one shared identifier.
+export const MANUAL_ACCOUNT_ID = "__manual__";
+export const MANUAL_ACCOUNT_OPTION: AccountOption = {
+  id: MANUAL_ACCOUNT_ID,
+  name: "Cash / Manual",
+  mask: null,
+};
 // value is "YYYY-MM"; the "all" sentinel is added by FilterBar itself, same
 // as the "All accounts"/"All categories" entries below.
 export type MonthOption = { value: string; label: string };

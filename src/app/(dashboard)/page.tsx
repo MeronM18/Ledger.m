@@ -7,7 +7,11 @@ import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth } from "@/lib/net-worth";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
-import { categoryTotalsForMonth, filterSpendingTransactions } from "@/lib/spending-aggregation";
+import {
+  categoryTotalsForMonth,
+  filterSpendingTransactions,
+  manualTransactionToSpendingTransaction,
+} from "@/lib/spending-aggregation";
 import { summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -21,6 +25,7 @@ type RecentTransaction = {
   amount: number;
   iso_currency_code: string | null;
   pending: boolean;
+  isManual: boolean;
 };
 
 function SectionLink({ href }: { href: string }) {
@@ -43,9 +48,11 @@ export default async function OverviewPage() {
     { data: holdingsData, error: holdingsError },
     { data: pricesData, error: pricesError },
     { data: txData, error: txError },
+    { data: manualTxData, error: manualTxError },
     { data: streamsData, error: streamsError },
     { data: manualSubsData, error: manualSubsError },
     { data: recentData, error: recentError },
+    { data: recentManualData, error: recentManualError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance"),
     admin.from("manual_assets").select("value, is_liability"),
@@ -54,6 +61,7 @@ export default async function OverviewPage() {
     admin
       .from("transactions")
       .select("date, amount, pfc_primary, merchant_name, name, pending, iso_currency_code"),
+    admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
     admin
       .from("recurring_streams")
       .select("average_amount, frequency, is_active, user_marked_cancelled")
@@ -64,6 +72,11 @@ export default async function OverviewPage() {
       .select("id, date, name, merchant_name, logo_url, amount, iso_currency_code, pending")
       .order("date", { ascending: false })
       .limit(5),
+    admin
+      .from("manual_transactions")
+      .select("id, date, name, amount")
+      .order("date", { ascending: false })
+      .limit(5),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -71,15 +84,20 @@ export default async function OverviewPage() {
   if (holdingsError) console.error("Failed to load precious metal holdings for overview", holdingsError);
   if (pricesError) console.error("Failed to load metal prices for overview", pricesError);
   if (txError) console.error("Failed to load transactions for overview", txError);
+  if (manualTxError) console.error("Failed to load manual transactions for overview", manualTxError);
   if (streamsError) console.error("Failed to load recurring streams for overview", streamsError);
   if (manualSubsError) console.error("Failed to load manual subscriptions for overview", manualSubsError);
   if (recentError) console.error("Failed to load recent transactions for overview", recentError);
+  if (recentManualError) console.error("Failed to load recent manual transactions for overview", recentManualError);
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
 
-  const allTransactions = txData ?? [];
-  const currency = allTransactions[0]?.iso_currency_code ?? "USD";
+  const allTransactions = [
+    ...(txData ?? []),
+    ...(manualTxData ?? []).map(manualTransactionToSpendingTransaction),
+  ];
+  const currency = txData?.[0]?.iso_currency_code ?? "USD";
   const spending = filterSpendingTransactions(allTransactions);
   const now = new Date();
   const categoryTotals = categoryTotalsForMonth(spending, now.getFullYear(), now.getMonth());
@@ -98,11 +116,31 @@ export default async function OverviewPage() {
     ...manualSubsAsStreams,
   ]);
 
-  const recent = (recentData ?? []) as RecentTransaction[];
+  // Merge the two sources' own top-5s, then re-take the top 5 overall —
+  // fetching 5 from each and re-slicing guarantees correctness even when a
+  // manual entry is more recent than some/all of the Plaid ones, rather
+  // than always showing 5 Plaid rows plus manual ones bolted on separately.
+  const recent = [
+    ...((recentData ?? []) as Omit<RecentTransaction, "isManual">[]).map((t) => ({ ...t, isManual: false })),
+    ...(recentManualData ?? []).map((m) => ({
+      id: m.id,
+      date: m.date,
+      name: null,
+      merchant_name: m.name,
+      logo_url: null,
+      amount: m.amount,
+      iso_currency_code: null,
+      pending: false,
+      isManual: true,
+    })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError);
-  const spendingError = Boolean(txError);
+  const spendingError = Boolean(txError || manualTxError);
   const subscriptionsError = Boolean(streamsError || manualSubsError);
+  const recentTransactionsError = Boolean(recentError || recentManualError);
 
   return (
     <div className="flex flex-col gap-6">
@@ -189,7 +227,7 @@ export default async function OverviewPage() {
           <SectionLink href="/transactions" />
         </CardHeader>
         <CardContent>
-          {recentError ? (
+          {recentTransactionsError ? (
             <QueryErrorState message="Couldn't load recent transactions." />
           ) : recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">No transactions yet.</p>
@@ -219,6 +257,11 @@ export default async function OverviewPage() {
                       )}
                       <span className="flex items-center gap-2 text-sm font-medium">
                         {merchant}
+                        {t.isManual && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Manual
+                          </Badge>
+                        )}
                         {t.pending && (
                           <Badge variant="secondary" className="text-[10px]">
                             Pending

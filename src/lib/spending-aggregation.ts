@@ -27,6 +27,40 @@ export type RefundEntry = {
 
 const OTHER_SLOT = 8;
 
+export type ManualTransactionLike = {
+  date: string;
+  name: string;
+  amount: number;
+  pfc_primary: string;
+};
+
+/**
+ * Normalizes a manual_transactions row into the exact same shape every
+ * aggregation function below already operates on — this is the one and
+ * only place that mapping happens, specifically so every page that needs
+ * "Plaid + manual, aggregated together" merges the two sources the same
+ * way rather than each computing its own version (the class of bug this
+ * app already hit once with net worth).
+ *
+ * The manual name goes into merchant_name, not name: humanizeTransactionName
+ * treats a populated merchant_name as already-clean and returns it as-is,
+ * while `name` is what the messy-bank-descriptor heuristics (P2P transfer
+ * detection, PAYROLL parsing) run against. A user-typed manual entry name
+ * is already clean and its category was deliberately chosen from a
+ * dropdown — it must never be silently reinterpreted or recategorized by
+ * those heuristics the way a raw Plaid descriptor can be.
+ */
+export function manualTransactionToSpendingTransaction(m: ManualTransactionLike): SpendingTransaction {
+  return {
+    date: m.date,
+    amount: m.amount,
+    pfc_primary: m.pfc_primary,
+    merchant_name: m.name,
+    name: null,
+    pending: false,
+  };
+}
+
 /**
  * Excludes pending transactions and non-spending categories (transfers,
  * income, loan payments) — using each transaction's *effective* category
