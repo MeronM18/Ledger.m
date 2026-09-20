@@ -53,10 +53,29 @@ const UNIT_LABEL: Record<PreciousMetalHolding["weight_unit"], string> = {
   g: "g",
 };
 
+// Standard karat-to-fineness conversions for gold — lets the user pick a
+// karat instead of having to know/look up the decimal purity themselves.
+// Silver doesn't use karat (it's quoted directly as a fineness, e.g.
+// "sterling" = .925), so this only applies when metal === "gold".
+const KARAT_OPTIONS: { key: string; label: string; purity: number }[] = [
+  { key: "24k", label: "24k (fine gold)", purity: 1 },
+  { key: "22k", label: "22k", purity: 0.9167 },
+  { key: "21k", label: "21k", purity: 0.875 },
+  { key: "18k", label: "18k", purity: 0.75 },
+  { key: "14k", label: "14k", purity: 0.5833 },
+  { key: "10k", label: "10k", purity: 0.4167 },
+];
+
+function karatForPurity(purity: number): string {
+  const match = KARAT_OPTIONS.find((k) => Math.abs(k.purity - purity) < 0.0005);
+  return match?.key ?? "other";
+}
+
 type FormState = {
   metal: PreciousMetalHolding["metal"];
   weight: string;
   weight_unit: PreciousMetalHolding["weight_unit"];
+  karat: string;
   purity: string;
   notes: string;
 };
@@ -65,6 +84,7 @@ const EMPTY_FORM: FormState = {
   metal: "gold",
   weight: "",
   weight_unit: "oz",
+  karat: "24k",
   purity: "1",
   notes: "",
 };
@@ -86,6 +106,7 @@ function HoldingDialog({
           metal: holding.metal,
           weight: String(holding.weight),
           weight_unit: holding.weight_unit,
+          karat: holding.metal === "gold" ? karatForPurity(holding.purity) : "24k",
           purity: String(holding.purity),
           notes: holding.notes ?? "",
         }
@@ -206,17 +227,50 @@ function HoldingDialog({
           </button>
 
           {showAdvanced ? (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="metal-purity">Purity (0–1, e.g. 0.999)</Label>
-              <Input
-                id="metal-purity"
-                type="number"
-                step="0.001"
-                min="0"
-                max="1"
-                value={form.purity}
-                onChange={(e) => setForm((f) => ({ ...f, purity: e.target.value }))}
-              />
+            <div className="flex flex-col gap-3">
+              {form.metal === "gold" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Karat</Label>
+                  <Select
+                    value={form.karat}
+                    onValueChange={(v) => {
+                      const option = KARAT_OPTIONS.find((k) => k.key === v);
+                      setForm((f) => ({
+                        ...f,
+                        karat: v,
+                        purity: option ? String(option.purity) : f.purity,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {KARAT_OPTIONS.map((k) => (
+                        <SelectItem key={k.key} value={k.key}>
+                          {k.label} ({k.purity})
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="other">Other (enter purity manually)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {(form.metal !== "gold" || form.karat === "other") && (
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="metal-purity">Purity (0–1, e.g. 0.999)</Label>
+                  <Input
+                    id="metal-purity"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    max="1"
+                    value={form.purity}
+                    onChange={(e) => setForm((f) => ({ ...f, purity: e.target.value }))}
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
