@@ -13,7 +13,7 @@ import {
   topMerchants,
   type SpendingTransaction,
 } from "@/lib/spending-aggregation";
-import { effectiveCategory } from "@/lib/transaction-display";
+import { effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 
 export type SpendingRow = SpendingTransaction & {
   account: { id: string; name: string; mask: string | null } | null;
@@ -31,6 +31,7 @@ export function SpendingExplorer({
   currency: string | null;
   monthLabel: string;
 }) {
+  const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
@@ -43,6 +44,8 @@ export function SpendingExplorer({
   }, [transactions]);
 
   const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
     return transactions.filter((t) => {
       if (accountFilter === MANUAL_ACCOUNT_ID) {
         if (t.account !== null) return false;
@@ -50,9 +53,13 @@ export function SpendingExplorer({
         return false;
       }
       if (categoryFilter !== "all" && (effectiveCategory(t) ?? "OTHER") !== categoryFilter) return false;
+      if (q) {
+        const haystack = `${humanizeTransactionName(t)} ${t.merchant_name ?? ""} ${t.name ?? ""} ${humanizeCategory(effectiveCategory(t))}`.toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       return true;
     });
-  }, [transactions, accountFilter, categoryFilter]);
+  }, [transactions, accountFilter, categoryFilter, search]);
 
   const accountOptions = useMemo(() => [...accounts, MANUAL_ACCOUNT_OPTION], [accounts]);
 
@@ -65,6 +72,8 @@ export function SpendingExplorer({
   return (
     <div className="flex flex-col gap-6">
       <FilterBar
+        search={search}
+        onSearchChange={setSearch}
         accounts={accountOptions}
         accountValue={accountFilter}
         onAccountChange={setAccountFilter}

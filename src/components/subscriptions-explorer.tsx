@@ -128,6 +128,7 @@ export function SubscriptionsExplorer({
   manualSubscriptions: ManualSubscription[];
   accounts: AccountOption[];
 }) {
+  const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
 
   const items = useMemo<RowItem[]>(() => {
@@ -162,9 +163,21 @@ export function SubscriptionsExplorer({
     return [...plaidItems, ...manualItems];
   }, [streams, manualSubscriptions, accountFilter]);
 
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) => {
+      const label =
+        item.source === "plaid"
+          ? item.plaidStream!.merchant_name || item.plaidStream!.description || "Unknown"
+          : item.manualSub!.name;
+      return label.toLowerCase().includes(q);
+    });
+  }, [items, search]);
+
   const { active, inactive, monthlyTotal, annualTotal } = useMemo(
-    () => summarizeSubscriptions(items),
-    [items]
+    () => summarizeSubscriptions(filteredItems),
+    [filteredItems]
   );
 
   function renderRow(item: RowItem) {
@@ -178,7 +191,13 @@ export function SubscriptionsExplorer({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <FilterBar accounts={accounts} accountValue={accountFilter} onAccountChange={setAccountFilter} />
+        <FilterBar
+          search={search}
+          onSearchChange={setSearch}
+          accounts={accounts}
+          accountValue={accountFilter}
+          onAccountChange={setAccountFilter}
+        />
         <AddManualSubscriptionButton />
       </div>
 
