@@ -3,6 +3,7 @@ import { ArrowRight, Store } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Money } from "@/components/money";
+import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth } from "@/lib/net-worth";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { categoryTotalsForMonth, filterSpendingTransactions } from "@/lib/spending-aggregation";
@@ -98,6 +99,10 @@ export default async function OverviewPage() {
 
   const recent = (recentData ?? []) as RecentTransaction[];
 
+  const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError);
+  const spendingError = Boolean(txError);
+  const subscriptionsError = Boolean(streamsError || manualSubsError);
+
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Overview</h1>
@@ -108,13 +113,17 @@ export default async function OverviewPage() {
           <SectionLink href="/assets" />
         </CardHeader>
         <CardContent>
-          <span
-            className={`font-serif text-3xl font-semibold tabular-nums ${
-              netWorth < 0 ? "text-oxblood" : "text-moss"
-            }`}
-          >
-            {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(netWorth)}
-          </span>
+          {netWorthError ? (
+            <QueryErrorState message="Couldn't load net worth." />
+          ) : (
+            <span
+              className={`font-serif text-3xl font-semibold tabular-nums ${
+                netWorth < 0 ? "text-oxblood" : "text-moss"
+              }`}
+            >
+              {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(netWorth)}
+            </span>
+          )}
         </CardContent>
       </Card>
 
@@ -125,21 +134,27 @@ export default async function OverviewPage() {
             <SectionLink href="/spending" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <Money amount={monthTotal} currency={currency} tone="negative" className="text-2xl font-semibold" />
-            {topCategories.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No spending recorded yet.</p>
+            {spendingError ? (
+              <QueryErrorState message="Couldn't load spending." />
             ) : (
-              <div className="flex flex-col">
-                {topCategories.map((c) => (
-                  <div
-                    key={c.category}
-                    className="flex items-center justify-between border-t border-border py-2 first:border-t-0 first:pt-0"
-                  >
-                    <span className="text-sm text-muted-foreground">{c.label}</span>
-                    <Money amount={c.amount} currency={currency} tone="negative" className="text-sm font-medium" />
+              <>
+                <Money amount={monthTotal} currency={currency} tone="negative" className="text-2xl font-semibold" />
+                {topCategories.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No spending recorded yet.</p>
+                ) : (
+                  <div className="flex flex-col">
+                    {topCategories.map((c) => (
+                      <div
+                        key={c.category}
+                        className="flex items-center justify-between border-t border-border py-2 first:border-t-0 first:pt-0"
+                      >
+                        <span className="text-sm text-muted-foreground">{c.label}</span>
+                        <Money amount={c.amount} currency={currency} tone="negative" className="text-sm font-medium" />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
@@ -150,13 +165,19 @@ export default async function OverviewPage() {
             <SectionLink href="/subscriptions" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground">Monthly cost</p>
-              <Money amount={monthlyTotal} tone="negative" className="text-2xl font-semibold" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {active.length} active subscription{active.length === 1 ? "" : "s"}
-            </p>
+            {subscriptionsError ? (
+              <QueryErrorState message="Couldn't load subscriptions." />
+            ) : (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground">Monthly cost</p>
+                  <Money amount={monthlyTotal} tone="negative" className="text-2xl font-semibold" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {active.length} active subscription{active.length === 1 ? "" : "s"}
+                </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -167,7 +188,9 @@ export default async function OverviewPage() {
           <SectionLink href="/transactions" />
         </CardHeader>
         <CardContent>
-          {recent.length === 0 ? (
+          {recentError ? (
+            <QueryErrorState message="Couldn't load recent transactions." />
+          ) : recent.length === 0 ? (
             <p className="text-sm text-muted-foreground">No transactions yet.</p>
           ) : (
             <div className="flex flex-col">

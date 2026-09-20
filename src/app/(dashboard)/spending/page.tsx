@@ -1,4 +1,5 @@
 import { SpendingExplorer, type SpendingRow } from "@/components/spending-explorer";
+import { QueryErrorState } from "@/components/query-error";
 import { filterSpendingTransactions } from "@/lib/spending-aggregation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,12 +30,16 @@ export default async function SpendingPage() {
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Spending</h1>
 
-      <SpendingExplorer
-        transactions={spending}
-        accounts={accounts ?? []}
-        currency={currency}
-        monthLabel={monthLabel}
-      />
+      {error || acctError ? (
+        <QueryErrorState message="Couldn't load your spending data. Try refreshing the page." />
+      ) : (
+        <SpendingExplorer
+          transactions={spending}
+          accounts={accounts ?? []}
+          currency={currency}
+          monthLabel={monthLabel}
+        />
+      )}
     </div>
   );
 }

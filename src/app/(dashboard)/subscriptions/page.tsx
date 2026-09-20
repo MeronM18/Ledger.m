@@ -1,5 +1,6 @@
 import { SubscriptionsExplorer, type StreamRow } from "@/components/subscriptions-explorer";
 import type { ManualSubscription } from "@/components/manual-subscription-form";
+import { QueryErrorState } from "@/components/query-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export default async function SubscriptionsPage() {
@@ -32,11 +33,15 @@ export default async function SubscriptionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Subscriptions</h1>
-      <SubscriptionsExplorer
-        streams={streams}
-        manualSubscriptions={manualSubscriptions}
-        accounts={accounts ?? []}
-      />
+      {error || manualError || acctError ? (
+        <QueryErrorState message="Couldn't load your subscriptions. Try refreshing the page." />
+      ) : (
+        <SubscriptionsExplorer
+          streams={streams}
+          manualSubscriptions={manualSubscriptions}
+          accounts={accounts ?? []}
+        />
+      )}
     </div>
   );
 }
