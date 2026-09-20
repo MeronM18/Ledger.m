@@ -44,8 +44,16 @@ type FormState = {
   notes: string;
 };
 
+// NOT new Date().toISOString().slice(0, 10) — that converts to UTC first,
+// so anyone west of UTC using this after ~8pm local (America/New_York
+// during EDT) gets tomorrow's date instead of today's. Confirmed live: at
+// 11:21pm EDT, toISOString() already reads 2026-09-20 while it's still
+// 2026-09-19 locally. en-CA formats as YYYY-MM-DD, matching what an
+// <input type="date"> value expects. Same timezone convention as
+// greeting-header.tsx, for the same reason (this app has one real user, in
+// one real place).
 function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
 }
 
 const EMPTY_FORM: FormState = {

@@ -105,12 +105,18 @@ export function TransactionsExplorer({
   // Sort works together with the filters above, applied on top of the
   // already-filtered set rather than replacing it. Toggles between
   // desc/asc on repeated header clicks; no "unsorted" state to cycle back
-  // to — the query's own date-desc order is what you get before the first
-  // click, matching the header carrying no arrow until then.
+  // to — falls back to date-descending, which must be enforced here rather
+  // than trusted from the caller, since `transactions` merges two
+  // independently-sorted sources (Plaid + manual) that are concatenated,
+  // not interleaved by date, so the merged array is not actually in date
+  // order even though each source query is.
   const sorted = useMemo(() => {
-    if (!sortDirection) return filtered;
     const copy = [...filtered];
-    copy.sort((a, b) => (sortDirection === "asc" ? a.amount - b.amount : b.amount - a.amount));
+    if (sortDirection) {
+      copy.sort((a, b) => (sortDirection === "asc" ? a.amount - b.amount : b.amount - a.amount));
+    } else {
+      copy.sort((a, b) => b.date.localeCompare(a.date));
+    }
     return copy;
   }, [filtered, sortDirection]);
 
