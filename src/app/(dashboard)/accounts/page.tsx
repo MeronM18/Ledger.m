@@ -36,20 +36,45 @@ function statusBadgeVariant(status: string): "default" | "destructive" | "second
   return "secondary";
 }
 
+function formatHistoryStart(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
 export default async function AccountsPage() {
   const admin = createAdminClient();
-  const { data: items, error } = await admin
-    .from("items")
-    .select(
-      "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, iso_currency_code)"
-    )
-    .order("created_at", { ascending: false });
+  const [{ data: items, error }, { data: txDates, error: txDatesError }] = await Promise.all([
+    admin
+      .from("items")
+      .select(
+        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, iso_currency_code)"
+      )
+      .order("created_at", { ascending: false }),
+    // Earliest transaction per item — surfaces how much history Plaid
+    // actually returned (days_requested is a request, not a guarantee, and
+    // it varies a lot by institution) rather than leaving that invisible.
+    admin.from("transactions").select("date, account:accounts(item_id)").order("date", { ascending: true }),
+  ]);
 
   if (error) {
     console.error("Failed to load accounts", error);
   }
+  if (txDatesError) {
+    // Non-fatal: the page still works without the history-start line, so
+    // this degrades quietly rather than blocking the whole page on a
+    // supplementary query.
+    console.error("Failed to load transaction dates for history coverage", txDatesError);
+  }
 
   const rows = (items ?? []) as unknown as ItemRow[];
+
+  const earliestDateByItem = new Map<string, string>();
+  for (const t of (txDates ?? []) as unknown as { date: string; account: { item_id: string } | null }[]) {
+    const itemId = t.account?.item_id;
+    if (!itemId) continue;
+    // Rows are already ordered by date ascending, so the first one seen
+    // per item is its earliest.
+    if (!earliestDateByItem.has(itemId)) earliestDateByItem.set(itemId, t.date);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -81,6 +106,10 @@ export default async function AccountsPage() {
                       {item.last_synced_at
                         ? `Last synced ${new Date(item.last_synced_at).toLocaleString()}`
                         : "Never synced"}
+                      {" · "}
+                      {earliestDateByItem.has(item.id)
+                        ? `History from ${formatHistoryStart(earliestDateByItem.get(item.id)!)}`
+                        : "No transaction history yet"}
                       {item.error_code ? ` · ${item.error_code}` : ""}
                     </p>
                   </div>
