@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LastSyncedLabel } from "@/components/last-synced-label";
 import { Money } from "@/components/money";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { QueryErrorState } from "@/components/query-error";
@@ -103,9 +104,7 @@ export default async function AccountsPage() {
                   <div className="flex flex-col gap-1">
                     <CardTitle>{item.institution_name ?? "Unknown institution"}</CardTitle>
                     <p className="text-xs text-muted-foreground">
-                      {item.last_synced_at
-                        ? `Last synced ${new Date(item.last_synced_at).toLocaleString()}`
-                        : "Never synced"}
+                      <LastSyncedLabel timestamp={item.last_synced_at} />
                       {" · "}
                       {earliestDateByItem.has(item.id)
                         ? `History from ${formatHistoryStart(earliestDateByItem.get(item.id)!)}`
