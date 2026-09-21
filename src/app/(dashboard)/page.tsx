@@ -56,6 +56,7 @@ export default async function OverviewPage() {
     { data: manualSubsData, error: manualSubsError },
     { data: recentData, error: recentError },
     { data: recentManualData, error: recentManualError },
+    { data: creditAccounts, error: creditAcctError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance"),
     admin.from("manual_assets").select("value, is_liability"),
@@ -63,7 +64,7 @@ export default async function OverviewPage() {
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),
     admin
       .from("transactions")
-      .select("date, amount, pfc_primary, merchant_name, name, pending, iso_currency_code"),
+      .select("date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code"),
     admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
     admin
       .from("recurring_streams")
@@ -84,6 +85,7 @@ export default async function OverviewPage() {
       .select("id, date, name, amount")
       .order("date", { ascending: false })
       .limit(5),
+    admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -96,6 +98,7 @@ export default async function OverviewPage() {
   if (manualSubsError) console.error("Failed to load manual subscriptions for overview", manualSubsError);
   if (recentError) console.error("Failed to load recent transactions for overview", recentError);
   if (recentManualError) console.error("Failed to load recent manual transactions for overview", recentManualError);
+  if (creditAcctError) console.error("Failed to load connected credit accounts for overview", creditAcctError);
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
@@ -105,7 +108,22 @@ export default async function OverviewPage() {
     ...(manualTxData ?? []).map(manualTransactionToSpendingTransaction),
   ];
   const currency = txData?.[0]?.iso_currency_code ?? "USD";
-  const spending = filterSpendingTransactions(allTransactions);
+
+  // Only institutions with a connected *credit*-type account count as a
+  // "connected card" for the payment-exclusion rule — a connected
+  // savings/checking account at the same institution a card payment happens
+  // to be processed under (Amex here is a savings account, not a card)
+  // must never accidentally suppress that payment as if it were the card
+  // itself.
+  const connectedCardIssuers = Array.from(
+    new Set(
+      (creditAccounts ?? [])
+        .map((a) => (a.item as unknown as { institution_name: string | null } | null)?.institution_name)
+        .filter((name): name is string => Boolean(name))
+    )
+  );
+
+  const spending = filterSpendingTransactions(allTransactions, connectedCardIssuers);
   const now = new Date();
   const categoryTotals = categoryTotalsForMonth(spending, now.getFullYear(), now.getMonth());
   const monthTotal = categoryTotals.reduce((sum, c) => sum + c.amount, 0);
@@ -173,7 +191,7 @@ export default async function OverviewPage() {
     .slice(0, 5);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError);
-  const spendingError = Boolean(txError || manualTxError);
+  const spendingError = Boolean(txError || manualTxError || creditAcctError);
   const subscriptionsError = Boolean(streamsError || manualSubsError);
   const recentTransactionsError = Boolean(recentError || recentManualError);
 

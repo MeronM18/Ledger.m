@@ -9,6 +9,7 @@ export type SpendingTransaction = {
   date: string; // YYYY-MM-DD
   amount: number; // Plaid convention: positive = money out, negative = money in
   pfc_primary: string | null;
+  pfc_detailed?: string | null;
   merchant_name: string | null;
   name: string | null;
   pending: boolean;
@@ -61,6 +62,40 @@ export function manualTransactionToSpendingTransaction(m: ManualTransactionLike)
   };
 }
 
+const CREDIT_CARD_PAYMENT_DETAIL = "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT";
+
+/**
+ * True for a credit-card-payment transaction (Plaid's own
+ * LOAN_PAYMENTS_CREDIT_CARD_PAYMENT detailed category — more reliable than
+ * pattern-matching the raw name/merchant text) whose destination card is
+ * NOT one of `connectedCardIssuers` (the institution names of connected
+ * Plaid items that actually have a credit-type account — e.g. "Chase").
+ *
+ * A payment toward a connected card is correctly excluded from spending
+ * elsewhere: that card's individual purchases already sync in and get
+ * counted on their own, so counting the payment too would double-count
+ * them. But a payment toward a card that ISN'T connected (Apple Card,
+ * or a card processed under a generic biller name like "Cardmember
+ * Service"/"Elan") has no other transactions syncing in anywhere — the
+ * payment itself is the only signal that spending ever happened, so
+ * excluding it the same way would make that card's spending invisible
+ * entirely rather than double-counted.
+ *
+ * Matching is a case-insensitive substring check against the connected
+ * issuer names, not a hardcoded card list — a real, connected item is
+ * always named by *institution* ("Chase"), never by product name ("Apple
+ * Card"), so this only fires for issuers actually linked here right now,
+ * and needs no changes if a card is connected or disconnected later.
+ */
+export function isPaymentToUnconnectedCard(
+  t: SpendingTransaction,
+  connectedCardIssuers: string[]
+): boolean {
+  if (t.pfc_detailed !== CREDIT_CARD_PAYMENT_DETAIL) return false;
+  const haystack = `${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
+  return !connectedCardIssuers.some((issuer) => haystack.includes(issuer.toLowerCase()));
+}
+
 /**
  * Excludes pending transactions and non-spending categories (transfers,
  * income, loan payments) — using each transaction's *effective* category
@@ -68,11 +103,22 @@ export function manualTransactionToSpendingTransaction(m: ManualTransactionLike)
  * mis-tagged as LOAN_DISBURSEMENTS still needs to be excluded correctly),
  * not just the raw pfc_primary, so this stays consistent with what the
  * display layer shows.
+ *
+ * One deliberate exception: a credit-card payment toward a card that ISN'T
+ * one of `connectedCardIssuers` is pulled back IN as real spending — see
+ * isPaymentToUnconnectedCard. `connectedCardIssuers` defaults to empty (the
+ * pre-existing all-payments-excluded behavior) so every other caller of
+ * this function keeps working unchanged until it opts in.
  */
 export function filterSpendingTransactions(
-  transactions: SpendingTransaction[]
+  transactions: SpendingTransaction[],
+  connectedCardIssuers: string[] = []
 ): SpendingTransaction[] {
-  return transactions.filter((t) => !t.pending && isSpendingCategory(effectiveCategory(t)));
+  return transactions.filter((t) => {
+    if (t.pending) return false;
+    if (isPaymentToUnconnectedCard(t, connectedCardIssuers)) return true;
+    return isSpendingCategory(effectiveCategory(t));
+  });
 }
 
 /**
