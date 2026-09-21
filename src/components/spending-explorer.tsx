@@ -8,6 +8,7 @@ import { FilterBar, MANUAL_ACCOUNT_ID, MANUAL_ACCOUNT_OPTION, type AccountOption
 import { humanizeCategory } from "@/lib/plaid-categories";
 import {
   categoryTotalsForMonth,
+  displayCategoryKey,
   monthlyTotals,
   refundTransactions,
   topMerchants,
@@ -45,18 +46,17 @@ export function SpendingExplorer({
 
   const categories = useMemo(() => {
     const present = new Set<string>();
-    for (const t of transactions) present.add(effectiveCategory(t) ?? "OTHER");
+    for (const t of transactions) present.add(displayCategoryKey(t));
     return Array.from(present)
       .sort()
       .map((c) => ({
         value: c,
-        // Same reasoning as categoryTotalsForMonth's label override: the
-        // `transactions` this page receives is already the spending-only
-        // set, so a "LOAN_PAYMENTS" entry here can only be an
-        // isPaymentToUnconnectedCard() carve-in, never a real loan
-        // payment — labeling the filter option "Loan Payments" would be
-        // misleading about what selecting it actually shows.
-        label: c === "LOAN_PAYMENTS" ? "Other/Uncategorized" : humanizeCategory(c === "OTHER" ? null : c),
+        // displayCategoryKey already folds the LOAN_PAYMENTS carve-in
+        // bucket (Apple Card, Elan, Cardmember Service, ...) into the same
+        // "OTHER" key a genuinely uncategorized transaction uses, so this
+        // is one filter option covering both, not two easily-confused
+        // ones.
+        label: c === "OTHER" ? "Other/Uncategorized" : humanizeCategory(c),
       }));
   }, [transactions]);
 
@@ -86,7 +86,7 @@ export function SpendingExplorer({
       } else if (accountFilter !== "all" && t.account?.id !== accountFilter) {
         return false;
       }
-      if (categoryFilter !== "all" && (effectiveCategory(t) ?? "OTHER") !== categoryFilter) return false;
+      if (categoryFilter !== "all" && displayCategoryKey(t) !== categoryFilter) return false;
       if (q) {
         const haystack = `${humanizeTransactionName(t)} ${t.merchant_name ?? ""} ${t.name ?? ""} ${humanizeCategory(effectiveCategory(t))}`.toLowerCase();
         if (!haystack.includes(q)) return false;

@@ -97,6 +97,23 @@ export function isPaymentToUnconnectedCard(
 }
 
 /**
+ * The category grouping/filtering key for display purposes — folds the raw
+ * "LOAN_PAYMENTS" carve-in bucket (see isPaymentToUnconnectedCard) into the
+ * same "OTHER" bucket a genuinely uncategorized transaction (null
+ * pfc_primary) already uses. Both mean the same thing to someone looking
+ * at a category breakdown: "we don't actually know what this was for," so
+ * they're one option/slice, not two confusingly similar ones. Used
+ * anywhere a category needs to be grouped or matched against a filter
+ * value for *spending* purposes — not for a raw per-transaction category
+ * label (e.g. on /transactions), which should keep showing "Loan
+ * Payments" as-is for what it actually is.
+ */
+export function displayCategoryKey(t: SpendingTransaction): string {
+  const raw = effectiveCategory(t) ?? "OTHER";
+  return raw === "LOAN_PAYMENTS" ? "OTHER" : raw;
+}
+
+/**
  * Excludes pending transactions and non-spending categories (transfers,
  * income, loan payments) — using each transaction's *effective* category
  * (transaction-display.ts's override layer, e.g. a PayPal transfer Plaid
@@ -156,7 +173,13 @@ export function categoryTotalsForMonth(
       const d = new Date(`${t.date}T00:00:00`);
       if (d.getFullYear() !== year || d.getMonth() !== month) continue;
     }
-    const key = effectiveCategory(t) ?? "OTHER";
+    // displayCategoryKey folds the LOAN_PAYMENTS carve-in bucket (Apple
+    // Card, Elan, Cardmember Service, ...) into the same "OTHER" bucket a
+    // genuinely uncategorized transaction uses — both mean "we don't know
+    // what this was for," so they net together into one slice/row, not
+    // two similarly-labeled ones a viewer would have to mentally combine
+    // themselves.
+    const key = displayCategoryKey(t);
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }
 
@@ -164,18 +187,7 @@ export function categoryTotalsForMonth(
     .filter(([, amount]) => amount > 0)
     .map(([category, amount]) => ({
       category,
-      // Every transaction that reaches this point under the raw
-      // "LOAN_PAYMENTS" key is, by construction, an
-      // isPaymentToUnconnectedCard() carve-in (Apple Card, Elan,
-      // Cardmember Service, ...) — a real car/mortgage/personal/student
-      // loan payment carries a different pfc_detailed and never reaches
-      // `transactions` here at all, it's excluded by isSpendingCategory
-      // before this function ever sees it. So "Loan Payments" as a label
-      // would be actively misleading here (there's no loan involved), but
-      // the raw category string is left untouched everywhere else — a
-      // Chase-destined payment on /transactions still correctly reads
-      // "Loan Payments", since that's what it actually is.
-      label: category === "LOAN_PAYMENTS" ? "Other/Uncategorized" : humanizeCategory(category),
+      label: category === "OTHER" ? "Other/Uncategorized" : humanizeCategory(category),
       amount,
       colorSlot: categoryColorSlot(category) ?? OTHER_SLOT,
     }))
