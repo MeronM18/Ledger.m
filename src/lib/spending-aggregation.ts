@@ -106,7 +106,13 @@ export function isPaymentToUnconnectedCard(
  *
  * One deliberate exception: a credit-card payment toward a card that ISN'T
  * one of `connectedCardIssuers` is pulled back IN as real spending — see
- * isPaymentToUnconnectedCard. `connectedCardIssuers` defaults to empty (the
+ * isPaymentToUnconnectedCard. This check runs BEFORE the pending check
+ * (and bypasses it) — unlike an ordinary pending purchase, which will post
+ * as itself and get counted once it does, this payment IS the only
+ * transaction that will ever represent that card's spending. Waiting for
+ * it to stop being pending would just mean waiting for it to disappear
+ * from every spending total in the meantime, not eventually seeing it
+ * counted correctly. `connectedCardIssuers` defaults to empty (the
  * pre-existing all-payments-excluded behavior) so every other caller of
  * this function keeps working unchanged until it opts in.
  */
@@ -115,20 +121,23 @@ export function filterSpendingTransactions(
   connectedCardIssuers: string[] = []
 ): SpendingTransaction[] {
   return transactions.filter((t) => {
-    if (t.pending) return false;
     if (isPaymentToUnconnectedCard(t, connectedCardIssuers)) return true;
+    if (t.pending) return false;
     return isSpendingCategory(effectiveCategory(t));
   });
 }
 
 /**
- * Category totals for one calendar month. Net amount per category (a refund
- * reduces its category's total — this is the economically correct "what did
- * I actually spend" figure); categories that net to zero or negative (fully
- * refunded) are dropped since a pie/donut can't show a non-positive slice.
- * Null/"OTHER" pfc_primary share one "Other" bucket. Sorted by the fixed
- * color-slot order (not by value) so pie adjacency matches the validated
- * palette ordering.
+ * Category totals for one calendar month, or across the entire array when
+ * `year`/`month` are omitted (an explicit "all time" mode, not an
+ * accidental fallthrough — callers that want a specific month always pass
+ * both). Net amount per category (a refund reduces its category's total —
+ * this is the economically correct "what did I actually spend" figure);
+ * categories that net to zero or negative (fully refunded) are dropped
+ * since a pie/donut can't show a non-positive slice. Null/"OTHER"
+ * pfc_primary share one "Other" bucket. Sorted by the fixed color-slot
+ * order (not by value) so pie adjacency matches the validated palette
+ * ordering.
  *
  * Netting here is intentional, not silent: refundTransactions() below
  * surfaces every individual refund as its own visible line, so a refund's
@@ -137,14 +146,16 @@ export function filterSpendingTransactions(
  */
 export function categoryTotalsForMonth(
   transactions: SpendingTransaction[],
-  year: number,
-  month: number // 0-indexed, matches Date#getMonth()
+  year?: number,
+  month?: number // 0-indexed, matches Date#getMonth()
 ): CategoryTotal[] {
   const totals = new Map<string, number>();
 
   for (const t of transactions) {
-    const d = new Date(`${t.date}T00:00:00`);
-    if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+    if (year !== undefined && month !== undefined) {
+      const d = new Date(`${t.date}T00:00:00`);
+      if (d.getFullYear() !== year || d.getMonth() !== month) continue;
+    }
     const key = effectiveCategory(t) ?? "OTHER";
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }

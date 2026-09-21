@@ -52,9 +52,6 @@ export default async function SpendingPage() {
 
   const spending = filterSpendingTransactions(allTransactions, connectedCardIssuers) as SpendingRow[];
 
-  const now = new Date();
-  const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Spending</h1>
@@ -62,12 +59,7 @@ export default async function SpendingPage() {
       {error || manualError || acctError || creditAcctError ? (
         <QueryErrorState message="Couldn't load your spending data. Try refreshing the page." />
       ) : (
-        <SpendingExplorer
-          transactions={spending}
-          accounts={accounts ?? []}
-          currency={currency}
-          monthLabel={monthLabel}
-        />
+        <SpendingExplorer transactions={spending} accounts={accounts ?? []} currency={currency} />
       )}
     </div>
   );

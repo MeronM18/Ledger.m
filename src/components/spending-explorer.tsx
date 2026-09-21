@@ -20,20 +20,28 @@ export type SpendingRow = SpendingTransaction & {
   iso_currency_code: string | null;
 };
 
+function currentMonthValue(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function SpendingExplorer({
   transactions,
   accounts,
   currency,
-  monthLabel,
 }: {
   transactions: SpendingRow[];
   accounts: AccountOption[];
   currency: string | null;
-  monthLabel: string;
 }) {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  // Defaults to the real current month, matching this page's behavior
+  // before a month selector existed at all (the donut was hardcoded to
+  // `now`) — nothing changes visually on first load, but it's now a real,
+  // user-changeable selection rather than a fixed "today's month" pie.
+  const [monthFilter, setMonthFilter] = useState<string>(currentMonthValue());
 
   const categories = useMemo(() => {
     const present = new Set<string>();
@@ -43,7 +51,24 @@ export function SpendingExplorer({
       .map((c) => ({ value: c, label: humanizeCategory(c === "OTHER" ? null : c) }));
   }, [transactions]);
 
-  const filtered = useMemo(() => {
+  const monthOptions = useMemo(() => {
+    const present = new Set<string>();
+    for (const t of transactions) present.add(t.date.slice(0, 7));
+    return Array.from(present)
+      .sort((a, b) => b.localeCompare(a))
+      .map((m) => ({
+        value: m,
+        label: new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+      }));
+  }, [transactions]);
+
+  // Account/category/search only — this is what the "Spending by month"
+  // bar chart uses, deliberately NOT narrowed by monthFilter, since
+  // collapsing a multi-month trend chart down to whichever single month is
+  // selected would leave it showing one bar. It stays a trend across
+  // whatever account/category/search scope is active; only the donut and
+  // Top merchants scope down to the selected month.
+  const filteredAnyMonth = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     return transactions.filter((t) => {
@@ -61,11 +86,27 @@ export function SpendingExplorer({
     });
   }, [transactions, accountFilter, categoryFilter, search]);
 
+  // The same set, further narrowed to the selected month — this is what
+  // the donut and Top merchants both read from, so they can never drift
+  // apart from each other the way Top merchants previously drifted from
+  // the donut by skipping month-scoping entirely.
+  const filtered = useMemo(() => {
+    if (monthFilter === "all") return filteredAnyMonth;
+    return filteredAnyMonth.filter((t) => t.date.slice(0, 7) === monthFilter);
+  }, [filteredAnyMonth, monthFilter]);
+
   const accountOptions = useMemo(() => [...accounts, MANUAL_ACCOUNT_OPTION], [accounts]);
 
-  const now = new Date();
-  const categoryTotals = categoryTotalsForMonth(filtered, now.getFullYear(), now.getMonth());
-  const months = monthlyTotals(filtered);
+  const selectedMonthLabel =
+    monthFilter === "all"
+      ? "All time"
+      : new Date(`${monthFilter}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const categoryTotals =
+    monthFilter === "all"
+      ? categoryTotalsForMonth(filtered)
+      : categoryTotalsForMonth(filtered, Number(monthFilter.slice(0, 4)), Number(monthFilter.slice(5, 7)) - 1);
+  const months = monthlyTotals(filteredAnyMonth);
   const merchants = topMerchants(filtered, 10);
   const refunds = refundTransactions(filtered);
 
@@ -80,13 +121,16 @@ export function SpendingExplorer({
         categories={categories}
         categoryValue={categoryFilter}
         onCategoryChange={setCategoryFilter}
+        months={monthOptions}
+        monthValue={monthFilter}
+        onMonthChange={setMonthFilter}
       />
 
       <SpendingCharts
         categoryTotals={categoryTotals}
         monthlyTotals={months}
         currency={currency}
-        monthLabel={monthLabel}
+        monthLabel={selectedMonthLabel}
       />
 
       <Card>
