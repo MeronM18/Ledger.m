@@ -164,7 +164,18 @@ export function categoryTotalsForMonth(
     .filter(([, amount]) => amount > 0)
     .map(([category, amount]) => ({
       category,
-      label: humanizeCategory(category),
+      // Every transaction that reaches this point under the raw
+      // "LOAN_PAYMENTS" key is, by construction, an
+      // isPaymentToUnconnectedCard() carve-in (Apple Card, Elan,
+      // Cardmember Service, ...) — a real car/mortgage/personal/student
+      // loan payment carries a different pfc_detailed and never reaches
+      // `transactions` here at all, it's excluded by isSpendingCategory
+      // before this function ever sees it. So "Loan Payments" as a label
+      // would be actively misleading here (there's no loan involved), but
+      // the raw category string is left untouched everywhere else — a
+      // Chase-destined payment on /transactions still correctly reads
+      // "Loan Payments", since that's what it actually is.
+      label: category === "LOAN_PAYMENTS" ? "Other/Uncategorized" : humanizeCategory(category),
       amount,
       colorSlot: categoryColorSlot(category) ?? OTHER_SLOT,
     }))

@@ -48,7 +48,16 @@ export function SpendingExplorer({
     for (const t of transactions) present.add(effectiveCategory(t) ?? "OTHER");
     return Array.from(present)
       .sort()
-      .map((c) => ({ value: c, label: humanizeCategory(c === "OTHER" ? null : c) }));
+      .map((c) => ({
+        value: c,
+        // Same reasoning as categoryTotalsForMonth's label override: the
+        // `transactions` this page receives is already the spending-only
+        // set, so a "LOAN_PAYMENTS" entry here can only be an
+        // isPaymentToUnconnectedCard() carve-in, never a real loan
+        // payment — labeling the filter option "Loan Payments" would be
+        // misleading about what selecting it actually shows.
+        label: c === "LOAN_PAYMENTS" ? "Other/Uncategorized" : humanizeCategory(c === "OTHER" ? null : c),
+      }));
   }, [transactions]);
 
   const monthOptions = useMemo(() => {
