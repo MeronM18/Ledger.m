@@ -36,9 +36,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
+  // forceRefresh: true — this is the user-initiated path ("Sync now" /
+  // "Sync all"), the exact moment someone is actively waiting and checking
+  // "why isn't this here yet." /transactions/refresh forces Plaid to pull
+  // fresh data from the institution instead of serving its own cache,
+  // which can otherwise lag same-day activity by hours. It's a paid,
+  // per-request endpoint, so it's deliberately NOT used on the free cron
+  // backstop or webhook-driven syncs below — only here, where a human
+  // explicitly asked for a fresh check.
   const results = parsed.data.item_id
-    ? [await syncItemTransactions(parsed.data.item_id)]
-    : await syncAllActiveItems();
+    ? [await syncItemTransactions(parsed.data.item_id, { forceRefresh: true })]
+    : await syncAllActiveItems({ forceRefresh: true });
 
   return NextResponse.json({ results });
 }
@@ -47,7 +55,11 @@ export async function POST(request: Request) {
  * Vercel Cron always issues a GET request and (when a CRON_SECRET env var is
  * set) automatically sends it as the Authorization: Bearer header — see
  * https://vercel.com/docs/cron-jobs/manage-cron-jobs#securing-cron-jobs.
- * This is the backstop path: syncs every active item.
+ * This is the backstop path: syncs every active item against Plaid's own
+ * cache, no forced refresh — Plaid's regular extraction schedule already
+ * catches up on its own, and running a paid refresh automatically once a
+ * day for every item isn't worth the extra cost for a backstop that's
+ * mainly there in case a webhook was missed.
  */
 export async function GET(request: Request) {
   if (!hasCronSecret(request)) {

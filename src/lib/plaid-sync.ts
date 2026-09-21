@@ -180,7 +180,10 @@ async function applyPlaidSyncError(
   return errorMessage(err);
 }
 
-export async function syncItemTransactions(itemDbId: string): Promise<TransactionSyncResult> {
+export async function syncItemTransactions(
+  itemDbId: string,
+  options: { forceRefresh?: boolean } = {}
+): Promise<TransactionSyncResult> {
   const admin = createAdminClient();
 
   const { data: item, error: itemFetchError } = await admin
@@ -198,6 +201,29 @@ export async function syncItemTransactions(itemDbId: string): Promise<Transactio
     accessToken = decrypt(item.access_token_encrypted);
   } catch {
     return { itemId: itemDbId, ok: false, error: "Failed to decrypt access token" };
+  }
+
+  // /transactions/sync only ever returns what Plaid has already cached for
+  // this item — Plaid typically re-pulls from the institution somewhere
+  // between 1-4x/day on its own schedule, so a same-day payment or charge
+  // can be genuinely invisible to /transactions/sync (and to /accounts/get's
+  // balance, which shares that same cache) for hours, with a clean "0
+  // added" response that looks identical to "nothing happened yet."
+  // /transactions/refresh forces Plaid to go extract fresh data from the
+  // institution right now; the extraction itself is what this call waits
+  // on, so /transactions/sync and /accounts/get immediately afterward see
+  // the result without needing to wait for the SYNC_UPDATES_AVAILABLE
+  // webhook this same call also fires. It's a paid, optional add-on
+  // endpoint, so this only runs for the user-triggered "Sync now"/"Sync
+  // all" buttons — not the daily cron backstop or webhook-driven syncs,
+  // which stay on the free cached path. A refresh failure never fails the
+  // sync outright; it just falls back to whatever Plaid already has cached.
+  if (options.forceRefresh) {
+    try {
+      await plaidClient.transactionsRefresh({ access_token: accessToken });
+    } catch (err) {
+      console.error(`transactionsRefresh failed for item ${itemDbId}, continuing with cached sync`, err);
+    }
   }
 
   let cursor: string | undefined = item.transactions_cursor ?? undefined;
@@ -404,13 +430,15 @@ export async function syncItemRecurring(
   return { itemId: itemDbId, ok: true, count: rows.length };
 }
 
-export async function syncAllActiveItems(): Promise<TransactionSyncResult[]> {
+export async function syncAllActiveItems(
+  options: { forceRefresh?: boolean } = {}
+): Promise<TransactionSyncResult[]> {
   const admin = createAdminClient();
   const { data: items } = await admin.from("items").select("id").eq("status", "active");
 
   const results: TransactionSyncResult[] = [];
   for (const item of items ?? []) {
-    results.push(await syncItemTransactions(item.id));
+    results.push(await syncItemTransactions(item.id, options));
   }
   return results;
 }
