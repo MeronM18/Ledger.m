@@ -3,6 +3,8 @@ import { QueryErrorState } from "@/components/query-error";
 import { filterSpendingTransactions, manualTransactionToSpendingTransaction } from "@/lib/spending-aggregation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { applyEditsToAll } from "@/lib/transaction-edits";
+import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
 export default async function SpendingPage() {
   const admin = createAdminClient();
@@ -12,12 +14,13 @@ export default async function SpendingPage() {
     { data: manualData, error: manualError },
     { data: accounts, error: acctError },
     { data: creditAccounts, error: creditAcctError },
+    edits,
   ] = await Promise.all([
     fetchAllRows((from, to) =>
       admin
         .from("transactions")
         .select(
-          "date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, account:accounts(id, name, mask)"
+          "id, date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, account:accounts(id, name, mask)"
         )
         .order("date", { ascending: false })
         .order("id")
@@ -26,6 +29,7 @@ export default async function SpendingPage() {
     admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
     admin.from("accounts").select("id, name, mask").order("name"),
     admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
+    loadTransactionEdits(admin),
   ]);
 
   if (error) console.error("Failed to load transactions for spending page", error);
@@ -33,7 +37,11 @@ export default async function SpendingPage() {
   if (acctError) console.error("Failed to load accounts for spending page", acctError);
   if (creditAcctError) console.error("Failed to load connected credit accounts for spending page", creditAcctError);
 
-  const transactions = (data ?? []) as unknown as SpendingRow[];
+  const transactions = applyEditsToAll(
+    (data ?? []) as unknown as (SpendingRow & { id: string })[],
+    edits.overrides,
+    edits.rules
+  ) as SpendingRow[];
   const manualTransactions: SpendingRow[] = (manualData ?? []).map((m) => ({
     ...manualTransactionToSpendingTransaction(m),
     account: null,
@@ -62,7 +70,7 @@ export default async function SpendingPage() {
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Spending</h1>
 
-      {error || manualError || acctError || creditAcctError ? (
+      {error || manualError || acctError || creditAcctError || edits.error ? (
         <QueryErrorState message="Couldn't load your spending data. Try refreshing the page." />
       ) : (
         <SpendingExplorer transactions={spending} accounts={accounts ?? []} currency={currency} />

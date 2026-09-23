@@ -15,6 +15,7 @@ export type SpendingTransaction = {
   amount: number; // Plaid convention: positive = money out, negative = money in
   pfc_primary: string | null;
   pfc_detailed?: string | null;
+  category_override?: string | null;
   merchant_name: string | null;
   name: string | null;
   pending: boolean;
@@ -94,6 +95,9 @@ export function isPaymentToUnconnectedCard(
   t: SpendingTransaction,
   connectedCardIssuers: string[]
 ): boolean {
+  // A category the user picked by hand is a decision, not a guess: never
+  // pull the payment back in as spending against it.
+  if (t.category_override) return false;
   if (t.pfc_detailed !== CREDIT_CARD_PAYMENT_DETAIL) return false;
   const haystack = `${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
   return !connectedCardIssuers.some((issuer) => haystack.includes(issuer.toLowerCase()));
