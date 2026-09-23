@@ -66,7 +66,13 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] 16 new tests (119 total)
 - [ ] Not built: per-service direct cancel links (would need a maintained, verified list); trial-ending warnings before conversion (Plaid only shows the conversion after it happens)
 
-- [ ] Step 9: Savings goals
+## Step 9: Savings goals  (branch `step9/savings-goals`)
+- [x] /goals page: progress bar, saved of target, "set aside $X a month for N months", reached / behind states, edit, delete, add money (or take money out)
+- [x] Track by hand or follow a connected account's balance
+- [x] Migration `0010_savings_goals.sql` (**must be applied: `supabase db push`**)
+- [x] 10 new tests (129 total)
+- [ ] Not built: contribution history, auto-suggested goals, goal progress on the overview (comes with step 10)
+
 - [ ] Step 10: Overview redesign (net worth sparkline, pace bar, bills timeline)
 
 ## Open items
