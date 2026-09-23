@@ -92,7 +92,8 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Manual subscriptions and assets are fully editable and deletable, not insert-only
 
 **Notifications**
-- Push notifications (via ntfy) fire on new transactions synced through a webhook, so a card swipe shows up on a phone before the receipt does
+- Push notifications (via ntfy) fire on new transactions synced through a webhook, so a card swipe shows up on a phone before the receipt does; a debit of $250 or more is labeled as a large charge
+- Alerts for a category over (or 80% of) its budget, a subscription renewing within three days, a subscription charging more than usual, and a checking/savings balance under $100. Each fires once per situation, is kept in a recent-alerts list on the overview, and is checked after every sync and once a day
 
 ## Security
 

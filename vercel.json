@@ -12,6 +12,10 @@
     {
       "path": "/api/net-worth/snapshot",
       "schedule": "5 6 * * *"
+    },
+    {
+      "path": "/api/alerts/check",
+      "schedule": "20 6 * * *"
     }
   ]
 }

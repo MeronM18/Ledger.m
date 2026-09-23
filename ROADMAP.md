@@ -27,7 +27,15 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] Over-budget push alerts come in step 4 with the other alerts
 - [ ] Cleanup later: move overview/spending onto `loadSpendingData` (three pages still load the same data separately)
 
-- [ ] Step 4: Alerts (large/unusual charge, price increase, upcoming renewal, low balance)
+## Step 4: Alerts  (branch `step4/alerts`)
+- [x] Push alerts (ntfy) for: category over budget / 80% used, subscription renewing in 3 days, price increase, low balance (under $100), large charge (a debit of $250+ is labeled on its normal push and never folded into a batch summary)
+- [x] Each alert is recorded first (unique key), so it is sent once per situation: per category per month, per billing cycle, per new charge amount, per week for low balance. A failed push is retried next run
+- [x] More than 5 alerts in one run (first run, long gap): 5 pushes + one summary, the rest visible in the app
+- [x] Recent alerts card on the overview; daily cron `/api/alerts/check` plus a check after every item sync
+- [x] Migration `0009_alert_events.sql` (**must be applied: `supabase db push`**); thresholds in `src/lib/config.ts`
+- [x] 18 new tests (71 total), including the dispatcher against a fake database
+- [ ] Not built: "unusual charge" (a charge far above that merchant's norm) beyond the $250 large-charge label; per-alert on/off settings
+
 ## Step 5: Trends  (branch `step5/trends`, no migration)
 - [x] Pace card: this month vs last month day by day, compared at the same day of the month, plus last month's total and a typical-month figure
 - [x] Biggest changes vs last month by category (dollars, bars, new-this-month), click one to drill into its transactions
