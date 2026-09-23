@@ -29,7 +29,14 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 
 - [ ] Step 4: Alerts (large/unusual charge, price increase, upcoming renewal, low balance)
 - [ ] Step 5: Trends (month over month, spending pace, category drill-down)
-- [ ] Step 6: Cash-flow forecast / safe to spend
+## Step 6: Cash flow / safe to spend  (branch `step6/cash-flow`, no migration)
+- [x] "Safe to spend until your next paycheck" = checking cash minus the bills due before it; per-day figure; warnings when bills exceed cash, when your usual spending would overshoot, and when the balance is projected under $100
+- [x] /cash-flow page: 30-day balance chart (bills/paychecks only, plus a dashed line with typical spending), upcoming bills and paychecks list, and a plain-language "how this is worked out"
+- [x] Safe to spend card on the overview (loads independently, so it never slows the rest)
+- [x] 15 new tests (forecast engine), 69 total
+- [ ] Cleanup after #7 merges: use `ALERT_THRESHOLDS.lowBalance` instead of `FORECAST_LOW_BALANCE`
+- [ ] Not built: choosing which accounts count; credit card balances are shown but not deducted
+
 - [ ] Step 7: Credit utilization
 - [ ] Step 8: Subscription extras (trials, duplicates, renewal calendar, annual dates)
 - [ ] Step 9: Savings goals

@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowRight, Store } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { GreetingHeader } from "@/components/greeting-header";
+import { SafeToSpendCard, SafeToSpendSkeleton } from "@/components/safe-to-spend-card";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth } from "@/lib/net-worth";
@@ -254,6 +256,10 @@ export default async function OverviewPage() {
           )}
         </CardContent>
       </Card>
+
+      <Suspense fallback={<SafeToSpendSkeleton />}>
+        <SafeToSpendCard />
+      </Suspense>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
