@@ -73,7 +73,17 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] 10 new tests (129 total)
 - [ ] Not built: contribution history, auto-suggested goals, goal progress on the overview (comes with step 10)
 
-- [ ] Step 10: Overview redesign (net worth sparkline, pace bar, bills timeline)
+## Step 10: Overview redesign  (branch `step10/overview-redesign`, no migration)
+- [x] Net worth hero: bigger figure, change over the last 30 days ($ and %), and a 90-day sparkline (from the daily snapshots; the change appears after a week of history)
+- [x] "Needs your attention" leads the page when there is something: over/near budget, subscriptions renewing within 3 days. Hidden when all is well
+- [x] Spending pace card (this month vs last month at the same day, as bars) beside Safe to spend; Goals card beside Budgets; Upcoming beside Recent alerts
+- [x] Goals loading shared between /goals and the overview (`loadGoals`)
+- [x] 10 new tests (139 total)
+- [ ] Not built: a bills timeline (the Upcoming list and the Subscriptions calendar cover it); mobile-specific tuning beyond stacking to one column
+
+## All ten steps are built
+Open follow-ups worth doing next: run the app against real data and fix what looks off; overview/spending/transactions still each load transactions separately (move them onto `loadSpendingData`); unusual-charge alerts; per-alert settings.
+
 
 ## Open items
 - PR #1 (subscription next-date rollover) is merged; its date helpers now default to Eastern "today" (done in step 1).
