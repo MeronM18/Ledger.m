@@ -95,3 +95,81 @@ export function isWithinNextDays(
   const daysUntil = (target.getTime() - startOfDay(referenceDate).getTime()) / (1000 * 60 * 60 * 24);
   return daysUntil >= 0 && daysUntil <= days;
 }
+
+function addDays(d: Date, days: number): Date {
+  const result = new Date(d);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+// Preserves day-of-month across the step instead of drifting (Date's own
+// setMonth would turn Jan 31 + 1 month into Mar 3 in a non-leap year) by
+// clamping to the target month's actual length (Jan 31 + 1 month -> Feb 28).
+function addMonths(d: Date, months: number): Date {
+  const day = d.getDate();
+  const firstOfTargetMonth = new Date(d.getFullYear(), d.getMonth() + months, 1);
+  const daysInTargetMonth = new Date(
+    firstOfTargetMonth.getFullYear(),
+    firstOfTargetMonth.getMonth() + 1,
+    0
+  ).getDate();
+  firstOfTargetMonth.setDate(Math.min(day, daysInTargetMonth));
+  return firstOfTargetMonth;
+}
+
+function toDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+// Safety cap on the roll-forward loop below — well beyond any realistic
+// gap (weekly for ~19 years), just to guarantee termination if a stored
+// date/frequency pair is somehow malformed.
+const MAX_ROLL_FORWARD_STEPS = 1000;
+
+/**
+ * Rolls a stored next-charge date forward to the next occurrence on or
+ * after `referenceDate`, stepping by the subscription's own billing
+ * frequency. Both predicted_next_date (Plaid) and next_billing_date
+ * (manual) are written once and only advanced when new data arrives (a
+ * matching Plaid charge landing, or the user editing the manual entry) —
+ * so once that date passes without new data (the normal case for most of
+ * a billing cycle), it just reads as stale rather than as "still active,
+ * still billing." This is a display-only projection: it never mutates the
+ * stored date, and hasLapsed() above still compares against the raw
+ * stored date to detect a real gap (no new charge for well past a period).
+ */
+export function projectNextOccurrence(
+  date: string | null,
+  frequency: string | null,
+  referenceDate: Date = new Date()
+): string | null {
+  if (!date) return null;
+  let current = new Date(`${date}T00:00:00`);
+  const today = startOfDay(referenceDate);
+  if (current.getTime() >= today.getTime()) return date;
+
+  for (let i = 0; i < MAX_ROLL_FORWARD_STEPS && current.getTime() < today.getTime(); i++) {
+    switch (frequency) {
+      case "WEEKLY":
+        current = addDays(current, 7);
+        break;
+      case "BIWEEKLY":
+        current = addDays(current, 14);
+        break;
+      case "SEMI_MONTHLY":
+        current = addDays(current, 15);
+        break;
+      case "ANNUALLY":
+        current = addMonths(current, 12);
+        break;
+      case "MONTHLY":
+      default:
+        current = addMonths(current, 1);
+        break;
+    }
+  }
+  return toDateString(current);
+}
