@@ -238,7 +238,7 @@ export function BudgetsManager({
                 key={p.id}
                 className="flex flex-col gap-2 border-t border-border py-4 first:border-t-0 first:pt-0"
               >
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <span className="flex items-center gap-2 text-sm font-medium">
                     <span
                       className="size-2.5 shrink-0 rounded-full"

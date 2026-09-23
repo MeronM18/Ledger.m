@@ -191,8 +191,8 @@ export function TransactionsExplorer({
             <TableRow>
               <TableHead>Date</TableHead>
               <TableHead>Merchant</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Category</TableHead>
+              <TableHead className="hidden md:table-cell">Account</TableHead>
+              <TableHead className="hidden md:table-cell">Category</TableHead>
               <TableHead className="text-right">
                 <button
                   type="button"
@@ -235,7 +235,8 @@ export function TransactionsExplorer({
                           <Store className="size-3.5" />
                         </span>
                       )}
-                      <span className="flex items-center gap-2">
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="flex flex-wrap items-center gap-2">
                         {displayName}
                         {t.isManual && (
                           <Badge variant="secondary" className="text-[10px]">
@@ -258,12 +259,18 @@ export function TransactionsExplorer({
                           </span>
                         )}
                       </span>
+                      {/* On a phone the Account and Category columns are hidden;
+                          their details sit under the name instead. */}
+                      <span className="truncate text-xs text-muted-foreground md:hidden">
+                        {displayCategoryLabel} · {t.isManual ? "Cash / Manual" : accountLabel(t.account)}
+                      </span>
+                      </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="hidden text-muted-foreground md:table-cell">
                     {t.isManual ? "Cash / Manual" : accountLabel(t.account)}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="hidden text-muted-foreground md:table-cell">
                     {displayCategoryLabel}
                   </TableCell>
                   <TableCell className="text-right">

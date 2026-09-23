@@ -78,13 +78,13 @@ export function FilterBar({
           placeholder="Search merchant or description..."
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="max-w-xs"
+          className="w-full sm:max-w-xs sm:flex-1"
         />
       )}
 
       {accounts && onAccountChange && (
         <Select value={accountValue} onValueChange={onAccountChange}>
-          <SelectTrigger className="w-48">
+          <SelectTrigger className="min-w-36 flex-1 sm:w-48 sm:flex-none">
             <SelectValue placeholder="Account" />
           </SelectTrigger>
           <SelectContent>
@@ -100,7 +100,7 @@ export function FilterBar({
 
       {categories && onCategoryChange && (
         <Select value={categoryValue} onValueChange={onCategoryChange}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="min-w-36 flex-1 sm:w-44 sm:flex-none">
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
@@ -116,7 +116,7 @@ export function FilterBar({
 
       {months && onMonthChange && (
         <Select value={monthValue} onValueChange={onMonthChange}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="min-w-36 flex-1 sm:w-44 sm:flex-none">
             <SelectValue placeholder="Month" />
           </SelectTrigger>
           <SelectContent>
