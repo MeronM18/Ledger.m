@@ -28,7 +28,13 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] Cleanup later: move overview/spending onto `loadSpendingData` (three pages still load the same data separately)
 
 - [ ] Step 4: Alerts (large/unusual charge, price increase, upcoming renewal, low balance)
-- [ ] Step 5: Trends (month over month, spending pace, category drill-down)
+## Step 5: Trends  (branch `step5/trends`, no migration)
+- [x] Pace card: this month vs last month day by day, compared at the same day of the month, plus last month's total and a typical-month figure
+- [x] Biggest changes vs last month by category (dollars, bars, new-this-month), click one to drill into its transactions
+- [x] Respects the account/search/month filters already on the Spending page
+- [x] 9 new tests (pure trend math)
+- [ ] Not built: income-vs-spending trend on this page (it only receives spending transactions); year-over-year
+
 - [ ] Step 6: Cash-flow forecast / safe to spend
 - [ ] Step 7: Credit utilization
 - [ ] Step 8: Subscription extras (trials, duplicates, renewal calendar, annual dates)
