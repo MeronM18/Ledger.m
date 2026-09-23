@@ -6,7 +6,7 @@ import { GreetingHeader } from "@/components/greeting-header";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth } from "@/lib/net-worth";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, timeAgo } from "@/lib/format";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import {
   categoryTotalsForMonth,
@@ -69,6 +69,7 @@ export default async function OverviewPage() {
     { data: creditAccounts, error: creditAcctError },
     edits,
     { data: budgetRows, error: budgetsError },
+    { data: alertRows, error: alertsError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -105,6 +106,7 @@ export default async function OverviewPage() {
     admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
     loadTransactionEdits(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
+    admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(5),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -119,6 +121,7 @@ export default async function OverviewPage() {
   if (recentManualError) console.error("Failed to load recent manual transactions for overview", recentManualError);
   if (creditAcctError) console.error("Failed to load connected credit accounts for overview", creditAcctError);
   if (budgetsError) console.error("Failed to load budgets for overview", budgetsError);
+  if (alertsError) console.error("Failed to load alerts for overview", alertsError);
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
@@ -338,6 +341,36 @@ export default async function OverviewPage() {
                 <BudgetBar progress={b} />
               </div>
             ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent alerts</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {alertsError ? (
+            <QueryErrorState message="Couldn't load alerts." />
+          ) : !alertRows || alertRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Nothing to flag. Budget, renewal, price and low-balance alerts show up here and on your phone.
+            </p>
+          ) : (
+            <div className="flex flex-col">
+              {alertRows.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-start justify-between gap-4 border-t border-border py-3 first:border-t-0 first:pt-0"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{a.title}</p>
+                    <p className="text-xs text-muted-foreground">{a.body}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(a.created_at)}</span>
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
