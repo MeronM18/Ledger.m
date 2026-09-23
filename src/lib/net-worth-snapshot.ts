@@ -30,7 +30,7 @@ export async function takeNetWorthSnapshot(): Promise<NetWorthSnapshotResult> {
     { data: holdingsData, error: holdingsError },
     { data: pricesData, error: pricesError },
   ] = await Promise.all([
-    admin.from("accounts").select("type, current_balance"),
+    admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
     admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),

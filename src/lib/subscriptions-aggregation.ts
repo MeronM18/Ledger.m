@@ -1,4 +1,5 @@
 import { monthlyFactorForFrequency } from "@/lib/plaid-categories";
+import { easternToday } from "@/lib/time";
 
 // Pure, dependency-free so /subscriptions and /overview compute the same
 // active/inactive split and monthly cost from one formula.
@@ -72,7 +73,7 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-export function hasLapsed(predictedNextDate: string | null, referenceDate: Date = new Date()): boolean {
+export function hasLapsed(predictedNextDate: string | null, referenceDate: Date = easternToday()): boolean {
   if (!predictedNextDate) return false;
   const predicted = new Date(`${predictedNextDate}T00:00:00`);
   const daysPast = (startOfDay(referenceDate).getTime() - predicted.getTime()) / (1000 * 60 * 60 * 24);
@@ -88,7 +89,7 @@ export function hasLapsed(predictedNextDate: string | null, referenceDate: Date 
 export function isWithinNextDays(
   date: string | null,
   days: number,
-  referenceDate: Date = new Date()
+  referenceDate: Date = easternToday()
 ): boolean {
   if (!date) return false;
   const target = new Date(`${date}T00:00:00`);
@@ -144,7 +145,7 @@ const MAX_ROLL_FORWARD_STEPS = 1000;
 export function projectNextOccurrence(
   date: string | null,
   frequency: string | null,
-  referenceDate: Date = new Date()
+  referenceDate: Date = easternToday()
 ): string | null {
   if (!date) return null;
   let current = new Date(`${date}T00:00:00`);

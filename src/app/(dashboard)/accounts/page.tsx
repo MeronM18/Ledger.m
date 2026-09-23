@@ -7,6 +7,7 @@ import { QueryErrorState } from "@/components/query-error";
 import { SyncAllButton } from "@/components/sync-all-button";
 import { SyncNowButton } from "@/components/sync-now-button";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 type AccountRow = {
   id: string;
@@ -53,7 +54,14 @@ export default async function AccountsPage() {
     // Earliest transaction per item — surfaces how much history Plaid
     // actually returned (days_requested is a request, not a guarantee, and
     // it varies a lot by institution) rather than leaving that invisible.
-    admin.from("transactions").select("date, account:accounts(item_id)").order("date", { ascending: true }),
+    fetchAllRows((from, to) =>
+      admin
+        .from("transactions")
+        .select("date, account:accounts(item_id)")
+        .order("date", { ascending: true })
+        .order("id")
+        .range(from, to)
+    ),
   ]);
 
   if (error) {

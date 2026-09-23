@@ -35,6 +35,7 @@ export default async function AssetsPage() {
     admin
       .from("accounts")
       .select("id, name, mask, type, subtype, current_balance, iso_currency_code")
+      .eq("is_hidden", false)
       .order("name"),
     admin
       .from("manual_assets")

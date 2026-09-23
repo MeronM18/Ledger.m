@@ -1,4 +1,9 @@
-import { categoryColorSlot, humanizeCategory, isSpendingCategory } from "@/lib/plaid-categories";
+import {
+  categoryColorSlot,
+  humanizeCategory,
+  isSpendingCategory,
+  OTHER_CATEGORY_COLOR_SLOT,
+} from "@/lib/plaid-categories";
 import { detectPayrollCompany, effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure aggregation logic, no DB/network — kept separate from the page so the
@@ -25,8 +30,6 @@ export type RefundEntry = {
   categoryLabel: string;
   amount: number; // positive dollar amount refunded (money back)
 };
-
-const OTHER_SLOT = 8;
 
 export type ManualTransactionLike = {
   date: string;
@@ -189,7 +192,7 @@ export function categoryTotalsForMonth(
       category,
       label: category === "OTHER" ? "Other/Uncategorized" : humanizeCategory(category),
       amount,
-      colorSlot: categoryColorSlot(category) ?? OTHER_SLOT,
+      colorSlot: categoryColorSlot(category) ?? OTHER_CATEGORY_COLOR_SLOT,
     }))
     .sort((a, b) => a.colorSlot - b.colorSlot);
 }
