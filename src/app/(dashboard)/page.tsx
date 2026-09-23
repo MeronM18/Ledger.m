@@ -22,6 +22,8 @@ import {
 } from "@/lib/subscriptions-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { calendarNow } from "@/lib/time";
 
 type RecentTransaction = {
   id: string;
@@ -62,13 +64,18 @@ export default async function OverviewPage() {
     { data: recentManualData, error: recentManualError },
     { data: creditAccounts, error: creditAcctError },
   ] = await Promise.all([
-    admin.from("accounts").select("type, current_balance"),
+    admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
     admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),
-    admin
-      .from("transactions")
-      .select("date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code"),
+    fetchAllRows((from, to) =>
+      admin
+        .from("transactions")
+        .select("date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code")
+        .order("date", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
     admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
     admin
       .from("recurring_streams")
@@ -128,13 +135,13 @@ export default async function OverviewPage() {
   );
 
   const spending = filterSpendingTransactions(allTransactions, connectedCardIssuers);
-  const now = new Date();
-  const categoryTotals = categoryTotalsForMonth(spending, now.getFullYear(), now.getMonth());
+  const now = calendarNow();
+  const categoryTotals = categoryTotalsForMonth(spending, now.year, now.month);
   const monthTotal = categoryTotals.reduce((sum, c) => sum + c.amount, 0);
   const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
-  const monthLabel = now.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-  const incomeBySource = incomeBySourceForMonth(allTransactions, now.getFullYear(), now.getMonth());
-  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.getFullYear(), now.getMonth());
+  const monthLabel = now.monthLabel;
+  const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
+  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month);
 
   const manualSubsAsStreams = (manualSubsData ?? []).map((m) => ({
     average_amount: m.amount,

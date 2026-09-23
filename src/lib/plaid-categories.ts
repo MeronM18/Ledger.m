@@ -58,12 +58,13 @@ export function humanizeCategory(pfcPrimary: string | null): string {
     .join(" ");
 }
 
-// Fixed category -> color-slot assignment (1-8), so a given category always
+// Fixed category -> color-slot assignment (1-13), so a given category always
 // gets the same color regardless of which categories happen to be present in
 // a given month/filter (see dataviz skill: "color follows the entity, never
-// its rank"). The 8 slots are this app's real-world spending categories,
-// pre-filled first; any category beyond the 8th slot folds into "Other" for
-// coloring/aggregation purposes rather than generating a 9th hue.
+// its rank"). Every spending category the app can show has its own slot;
+// only a category outside this map (a brand-new Plaid value) falls back to
+// the shared "Other" slot in spending-aggregation.ts. Slots 1-8 are the
+// validated palette; 9-13 extend it (see globals.css).
 const CATEGORY_COLOR_SLOT: Record<string, number> = {
   FOOD_AND_DRINK: 1,
   GENERAL_MERCHANDISE: 2,
@@ -73,20 +74,24 @@ const CATEGORY_COLOR_SLOT: Record<string, number> = {
   GENERAL_SERVICES: 6,
   BANK_FEES: 7,
   OTHER: 8,
+  RENT_AND_UTILITIES: 9,
+  TRAVEL: 10,
+  MEDICAL: 11,
+  HOME_IMPROVEMENT: 12,
+  GOVERNMENT_AND_NON_PROFIT: 13,
 };
-const MAX_CATEGORY_COLOR_SLOTS = 8;
+const OTHER_COLOR_SLOT = 8;
 
 /**
- * Returns a 1-8 slot for CSS var --viz-N (see globals.css), or null if this
- * category should fold into the "Other" bucket (unassigned or 9th+ distinct
- * category actually present).
+ * Returns a 1-13 slot for CSS var --viz-N (see globals.css), or null for a
+ * category with no assigned slot (which callers fold into the "Other" slot).
  */
 export function categoryColorSlot(pfcPrimary: string | null): number | null {
   const key = pfcPrimary ?? "OTHER";
   return CATEGORY_COLOR_SLOT[key] ?? null;
 }
 
-export const OTHER_CATEGORY_COLOR_SLOT = MAX_CATEGORY_COLOR_SLOTS;
+export const OTHER_CATEGORY_COLOR_SLOT = OTHER_COLOR_SLOT;
 
 /**
  * Multiplier to normalize a recurring stream's per-period amount to a

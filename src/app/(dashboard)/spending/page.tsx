@@ -2,6 +2,7 @@ import { SpendingExplorer, type SpendingRow } from "@/components/spending-explor
 import { QueryErrorState } from "@/components/query-error";
 import { filterSpendingTransactions, manualTransactionToSpendingTransaction } from "@/lib/spending-aggregation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 export default async function SpendingPage() {
   const admin = createAdminClient();
@@ -12,11 +13,16 @@ export default async function SpendingPage() {
     { data: accounts, error: acctError },
     { data: creditAccounts, error: creditAcctError },
   ] = await Promise.all([
-    admin
-      .from("transactions")
-      .select(
-        "date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, account:accounts(id, name, mask)"
-      ),
+    fetchAllRows((from, to) =>
+      admin
+        .from("transactions")
+        .select(
+          "date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, account:accounts(id, name, mask)"
+        )
+        .order("date", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
     admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
     admin.from("accounts").select("id, name, mask").order("name"),
     admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),

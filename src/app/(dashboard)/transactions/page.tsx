@@ -2,6 +2,7 @@ import { TransactionsExplorer, type TransactionRow } from "@/components/transact
 import type { ManualTransaction } from "@/components/manual-transaction-form";
 import { QueryErrorState } from "@/components/query-error";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 export default async function TransactionsPage() {
   const admin = createAdminClient();
@@ -11,12 +12,16 @@ export default async function TransactionsPage() {
     { data: manualTransactions, error: manualTxError },
     { data: accounts, error: acctError },
   ] = await Promise.all([
-    admin
-      .from("transactions")
-      .select(
-        "id, date, name, merchant_name, logo_url, pfc_primary, amount, iso_currency_code, pending, account:accounts(id, name, mask)"
-      )
-      .order("date", { ascending: false }),
+    fetchAllRows((from, to) =>
+      admin
+        .from("transactions")
+        .select(
+          "id, date, name, merchant_name, logo_url, pfc_primary, amount, iso_currency_code, pending, account:accounts(id, name, mask)"
+        )
+        .order("date", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
     admin
       .from("manual_transactions")
       .select("id, date, name, amount, pfc_primary, payment_method, notes")

@@ -108,7 +108,7 @@ Paranoid, for an app with exactly one user? Maybe. But that user's real bank acc
 
 ## Testing
 
-There's no automated test suite. Every change is run through `npm run lint` and `npm run build`, then verified against the real, live, connected accounts before it's considered done: real transaction history, real subscription list, real net worth, not synthetic fixtures. For a single-user financial app, that trade (rigor at the point of change, over a maintained test harness) has been the deliberate call.
+`npm test` runs a unit suite (Vitest) over the pure money and date logic: spending and income aggregation, net worth, subscription dates, the paginated-read helper, and the Eastern-time helpers. Every change also goes through `npm run lint` and `npm run build`, then gets verified against the real, live, connected accounts before it's considered done: real transaction history, real subscription list, real net worth. The suite covers the calculations; the live check covers everything that depends on real Plaid data.
 
 ## Contribution Guidelines
 
