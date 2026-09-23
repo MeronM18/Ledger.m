@@ -12,7 +12,13 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] Verify: lint clean, tsc clean, 28 tests pass, build compiles (only fails on missing local secrets)
 
 ## Later steps (in order)
-- [ ] Step 2: Recategorize transactions, merchant renames, rules, notes
+## Step 2: Transaction editing  (branch `step2/transaction-editing`, PR stacked on step 1)
+- [x] Recategorize, rename, notes per transaction; "apply to all matching" merchant rules; reset
+- [x] Migration `0007_transaction_edits.sql` (**must be applied: `supabase db push`**)
+- [x] Edits flow into every page (overview, spending, transactions, CSV)
+- [x] 11 new tests (39 total)
+- [ ] Not done: editing manual transactions' rules (they already have their own edit dialog); a pending charge that posts gets a new Plaid id and loses its per-transaction edit (rules still apply)
+
 - [ ] Step 3: Budgets with progress and over-budget alerts
 - [ ] Step 4: Alerts (large/unusual charge, price increase, upcoming renewal, low balance)
 - [ ] Step 5: Trends (month over month, spending pace, category drill-down)

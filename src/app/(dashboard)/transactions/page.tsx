@@ -2,7 +2,10 @@ import { TransactionsExplorer, type TransactionRow } from "@/components/transact
 import type { ManualTransaction } from "@/components/manual-transaction-form";
 import { QueryErrorState } from "@/components/query-error";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MerchantRulesManager } from "@/components/merchant-rules-manager";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { applyEditsToAll } from "@/lib/transaction-edits";
+import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
 export default async function TransactionsPage() {
   const admin = createAdminClient();
@@ -11,6 +14,7 @@ export default async function TransactionsPage() {
     { data: transactions, error: txError },
     { data: manualTransactions, error: manualTxError },
     { data: accounts, error: acctError },
+    edits,
   ] = await Promise.all([
     fetchAllRows((from, to) =>
       admin
@@ -27,13 +31,18 @@ export default async function TransactionsPage() {
       .select("id, date, name, amount, pfc_primary, payment_method, notes")
       .order("date", { ascending: false }),
     admin.from("accounts").select("id, name, mask").order("name"),
+    loadTransactionEdits(admin),
   ]);
 
   if (txError) console.error("Failed to load transactions", txError);
   if (manualTxError) console.error("Failed to load manual transactions", manualTxError);
   if (acctError) console.error("Failed to load accounts", acctError);
 
-  const plaidRows = (transactions ?? []) as unknown as TransactionRow[];
+  const plaidRows = applyEditsToAll(
+    (transactions ?? []) as unknown as (TransactionRow & { id: string })[],
+    edits.overrides,
+    edits.rules
+  );
   const manualRows: TransactionRow[] = ((manualTransactions ?? []) as ManualTransaction[]).map((m) => ({
     id: m.id,
     date: m.date,
@@ -52,10 +61,13 @@ export default async function TransactionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Transactions</h1>
-      {txError || manualTxError || acctError ? (
+      {txError || manualTxError || acctError || edits.error ? (
         <QueryErrorState message="Couldn't load your transactions. Try refreshing the page." />
       ) : (
-        <TransactionsExplorer transactions={[...plaidRows, ...manualRows]} accounts={accounts ?? []} />
+        <>
+          <TransactionsExplorer transactions={[...plaidRows, ...manualRows]} accounts={accounts ?? []} />
+          <MerchantRulesManager rules={edits.rules} />
+        </>
       )}
     </div>
   );
