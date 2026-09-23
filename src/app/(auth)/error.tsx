@@ -20,7 +20,7 @@ export default function AuthError({
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm border-oxblood/40">
         <CardHeader className="items-center text-center">
-          <AlertTriangle className="mb-2 size-6 text-oxblood" />
+          <AlertTriangle className="mb-2 size-6 text-oxblood-text" />
           <CardTitle className="font-serif text-lg text-bone">Something went wrong</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4 text-center">

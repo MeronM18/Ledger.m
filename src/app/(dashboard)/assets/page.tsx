@@ -22,6 +22,8 @@ type AccountRow = {
   iso_currency_code: string | null;
 };
 
+export const metadata = { title: "Assets" };
+
 export default async function AssetsPage() {
   const admin = createAdminClient();
 
@@ -111,7 +113,7 @@ export default async function AssetsPage() {
               <CardContent>
                 <span
                   className={`font-serif text-3xl font-semibold tabular-nums ${
-                    netWorth < 0 ? "text-oxblood" : "text-moss"
+                    netWorth < 0 ? "text-oxblood-text" : "text-moss"
                   }`}
                 >
                   {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(

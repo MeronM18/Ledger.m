@@ -16,6 +16,8 @@ import { loadSpendingData } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow } from "@/lib/time";
 
+export const metadata = { title: "Budgets" };
+
 export default async function BudgetsPage() {
   const admin = createAdminClient();
 

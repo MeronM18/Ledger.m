@@ -282,7 +282,7 @@ function GoalCard({ goal, accounts, currency }: { goal: GoalRow; accounts: Accou
             </>
           )}
           {goal.status === "behind" && (
-            <span className="text-oxblood">
+            <span className="text-oxblood-text">
               The target date has passed with {formatCurrency(goal.remaining, currency)} to go. Edit the date to set a new one.
             </span>
           )}

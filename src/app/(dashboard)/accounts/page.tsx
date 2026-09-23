@@ -46,6 +46,8 @@ function formatHistoryStart(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+export const metadata = { title: "Accounts" };
+
 export default async function AccountsPage() {
   const admin = createAdminClient();
   const [{ data: items, error }, { data: txDates, error: txDatesError }] = await Promise.all([

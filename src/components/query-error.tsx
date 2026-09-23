@@ -14,8 +14,8 @@ export function QueryErrorState({
 }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-oxblood/30 bg-oxblood/5 py-10 text-center">
-      <AlertTriangle className="size-5 text-oxblood" />
-      <p className="text-sm text-oxblood">{message}</p>
+      <AlertTriangle className="size-5 text-oxblood-text" />
+      <p className="text-sm text-oxblood-text">{message}</p>
     </div>
   );
 }

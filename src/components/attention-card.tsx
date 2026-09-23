@@ -5,7 +5,7 @@ import type { AttentionItem } from "@/lib/attention";
 import { cn } from "@/lib/utils";
 
 const TONE_ICON = {
-  over: { Icon: AlertTriangle, className: "text-oxblood" },
+  over: { Icon: AlertTriangle, className: "text-oxblood-text" },
   warning: { Icon: AlertTriangle, className: "text-champagne" },
   info: { Icon: CalendarClock, className: "text-muted-foreground" },
 } as const;

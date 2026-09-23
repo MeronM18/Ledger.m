@@ -24,7 +24,9 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Ledger.m",
+  // Each page sets its own title ("Budgets"), shown as "Budgets · Ledger.m"
+  // so tabs and history are tellable apart.
+  title: { default: "Ledger.m", template: "%s · Ledger.m" },
   description: "Personal finance tracker",
 };
 

@@ -6,6 +6,8 @@ import { goalsSummary } from "@/lib/goals";
 import { loadGoals } from "@/lib/goals-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const metadata = { title: "Goals" };
+
 export default async function GoalsPage() {
   const { rows, accounts, error } = await loadGoals(createAdminClient());
 

@@ -89,3 +89,12 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - PR #1 (subscription next-date rollover) is merged; its date helpers now default to Eastern "today" (done in step 1).
 - Not verified against live data: the transaction-count/1,000-row cap, and how the 5 new chart colors look next to the originals.
 - Confirm real transaction count vs the 1,000-row cap (`select count(*) from transactions`).
+
+## Polish pass (branch `polish/audit`)
+- [x] Phone navigation: the sidebar was always visible, taking 224px of a phone screen. Phones now get a top bar with a menu drawer; the desktop sidebar is sticky
+- [x] Content capped at a readable width (max-w-7xl, centered) instead of stretching across a wide monitor
+- [x] Red text (money out, over budget, errors) was 3.3:1 contrast, below the 4.5:1 small text needs; text now uses a lighter tone of the same hue (5.5:1), fills unchanged
+- [x] Visible keyboard focus on links and buttons; `aria-current` on the active nav link
+- [x] Each page has its own tab title ("Budgets · Ledger.m")
+- [x] Loading skeleton for the overview and accounts, which showed nothing while loading
+- [ ] Needs screenshots to judge: real spacing and hierarchy on each page at desktop and phone width, chart legibility, dialog layouts

@@ -60,7 +60,7 @@ function PaceHeadline({
           <>The same as {previousMonthLabel} {when}.</>
         ) : (
           <>
-            <span className={cn("font-medium", less ? "text-moss" : "text-oxblood")}>
+            <span className={cn("font-medium", less ? "text-moss" : "text-oxblood-text")}>
               {formatCurrency(Math.abs(pace.delta), currency)}
               {pace.deltaPct !== null ? ` (${pctLabel(pace.deltaPct)})` : ""} {less ? "less" : "more"}
             </span>{" "}
@@ -196,7 +196,7 @@ export function SpendingTrends({
                         />
                         {c.label}
                       </span>
-                      <span className={cn("flex items-center gap-1 font-mono tabular-nums", up ? "text-oxblood" : "text-moss")}>
+                      <span className={cn("flex items-center gap-1 font-mono tabular-nums", up ? "text-oxblood-text" : "text-moss")}>
                         {up ? <ArrowUp className="size-3" aria-hidden /> : <ArrowDown className="size-3" aria-hidden />}
                         {formatCurrency(Math.abs(c.delta), currency)}
                         <span className="sr-only">{up ? " more" : " less"}</span>

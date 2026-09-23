@@ -31,7 +31,7 @@ export function Money({
   className?: string;
 }) {
   const toneClass =
-    tone === "positive" ? "text-moss" : tone === "negative" ? "text-oxblood" : "text-bone";
+    tone === "positive" ? "text-moss" : tone === "negative" ? "text-oxblood-text" : "text-bone";
 
   const prefix = showSign ? (tone === "negative" ? "-" : tone === "positive" ? "+" : "") : "";
   const displayAmount = showSign ? Math.abs(amount) : amount;

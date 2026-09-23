@@ -263,7 +263,7 @@ export function BudgetsManager({
                       </span>
                     </>
                   ) : (
-                    <span className="text-oxblood">{formatCurrency(-p.remaining, currency)} over</span>
+                    <span className="text-oxblood-text">{formatCurrency(-p.remaining, currency)} over</span>
                   )}
                   {p.projectedOver && p.projected !== null && (
                     <span className="text-champagne">

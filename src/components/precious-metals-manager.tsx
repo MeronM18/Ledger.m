@@ -343,7 +343,7 @@ function HoldingRow({
               <>
                 spot price: ${price.price_per_troy_oz_usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}/oz
                 {stale ? (
-                  <span className="text-oxblood">
+                  <span className="text-oxblood-text">
                     {" "}
                     · as of {new Date(price.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })} (stale)
                   </span>

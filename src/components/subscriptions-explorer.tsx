@@ -110,7 +110,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
         <p className="flex items-center gap-2 text-sm font-medium">
           {label}
           {priceIncreased && (
-            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
               <TrendingUp className="size-3" />
               Price increased
             </Badge>
@@ -122,7 +122,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
             </Badge>
           )}
           {lapsed && (
-            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
               <AlertTriangle className="size-3" />
               Hasn&apos;t charged recently
             </Badge>
@@ -162,7 +162,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
             Manual
           </Badge>
           {lapsed && (
-            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
               <AlertTriangle className="size-3" />
               Hasn&apos;t charged recently
             </Badge>

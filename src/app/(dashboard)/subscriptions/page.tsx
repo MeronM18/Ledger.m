@@ -16,6 +16,8 @@ type StreamQueryRow = Omit<StreamRow, "firstChargeAmount"> & {
   transaction_ids: string[] | null;
 };
 
+export const metadata = { title: "Subscriptions" };
+
 export default async function SubscriptionsPage() {
   const admin = createAdminClient();
 

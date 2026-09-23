@@ -62,6 +62,8 @@ function SectionLink({ href }: { href: string }) {
   );
 }
 
+export const metadata = { title: "Overview" };
+
 export default async function OverviewPage() {
   const admin = createAdminClient();
 
@@ -461,7 +463,7 @@ export default async function OverviewPage() {
                 <p className="text-sm text-muted-foreground">
                   {formatCurrency(incomeVsSpending.income, currency)} in ·{" "}
                   {formatCurrency(incomeVsSpending.spending, currency)} out · net{" "}
-                  <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood"}>
+                  <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood-text"}>
                     {formatCurrency(incomeVsSpending.net, currency)}
                   </span>
                 </p>

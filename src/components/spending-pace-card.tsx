@@ -50,7 +50,7 @@ export function SpendingPaceCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {error ? (
-          <p className="text-sm text-oxblood">Couldn&apos;t load spending.</p>
+          <p className="text-sm text-oxblood-text">Couldn&apos;t load spending.</p>
         ) : !pace.hasPrevious ? (
           <p className="text-sm text-muted-foreground">
             {formatCurrency(pace.current, currency)} spent so far this month. A comparison shows up once there&apos;s a
@@ -71,7 +71,7 @@ export function SpendingPaceCard({
                 "Right on last month's pace."
               ) : (
                 <>
-                  <span className={cn("font-medium", less ? "text-moss" : "text-oxblood")}>
+                  <span className={cn("font-medium", less ? "text-moss" : "text-oxblood-text")}>
                     {formatCurrency(Math.abs(pace.delta), currency)} {less ? "less" : "more"}
                   </span>{" "}
                   than {previousMonthName} at this point.
