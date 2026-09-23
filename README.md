@@ -74,6 +74,9 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 **Budgets**
 - Monthly budget per spending category, with progress against the month, what's left or over, a warning when the month's pace will overshoot, spending that has no budget yet, and a suggested starting amount from your last three months
 
+**Credit**
+- Utilization per card and overall against each card's limit, with the amount to pay down to get under 30%; cards that report no limit are left out rather than counted as 0%
+
 **Net worth**
 - Real-time, across connected accounts, manual assets/liabilities, and precious metals
 - Daily snapshot history with a trend chart that waits for enough history to mean something instead of plotting a single point and calling it a trend
