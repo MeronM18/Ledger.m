@@ -67,7 +67,7 @@ export default async function BudgetsPage() {
               <p className="mt-1 text-sm text-muted-foreground">Budgeted categories</p>
               <p className="text-2xl font-semibold">
                 <Money amount={totals.spent} currency={data.currency} tone="neutral" />
-                <span className="text-base font-normal text-muted-foreground"> of </span>
+                <span className="mx-2 text-base font-normal text-muted-foreground">of</span>
                 <Money amount={totals.budget} currency={data.currency} tone="neutral" />
               </p>
             </div>

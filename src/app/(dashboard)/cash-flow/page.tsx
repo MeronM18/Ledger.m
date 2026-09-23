@@ -50,7 +50,7 @@ export default async function CashFlowPage() {
       <Card>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-wrap items-end justify-between gap-6">
-            <div>
+            <div className="flex flex-col gap-1">
               <p className="text-sm text-muted-foreground">Safe to spend {untilLabel}</p>
               <Money
                 amount={f.safeToSpend}

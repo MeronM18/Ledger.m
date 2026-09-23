@@ -69,11 +69,11 @@ export default async function GoalsPage() {
       {rows.length > 0 && (
         <Card>
           <CardContent className="flex flex-wrap items-end justify-between gap-6">
-            <div>
+            <div className="flex flex-col gap-1">
               <p className="text-sm text-muted-foreground">Saved across your goals</p>
               <p className="text-2xl font-semibold">
                 <Money amount={summary.saved} currency="USD" tone="positive" />
-                <span className="text-base font-normal text-muted-foreground"> of </span>
+                <span className="mx-2 text-base font-normal text-muted-foreground">of</span>
                 <Money amount={summary.target} currency="USD" tone="neutral" />
               </p>
             </div>
