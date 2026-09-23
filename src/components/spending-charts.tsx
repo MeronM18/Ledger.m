@@ -85,7 +85,12 @@ export function SpendingCharts({
                     labelStyle={tooltipLabelStyle}
                     itemStyle={tooltipItemStyle}
                   />
-                  <Legend verticalAlign="bottom" height={48} wrapperStyle={legendStyle} />
+                  <Legend
+                    verticalAlign="bottom"
+                    height={48}
+                    wrapperStyle={legendStyle}
+                    formatter={(value) => <span style={{ color: "var(--ash-grey)" }}>{value}</span>}
+                  />
                 </PieChart>
               </ResponsiveContainer>
               <div

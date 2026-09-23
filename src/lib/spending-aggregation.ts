@@ -317,14 +317,26 @@ export function incomeBySourceForMonth(
 export function monthlyIncomeVsSpending(
   transactions: SpendingTransaction[],
   year: number,
-  month: number
+  month: number,
+  // Same meaning as in filterSpendingTransactions: a payment to a card that
+  // isn't connected counts as spending. Without this the overview's income
+  // card reported less spending than its own spending card beside it. Left
+  // out, card payments are not counted, as before.
+  connectedCardIssuers?: string[]
 ): MonthlyIncomeVsSpending {
   let income = 0;
   let spending = 0;
 
   for (const t of transactions) {
-    if (t.pending) continue;
     if (!isInCalendarMonth(t.date, year, month)) continue;
+
+    // Checked before the pending skip, exactly as filterSpendingTransactions
+    // does: this payment is the only record that card's spending exists.
+    if (connectedCardIssuers && isPaymentToUnconnectedCard(t, connectedCardIssuers)) {
+      spending += t.amount;
+      continue;
+    }
+    if (t.pending) continue;
 
     const category = effectiveCategory(t);
     if (category === "INCOME") {

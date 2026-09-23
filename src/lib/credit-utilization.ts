@@ -1,3 +1,5 @@
+import { prettyName } from "@/lib/transaction-display";
+
 // Pure, dependency-free. Credit utilization is how much of a card's limit is
 // in use; scoring models favor keeping it low (under 30% is the common
 // guideline, under 10% the "excellent" end). This is a guide computed from
@@ -53,7 +55,8 @@ export function payDownTo(balance: number, limit: number, target: number): numbe
 }
 
 export function cardLabel(c: Pick<CreditCard, "name" | "mask" | "institution">): string {
-  const base = c.institution && !c.name.toLowerCase().includes(c.institution.toLowerCase()) ? `${c.institution} ${c.name}` : c.name;
+  const name = prettyName(c.name);
+  const base = c.institution && !name.toLowerCase().includes(c.institution.toLowerCase()) ? `${c.institution} ${name}` : name;
   return c.mask ? `${base} ••${c.mask}` : base;
 }
 

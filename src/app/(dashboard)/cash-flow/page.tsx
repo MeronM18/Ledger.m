@@ -15,6 +15,8 @@ function shortDate(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+export const metadata = { title: "Cash flow" };
+
 export default async function CashFlowPage() {
   const data = await loadForecast(createAdminClient());
 
@@ -86,7 +88,7 @@ export default async function CashFlowPage() {
           </div>
 
           {f.safeToSpend < 0 && (
-            <p className="text-sm text-oxblood">
+            <p className="text-sm text-oxblood-text">
               Bills due before payday add up to more than the cash you have, by {formatCurrency(-f.safeToSpend, currency)}.
             </p>
           )}

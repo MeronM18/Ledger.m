@@ -27,7 +27,7 @@ import {
   summarizeSubscriptions,
 } from "@/lib/subscriptions-aggregation";
 import { effectiveNextDate } from "@/lib/subscription-insights";
-import { humanizeTransactionName } from "@/lib/transaction-display";
+import { humanizeTransactionName, streamDisplayName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { calendarNow } from "@/lib/time";
@@ -61,6 +61,8 @@ function SectionLink({ href }: { href: string }) {
     </Link>
   );
 }
+
+export const metadata = { title: "Overview" };
 
 export default async function OverviewPage() {
   const admin = createAdminClient();
@@ -166,7 +168,7 @@ export default async function OverviewPage() {
   const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
   const monthLabel = now.monthLabel;
   const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
-  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month);
+  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month, connectedCardIssuers);
 
   const allBudgetProgress = budgetProgress(
     categoryTotals,
@@ -205,7 +207,7 @@ export default async function OverviewPage() {
       .filter(({ date }) => isWithinNextDays(date, UPCOMING_WINDOW_DAYS))
       .map(({ s, date }) => ({
         key: `plaid-${s.id}`,
-        label: s.merchant_name || s.description || "Unknown",
+        label: streamDisplayName(s),
         amount: s.average_amount ?? 0,
         date: date as string,
         isManual: false,
@@ -461,7 +463,7 @@ export default async function OverviewPage() {
                 <p className="text-sm text-muted-foreground">
                   {formatCurrency(incomeVsSpending.income, currency)} in ·{" "}
                   {formatCurrency(incomeVsSpending.spending, currency)} out · net{" "}
-                  <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood"}>
+                  <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood-text"}>
                     {formatCurrency(incomeVsSpending.net, currency)}
                   </span>
                 </p>

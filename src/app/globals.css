@@ -74,6 +74,7 @@
   --color-champagne-shadow: var(--champagne-shadow);
   --color-moss: var(--moss);
   --color-oxblood: var(--oxblood);
+  --color-oxblood-text: var(--oxblood-text);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -98,6 +99,10 @@
   --champagne-shadow: #a69c82;
   --moss: #8c9b7a;
   --oxblood: #9b5548;
+  /* Oxblood is 3.3:1 on a card, under the 4.5:1 that small text needs. Fills
+     (bars, tints, borders) keep --oxblood; text uses this lighter tone of the
+     same hue, 5.5:1 on a card. */
+  --oxblood-text: #c47a6b;
 
   /* Semantic tokens, mapped to the brand palette */
   --background: var(--onyx);
@@ -171,6 +176,12 @@
      lines never touch. One rule instead of a margin on every such pair. */
   p + p.text-xs {
     margin-top: 0.25rem;
+  }
+  /* Keyboard focus is always visible, including on plain links. */
+  :where(a, button, [role="button"], summary):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
   }
 }
 

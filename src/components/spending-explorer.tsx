@@ -131,8 +131,13 @@ export function SpendingExplorer({
     monthFilter === "all"
       ? { year: now.getFullYear(), month: now.getMonth() }
       : { year: Number(monthFilter.slice(0, 4)), month: Number(monthFilter.slice(5, 7)) - 1 };
+  // "September" for the month being viewed, and the year only where it
+  // differs, so "August 2026 ended at..." doesn't repeat a year every line.
   const monthName = (m: MonthRef) =>
-    new Date(m.year, m.month, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    new Date(m.year, m.month, 1).toLocaleDateString("en-US", {
+      month: "long",
+      ...(m.year === trendRef.year ? {} : { year: "numeric" as const }),
+    });
   const filteredAnyCategory = transactions.filter((t) => {
     if (accountFilter === MANUAL_ACCOUNT_ID) return t.account === null && matchesSearch(t);
     return (accountFilter === "all" || t.account?.id === accountFilter) && matchesSearch(t);
@@ -246,18 +251,26 @@ export function SpendingExplorer({
               {merchants.map((m, i) => (
                 <div
                   key={m.merchant}
-                  className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
+                  className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 first:pt-0"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 font-mono text-sm text-muted-foreground">{i + 1}</span>
-                    <div>
-                      <p className="text-sm font-medium">{m.merchant}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {m.count} transaction{m.count === 1 ? "" : "s"}
-                      </p>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="w-5 font-mono text-sm text-muted-foreground">{i + 1}</span>
+                      <div>
+                        <p className="text-sm font-medium">{m.merchant}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {m.count} transaction{m.count === 1 ? "" : "s"}
+                        </p>
+                      </div>
                     </div>
+                    <Money amount={m.amount} currency={currency} tone="negative" className="text-sm font-medium" />
                   </div>
-                  <Money amount={m.amount} currency={currency} tone="negative" className="text-sm font-medium" />
+                  <div className="ml-8 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+                    <div
+                      className="h-full rounded-full bg-oxblood/70"
+                      style={{ width: `${(m.amount / merchants[0].amount) * 100}%` }}
+                    />
+                  </div>
                 </div>
               ))}
             </div>

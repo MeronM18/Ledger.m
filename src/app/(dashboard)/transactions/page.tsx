@@ -7,6 +7,8 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { applyEditsToAll } from "@/lib/transaction-edits";
 import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
+export const metadata = { title: "Transactions" };
+
 export default async function TransactionsPage() {
   const admin = createAdminClient();
 

@@ -10,6 +10,7 @@ import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { prettyName } from "@/lib/transaction-display";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
 type AccountRow = {
@@ -45,6 +46,8 @@ function statusBadgeVariant(status: string): "default" | "destructive" | "second
 function formatHistoryStart(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
+
+export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
   const admin = createAdminClient();
@@ -95,7 +98,7 @@ export default async function AccountsPage() {
         .filter((a) => a.type === "credit")
         .map((a) => ({
           id: a.id,
-          name: a.name,
+          name: prettyName(a.name),
           mask: a.mask,
           institution: item.institution_name,
           balance: a.current_balance === null ? null : Number(a.current_balance),
@@ -154,7 +157,7 @@ export default async function AccountsPage() {
                     >
                       <div>
                         <p className="text-sm font-medium">
-                          {account.name}
+                          {prettyName(account.name)}
                           {account.mask ? ` ••${account.mask}` : ""}
                         </p>
                         <p className="text-xs text-muted-foreground">

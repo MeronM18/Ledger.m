@@ -11,6 +11,7 @@ import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth, isLiabilityAccount } from "@/lib/net-worth";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { prettyName } from "@/lib/transaction-display";
 
 type AccountRow = {
   id: string;
@@ -21,6 +22,8 @@ type AccountRow = {
   current_balance: number | null;
   iso_currency_code: string | null;
 };
+
+export const metadata = { title: "Assets" };
 
 export default async function AssetsPage() {
   const admin = createAdminClient();
@@ -111,7 +114,7 @@ export default async function AssetsPage() {
               <CardContent>
                 <span
                   className={`font-serif text-3xl font-semibold tabular-nums ${
-                    netWorth < 0 ? "text-oxblood" : "text-moss"
+                    netWorth < 0 ? "text-oxblood-text" : "text-moss"
                   }`}
                 >
                   {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -144,7 +147,7 @@ export default async function AssetsPage() {
                       >
                         <div>
                           <p className="text-sm font-medium">
-                            {a.name}
+                            {prettyName(a.name)}
                             {a.mask ? ` ••${a.mask}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -177,7 +180,7 @@ export default async function AssetsPage() {
                       >
                         <div>
                           <p className="text-sm font-medium">
-                            {a.name}
+                            {prettyName(a.name)}
                             {a.mask ? ` ••${a.mask}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -200,13 +203,13 @@ export default async function AssetsPage() {
           </Card>
 
           <Card>
-            <CardContent className="pt-6">
+            <CardContent>
               <ManualAssetsManager assets={manualAssets} />
             </CardContent>
           </Card>
 
           <Card>
-            <CardContent className="pt-6">
+            <CardContent>
               <PreciousMetalsManager holdings={holdings} prices={prices} />
             </CardContent>
           </Card>

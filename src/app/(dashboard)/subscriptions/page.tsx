@@ -6,6 +6,7 @@ import { occurrencesBetween } from "@/lib/forecast";
 import { effectiveNextDate, subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
 import { loadFirstChargeAmounts } from "@/lib/subscription-data";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { streamDisplayName } from "@/lib/transaction-display";
 import { calendarNow, easternToday } from "@/lib/time";
 
 // How far ahead the renewal calendar looks: about three months of days.
@@ -15,6 +16,8 @@ type StreamQueryRow = Omit<StreamRow, "firstChargeAmount"> & {
   pfc_detailed: string | null;
   transaction_ids: string[] | null;
 };
+
+export const metadata = { title: "Subscriptions" };
 
 export default async function SubscriptionsPage() {
   const admin = createAdminClient();
@@ -68,7 +71,7 @@ export default async function SubscriptionsPage() {
     firstChargeAmount: firstCharges.get(s.id) ?? null,
   }));
 
-  const streamName = (s: StreamRow) => s.merchant_name || s.description || "Unknown";
+  const streamName = (s: StreamRow) => streamDisplayName(s);
   const activeStreams = streams.filter((s) => s.is_active && !s.user_marked_cancelled);
   const activeManual = manualSubscriptions.filter((m) => m.is_active);
 

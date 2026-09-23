@@ -19,7 +19,7 @@ const BAND_TEXT: Record<UtilizationBand, string> = {
   excellent: "text-moss",
   good: "text-moss",
   fair: "text-champagne",
-  high: "text-oxblood",
+  high: "text-oxblood-text",
 };
 const BAND_BAR: Record<UtilizationBand, string> = {
   excellent: "bg-moss",

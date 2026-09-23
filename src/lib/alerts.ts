@@ -11,6 +11,7 @@ import {
 import { budgetProgress } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
 import { effectiveNextDate } from "@/lib/subscription-insights";
+import { streamDisplayName } from "@/lib/transaction-display";
 import { categoryTotalsForMonth } from "@/lib/spending-aggregation";
 import { loadSpendingData } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -126,7 +127,11 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   } else {
     const streams = (streamsRes.data ?? []).map((s) => ({
       id: s.id as string,
-      name: (s.merchant_name || s.description || "A subscription") as string,
+      name: streamDisplayName(
+        { merchant_name: s.merchant_name as string | null, description: s.description as string | null },
+        "outflow",
+        "A subscription"
+      ),
       average_amount: s.average_amount as number | null,
       last_amount: s.last_amount as number | null,
       frequency: s.frequency as string | null,

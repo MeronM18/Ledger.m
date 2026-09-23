@@ -48,13 +48,13 @@ export function NetWorthHero({
               <span
                 className={cn(
                   "font-serif text-4xl font-semibold tabular-nums",
-                  netWorth < 0 ? "text-oxblood" : "text-moss"
+                  netWorth < 0 ? "text-oxblood-text" : "text-moss"
                 )}
               >
                 {formatCurrency(netWorth, currency)}
               </span>
               {trend.change !== null ? (
-                <p className={cn("flex items-center gap-1.5 text-sm", up ? "text-moss" : "text-oxblood")}>
+                <p className={cn("flex items-center gap-1.5 text-sm", up ? "text-moss" : "text-oxblood-text")}>
                   {up ? <ArrowUpRight className="size-4" aria-hidden /> : <ArrowDownRight className="size-4" aria-hidden />}
                   <span className="font-mono tabular-nums">
                     {up ? "+" : "-"}

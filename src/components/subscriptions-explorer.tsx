@@ -25,6 +25,7 @@ import {
   type Insight,
 } from "@/lib/subscription-insights";
 import { calendarNow } from "@/lib/time";
+import { streamDisplayName } from "@/lib/transaction-display";
 import {
   hasLapsed,
   hasPriceIncrease,
@@ -90,7 +91,7 @@ function CancelHelpLink({ name }: { name: string }) {
 }
 
 function StreamRowView({ stream }: { stream: StreamRow }) {
-  const label = stream.merchant_name || stream.description || "Unknown";
+  const label = streamDisplayName(stream);
   const accountLabel = stream.account
     ? `${stream.account.name}${stream.account.mask ? ` ••${stream.account.mask}` : ""}`
     : "Unknown account";
@@ -110,7 +111,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
         <p className="flex items-center gap-2 text-sm font-medium">
           {label}
           {priceIncreased && (
-            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
               <TrendingUp className="size-3" />
               Price increased
             </Badge>
@@ -122,7 +123,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
             </Badge>
           )}
           {lapsed && (
-            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
               <AlertTriangle className="size-3" />
               Hasn&apos;t charged recently
             </Badge>
@@ -162,7 +163,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
             Manual
           </Badge>
           {lapsed && (
-            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
+            <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
               <AlertTriangle className="size-3" />
               Hasn&apos;t charged recently
             </Badge>
@@ -240,7 +241,7 @@ export function SubscriptionsExplorer({
     return items.filter((item) => {
       const label =
         item.source === "plaid"
-          ? item.plaidStream!.merchant_name || item.plaidStream!.description || "Unknown"
+          ? streamDisplayName(item.plaidStream!)
           : item.manualSub!.name;
       return label.toLowerCase().includes(q);
     });
@@ -261,16 +262,14 @@ export function SubscriptionsExplorer({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <FilterBar
-          search={search}
-          onSearchChange={setSearch}
-          accounts={accounts}
-          accountValue={accountFilter}
-          onAccountChange={setAccountFilter}
-        />
-        <AddManualSubscriptionButton />
-      </div>
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        accounts={accounts}
+        accountValue={accountFilter}
+        onAccountChange={setAccountFilter}
+        actions={<AddManualSubscriptionButton />}
+      />
 
       <SubscriptionInsightsCard insights={insights} />
 
@@ -290,8 +289,6 @@ export function SubscriptionsExplorer({
         </CardContent>
       </Card>
 
-      <SubscriptionCalendar events={calendarEvents} todayIso={todayIso} currency="USD" />
-
       <Tabs defaultValue="active">
         <TabsList>
           <TabsTrigger value="active">Active ({active.length})</TabsTrigger>
@@ -299,7 +296,7 @@ export function SubscriptionsExplorer({
         </TabsList>
         <TabsContent value="active">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent>
               {active.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No active subscriptions detected yet.</p>
               ) : (
@@ -310,7 +307,7 @@ export function SubscriptionsExplorer({
         </TabsContent>
         <TabsContent value="inactive">
           <Card>
-            <CardContent className="pt-6">
+            <CardContent>
               {inactive.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nothing here.</p>
               ) : (
@@ -320,6 +317,8 @@ export function SubscriptionsExplorer({
           </Card>
         </TabsContent>
       </Tabs>
+
+      <SubscriptionCalendar events={calendarEvents} todayIso={todayIso} currency="USD" />
     </div>
   );
 }

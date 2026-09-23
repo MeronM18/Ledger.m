@@ -3,6 +3,7 @@ import { ALERT_THRESHOLDS } from "@/lib/config";
 import { buildForecast, typicalDailySpend, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
 import { effectiveNextDate } from "@/lib/subscription-insights";
+import { streamDisplayName } from "@/lib/transaction-display";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow, easternToday } from "@/lib/time";
 
@@ -61,15 +62,18 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     .reduce((sum, a) => sum + Number(a.current_balance ?? 0), 0);
 
   const streams = streamsRes.data ?? [];
-  const streamName = (s: { merchant_name: string | null; description: string | null }, fallback: string) =>
-    s.merchant_name || s.description || fallback;
+  const streamName = (
+    s: { merchant_name: string | null; description: string | null },
+    fallback: string,
+    direction: "inflow" | "outflow"
+  ) => streamDisplayName(s, direction, fallback);
 
   const bills: RecurringItem[] = [
     ...streams
       .filter((s) => s.direction === "outflow")
       .map((s) => ({
         id: s.id as string,
-        name: streamName(s, "Recurring bill"),
+        name: streamName(s, "Recurring bill", "outflow"),
         amount: amountOf(s.average_amount, s.last_amount),
         frequency: s.frequency as string | null,
         date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
@@ -87,7 +91,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     .filter((s) => s.direction === "inflow")
     .map((s) => ({
       id: s.id as string,
-      name: streamName(s, "Income"),
+      name: streamName(s, "Income", "inflow"),
       // Plaid signs inflows as negative amounts; only the size matters here.
       amount: amountOf(s.average_amount, s.last_amount),
       frequency: s.frequency as string | null,

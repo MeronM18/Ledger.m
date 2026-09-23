@@ -97,7 +97,7 @@ function stripTrailingReferenceTokens(s: string): string {
   return words.join(" ");
 }
 
-function isMostlyUppercase(s: string): boolean {
+export function isMostlyUppercase(s: string): boolean {
   const letters = s.replace(/[^A-Za-z]/g, "");
   if (!letters) return false;
   const upper = letters.replace(/[^A-Z]/g, "");
@@ -208,4 +208,33 @@ export function humanizeTransaction(tx: DisplayableTransaction): {
     displayCategory,
     displayCategoryLabel: humanizeCategory(displayCategory),
   };
+}
+
+/**
+ * A name as it should read on screen. Banks send account and product names
+ * in capitals ("FIFTH THIRD MOMENTUM CHECKING"); those become title case,
+ * while a name already in mixed case is left exactly as it is.
+ */
+export function prettyName(name: string): string {
+  return isMostlyUppercase(name) ? toTitleCase(name) : name;
+}
+
+/**
+ * A recurring stream's display name. Plaid's stream description is the raw
+ * bank descriptor ("UNITED MORTGAGE PAYROLL 925644358895XMS 091526"), so it
+ * gets the same cleanup as a transaction name (payroll becomes "United
+ * Mortgage Paycheck", reference numbers and boilerplate are dropped);
+ * a merchant name Plaid already resolved is used as-is.
+ */
+export function streamDisplayName(
+  stream: { merchant_name: string | null; description: string | null },
+  direction: "inflow" | "outflow" = "outflow",
+  fallback = "Unknown"
+): string {
+  const name = humanizeTransactionName({
+    name: stream.description,
+    merchant_name: stream.merchant_name,
+    amount: direction === "inflow" ? -1 : 1,
+  });
+  return name === "Unknown" ? fallback : name;
 }

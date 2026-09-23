@@ -158,28 +158,28 @@ export function TransactionsExplorer({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <FilterBar
-          search={search}
-          onSearchChange={setSearch}
-          accounts={accountOptions}
-          accountValue={accountFilter}
-          onAccountChange={setAccountFilter}
-          categories={categories}
-          categoryValue={categoryFilter}
-          onCategoryChange={setCategoryFilter}
-          months={months}
-          monthValue={monthFilter}
-          onMonthChange={setMonthFilter}
-        />
-        <div className="flex items-center gap-2">
-          <Button size="sm" variant="outline" onClick={exportCsv}>
-            <Download className="size-3.5" />
-            Export CSV
-          </Button>
-          <AddManualTransactionButton />
-        </div>
-      </div>
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        accounts={accountOptions}
+        accountValue={accountFilter}
+        onAccountChange={setAccountFilter}
+        categories={categories}
+        categoryValue={categoryFilter}
+        onCategoryChange={setCategoryFilter}
+        months={months}
+        monthValue={monthFilter}
+        onMonthChange={setMonthFilter}
+        actions={
+          <>
+            <Button size="sm" variant="outline" onClick={exportCsv}>
+              <Download className="size-3.5" />
+              Export CSV
+            </Button>
+            <AddManualTransactionButton />
+          </>
+        }
+      />
 
       {sorted.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">

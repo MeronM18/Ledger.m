@@ -89,3 +89,19 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - PR #1 (subscription next-date rollover) is merged; its date helpers now default to Eastern "today" (done in step 1).
 - Not verified against live data: the transaction-count/1,000-row cap, and how the 5 new chart colors look next to the originals.
 - Confirm real transaction count vs the 1,000-row cap (`select count(*) from transactions`).
+
+## Polish pass (branch `polish/audit`)
+- [x] Phone navigation: the sidebar was always visible, taking 224px of a phone screen. Phones now get a top bar with a menu drawer; the desktop sidebar is sticky
+- [x] Content capped at a readable width (max-w-7xl, centered) instead of stretching across a wide monitor
+- [x] Red text (money out, over budget, errors) was 3.3:1 contrast, below the 4.5:1 small text needs; text now uses a lighter tone of the same hue (5.5:1), fills unchanged
+- [x] Visible keyboard focus on links and buttons; `aria-current` on the active nav link
+- [x] Each page has its own tab title ("Budgets · Ledger.m")
+- [x] Loading skeleton for the overview and accounts, which showed nothing while loading
+- [x] From real screenshots: the overview's income card reported less spending ($1,517) than the spending card beside it ($2,306), because it skipped payments to unconnected cards
+- [x] From real screenshots: Cash flow named the paycheck by its raw bank descriptor ("UNITED MORTGAGE PAYROLL 925644358895XMS 091526"); recurring bills and paychecks now get cleaned names everywhere (forecast, alerts, subscriptions, overview)
+- [x] Bank names in capitals ("FIFTH THIRD MOMENTUM CHECKING", "Chase CREDIT CARD") are title-cased on Accounts, Assets, filters and credit utilization
+- [x] "Needs your attention" collapses a pile of over-budget rows into one line that names the worst three, instead of a wall of five
+- [x] Filters and their action buttons (Export, Add) wrap as one group instead of stranding a dropdown on a second line
+- [x] Donut legend text is neutral (it was tinted per series, hard to read); pace chart fills its card; month names drop a repeated year
+- [x] Top merchants get proportional bars; over-budget bars show how far over (soft red up to the budget, full red beyond); renewal calendar sits below the list; doubled card padding removed
+- [ ] Still needs a look on a phone: menu drawer and each page at narrow width

@@ -46,7 +46,7 @@ export function NetWorthChart({ snapshots }: { snapshots: NetWorthSnapshotPoint[
             No net worth history yet.
           </p>
         ) : snapshots.length < MIN_SNAPSHOTS_FOR_CHART ? (
-          <div className="flex flex-col items-center justify-center gap-1 py-16 text-center">
+          <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
             <p className="text-sm text-muted-foreground">
               Building history — {snapshots.length} day{snapshots.length === 1 ? "" : "s"} recorded so far.
             </p>

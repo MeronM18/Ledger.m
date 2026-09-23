@@ -20,7 +20,7 @@ export default function DashboardError({
     <div className="flex flex-1 items-center justify-center p-6">
       <Card className="w-full max-w-sm border-oxblood/40">
         <CardHeader className="items-center text-center">
-          <AlertTriangle className="mb-2 size-6 text-oxblood" />
+          <AlertTriangle className="mb-2 size-6 text-oxblood-text" />
           <CardTitle className="font-serif text-lg text-bone">Something went wrong</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-4 text-center">
