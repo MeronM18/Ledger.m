@@ -3,7 +3,11 @@ import Link from "next/link";
 import { ArrowRight, Store } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AttentionCard } from "@/components/attention-card";
 import { GreetingHeader } from "@/components/greeting-header";
+import { NetWorthHero } from "@/components/net-worth-hero";
+import { OverviewGoalsCard, OverviewGoalsSkeleton } from "@/components/overview-goals-card";
+import { SpendingPaceCard } from "@/components/spending-pace-card";
 import { SafeToSpendCard, SafeToSpendSkeleton } from "@/components/safe-to-spend-card";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
@@ -28,7 +32,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { calendarNow } from "@/lib/time";
 import { BudgetBar } from "@/components/budgets-manager";
+import { attentionItems } from "@/lib/attention";
 import { budgetProgress } from "@/lib/budgets";
+import { netWorthTrend } from "@/lib/net-worth-trend";
+import { paceComparison, previousMonth } from "@/lib/trends";
 import { applyEditsToAll } from "@/lib/transaction-edits";
 import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
@@ -73,6 +80,7 @@ export default async function OverviewPage() {
     edits,
     { data: budgetRows, error: budgetsError },
     { data: alertRows, error: alertsError },
+    { data: snapshotRows, error: snapshotsError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -110,6 +118,7 @@ export default async function OverviewPage() {
     loadTransactionEdits(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(5),
+    admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -125,6 +134,7 @@ export default async function OverviewPage() {
   if (creditAcctError) console.error("Failed to load connected credit accounts for overview", creditAcctError);
   if (budgetsError) console.error("Failed to load budgets for overview", budgetsError);
   if (alertsError) console.error("Failed to load alerts for overview", alertsError);
+  if (snapshotsError) console.error("Failed to load net worth history for overview", snapshotsError);
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
@@ -158,11 +168,12 @@ export default async function OverviewPage() {
   const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
   const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month);
 
-  const budgetsToShow = budgetProgress(
+  const allBudgetProgress = budgetProgress(
     categoryTotals,
     (budgetRows ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) })),
     now
-  ).slice(0, 3);
+  );
+  const budgetsToShow = allBudgetProgress.slice(0, 3);
 
   const manualSubsAsStreams = (manualSubsData ?? []).map((m) => ({
     average_amount: m.amount,
@@ -235,6 +246,20 @@ export default async function OverviewPage() {
     .sort((a, b) => b.date.localeCompare(a.date))
     .slice(0, 5);
 
+  const trend = netWorthTrend(
+    (snapshotRows ?? []).map((r) => ({ date: r.date as string, net_worth: Number(r.net_worth) })),
+    netWorth,
+    now.isoDate
+  );
+  const pace = paceComparison(
+    spending,
+    { year: now.year, month: now.month },
+    { year: now.year, month: now.month, day: Number(now.isoDate.slice(8, 10)) }
+  );
+  const prev = previousMonth({ year: now.year, month: now.month });
+  const previousMonthName = new Date(prev.year, prev.month, 1).toLocaleDateString("en-US", { month: "long" });
+  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency);
+
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError);
   const spendingError = Boolean(txError || manualTxError || creditAcctError || edits.error);
   const subscriptionsError = Boolean(streamsError || manualSubsError);
@@ -244,29 +269,53 @@ export default async function OverviewPage() {
     <div className="flex flex-col gap-6">
       <GreetingHeader />
 
-      <Card className="border-champagne/40">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground">Net worth</CardTitle>
-          <SectionLink href="/assets" />
-        </CardHeader>
-        <CardContent>
-          {netWorthError ? (
-            <QueryErrorState message="Couldn't load net worth." />
-          ) : (
-            <span
-              className={`font-serif text-3xl font-semibold tabular-nums ${
-                netWorth < 0 ? "text-oxblood" : "text-moss"
-              }`}
-            >
-              {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(netWorth)}
-            </span>
-          )}
-        </CardContent>
-      </Card>
+      <NetWorthHero netWorth={netWorth} trend={trend} error={netWorthError} currency="USD" />
 
-      <Suspense fallback={<SafeToSpendSkeleton />}>
-        <SafeToSpendCard />
-      </Suspense>
+      <AttentionCard items={attention} />
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Suspense fallback={<SafeToSpendSkeleton />}>
+          <SafeToSpendCard />
+        </Suspense>
+        <SpendingPaceCard pace={pace} previousMonthName={previousMonthName} currency={currency} error={spendingError} />
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Budgets</CardTitle>
+            <SectionLink href="/budgets" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {budgetsError || spendingError ? (
+              <QueryErrorState message="Couldn't load budgets." />
+            ) : budgetsToShow.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No budgets yet.{" "}
+                <Link href="/budgets" className="text-champagne hover:underline">
+                  Set one up
+                </Link>
+                .
+              </p>
+            ) : (
+              budgetsToShow.map((b) => (
+                <div key={b.id} className="flex flex-col gap-1.5">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{b.label}</span>
+                    <span className="text-muted-foreground">
+                      {formatCurrency(b.spent, currency)} of {formatCurrency(b.budget, currency)}
+                    </span>
+                  </div>
+                  <BudgetBar progress={b} />
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+        <Suspense fallback={<OverviewGoalsSkeleton />}>
+          <OverviewGoalsCard />
+        </Suspense>
+      </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
@@ -323,67 +372,77 @@ export default async function OverviewPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Budgets</CardTitle>
-          <SectionLink href="/budgets" />
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {budgetsError || spendingError ? (
-            <QueryErrorState message="Couldn't load budgets." />
-          ) : budgetsToShow.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No budgets yet.{" "}
-              <Link href="/budgets" className="text-champagne hover:underline">
-                Set one up
-              </Link>
-              .
-            </p>
-          ) : (
-            budgetsToShow.map((b) => (
-              <div key={b.id} className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{b.label}</span>
-                  <span className="text-muted-foreground">
-                    {formatCurrency(b.spent, currency)} of {formatCurrency(b.budget, currency)}
-                  </span>
-                </div>
-                <BudgetBar progress={b} />
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent alerts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {alertsError ? (
-            <QueryErrorState message="Couldn't load alerts." />
-          ) : !alertRows || alertRows.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nothing to flag. Budget, renewal, price and low-balance alerts show up here and on your phone.
-            </p>
-          ) : (
-            <div className="flex flex-col">
-              {alertRows.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex items-start justify-between gap-4 border-t border-border py-3 first:border-t-0 first:pt-0"
-                >
-                  <div>
-                    <p className="text-sm font-medium">{a.title}</p>
-                    <p className="text-xs text-muted-foreground">{a.body}</p>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Upcoming</CardTitle>
+            <SectionLink href="/subscriptions" />
+          </CardHeader>
+          <CardContent>
+            {subscriptionsError ? (
+              <QueryErrorState message="Couldn't load upcoming charges." />
+            ) : upcoming.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing predicted to charge in the next {UPCOMING_WINDOW_DAYS} days.
+              </p>
+            ) : (
+              <div className="flex flex-col">
+                {upcoming.map((u) => (
+                  <div
+                    key={u.key}
+                    className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{u.label}</span>
+                      {u.isManual && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Manual
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(`${u.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </span>
+                      <Money amount={u.amount} tone="negative" className="text-sm font-medium" />
+                    </div>
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(a.created_at)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent alerts</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {alertsError ? (
+              <QueryErrorState message="Couldn't load alerts." />
+            ) : !alertRows || alertRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing to flag. Budget, renewal, price and low-balance alerts show up here and on your phone.
+              </p>
+            ) : (
+              <div className="flex flex-col">
+                {alertRows.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-start justify-between gap-4 border-t border-border py-3 first:border-t-0 first:pt-0"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{a.title}</p>
+                      <p className="text-xs text-muted-foreground">{a.body}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(a.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -421,46 +480,6 @@ export default async function OverviewPage() {
                 </div>
               )}
             </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Upcoming</CardTitle>
-          <SectionLink href="/subscriptions" />
-        </CardHeader>
-        <CardContent>
-          {subscriptionsError ? (
-            <QueryErrorState message="Couldn't load upcoming charges." />
-          ) : upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Nothing predicted to charge in the next {UPCOMING_WINDOW_DAYS} days.
-            </p>
-          ) : (
-            <div className="flex flex-col">
-              {upcoming.map((u) => (
-                <div
-                  key={u.key}
-                  className="flex items-center justify-between border-t border-border py-3 first:border-t-0 first:pt-0"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{u.label}</span>
-                    {u.isManual && (
-                      <Badge variant="secondary" className="text-[10px]">
-                        Manual
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(`${u.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                    <Money amount={u.amount} tone="negative" className="text-sm font-medium" />
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
         </CardContent>
       </Card>
