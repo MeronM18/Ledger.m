@@ -166,6 +166,12 @@
   html {
     @apply font-sans;
   }
+  /* A small caption sitting directly under a line of text (a name over its
+     details, a title over its subtitle) gets a hairline of air, so stacked
+     lines never touch. One rule instead of a margin on every such pair. */
+  p + p.text-xs {
+    margin-top: 0.25rem;
+  }
 }
 
 /* Restrained motion language: weight and precision, not decoration. A door

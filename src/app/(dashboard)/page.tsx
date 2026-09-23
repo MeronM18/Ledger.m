@@ -310,7 +310,7 @@ export default async function OverviewPage() {
               <QueryErrorState message="Couldn't load subscriptions." />
             ) : (
               <>
-                <div>
+                <div className="flex flex-col gap-1">
                   <p className="text-xs text-muted-foreground">Monthly cost</p>
                   <Money amount={monthlyTotal} tone="negative" className="text-2xl font-semibold" />
                 </div>

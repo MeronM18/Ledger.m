@@ -235,7 +235,7 @@ export function BudgetsManager({
                   <span className="flex items-center gap-1">
                     <span className="text-sm">
                       <Money amount={p.spent} currency={currency} tone="neutral" />
-                      <span className="text-muted-foreground"> of </span>
+                      <span className="mx-1.5 text-muted-foreground">of</span>
                       <Money amount={p.budget} currency={currency} tone="neutral" />
                     </span>
                     <BudgetDialog

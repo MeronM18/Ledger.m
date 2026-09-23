@@ -279,11 +279,11 @@ export function SubscriptionsExplorer({
           <CardTitle>Active subscriptions cost</CardTitle>
         </CardHeader>
         <CardContent className="flex gap-8">
-          <div>
+          <div className="flex flex-col gap-1">
             <p className="text-xs text-muted-foreground">Monthly</p>
             <Money amount={monthlyTotal} tone="negative" className="text-2xl font-semibold" />
           </div>
-          <div>
+          <div className="flex flex-col gap-1">
             <p className="text-xs text-muted-foreground">Annualized</p>
             <Money amount={annualTotal} tone="negative" className="text-2xl font-semibold" />
           </div>
