@@ -10,6 +10,7 @@ import {
 } from "@/lib/alerts-logic";
 import { budgetProgress } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
+import { effectiveNextDate } from "@/lib/subscription-insights";
 import { categoryTotalsForMonth } from "@/lib/spending-aggregation";
 import { loadSpendingData } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -90,7 +91,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
       .from("recurring_streams")
-      .select("id, merchant_name, description, average_amount, last_amount, frequency, predicted_next_date")
+      .select("id, merchant_name, description, average_amount, last_amount, frequency, predicted_next_date, last_date")
       .eq("direction", "outflow")
       .eq("is_active", true)
       .eq("user_marked_cancelled", false),
@@ -129,7 +130,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       average_amount: s.average_amount as number | null,
       last_amount: s.last_amount as number | null,
       frequency: s.frequency as string | null,
-      date: s.predicted_next_date as string | null,
+      date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
     }));
     const candidates: RenewalCandidate[] = [
       ...streams.map((s) => ({

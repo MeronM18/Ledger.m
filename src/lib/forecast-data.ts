@@ -2,6 +2,7 @@ import "server-only";
 import { ALERT_THRESHOLDS } from "@/lib/config";
 import { buildForecast, typicalDailySpend, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
+import { effectiveNextDate } from "@/lib/subscription-insights";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow, easternToday } from "@/lib/time";
 
@@ -34,7 +35,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     admin.from("accounts").select("type, subtype, available_balance, current_balance").eq("is_hidden", false),
     admin
       .from("recurring_streams")
-      .select("id, direction, merchant_name, description, average_amount, last_amount, frequency, predicted_next_date")
+      .select("id, direction, merchant_name, description, average_amount, last_amount, frequency, predicted_next_date, last_date")
       .eq("is_active", true)
       .eq("user_marked_cancelled", false),
     admin.from("manual_subscriptions").select("id, name, amount, frequency, next_billing_date").eq("is_active", true),
@@ -71,7 +72,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
         name: streamName(s, "Recurring bill"),
         amount: amountOf(s.average_amount, s.last_amount),
         frequency: s.frequency as string | null,
-        date: s.predicted_next_date as string | null,
+        date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
       })),
     ...(manualRes.data ?? []).map((m) => ({
       id: m.id as string,
@@ -90,7 +91,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
       // Plaid signs inflows as negative amounts; only the size matters here.
       amount: amountOf(s.average_amount, s.last_amount),
       frequency: s.frequency as string | null,
-      date: s.predicted_next_date as string | null,
+      date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
     }))
     .filter((i) => i.amount >= MIN_PAYCHECK_AMOUNT);
 

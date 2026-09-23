@@ -70,6 +70,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Plaid's recurring-transaction detection plus manually-tracked subscriptions, one unified view
 - Active/cancelled state, monthly and annualized cost totals
 - Price-increase detection (a charge meaningfully above its rolling average, not just any variance)
+- Next date for a charge with no bank prediction (an annual fee), a renewal calendar, and a "worth a look" list for a service entered twice or several of the same kind (streaming, music, gym); new and trial-style subscriptions are flagged and each has a how-to-cancel search link
 - Lapsed-subscription detection (a predicted charge date that's come and gone with nothing new to show for it)
 
 **Budgets**

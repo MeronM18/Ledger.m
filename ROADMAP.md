@@ -57,7 +57,15 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] 8 new tests (61 total on this branch)
 - [ ] Not built: statement-balance-based utilization (needs data Plaid's balance endpoint doesn't give us here); a high-utilization alert
 
-- [ ] Step 8: Subscription extras (trials, duplicates, renewal calendar, annual dates)
+## Step 8: Subscription extras  (branch `step8/subscription-extras`, no migration)
+- [x] Next date for charges Plaid gave no prediction for (your annual membership fee): one period after the last charge. Used on the Subscriptions page, overview Upcoming, alerts and the cash-flow forecast
+- [x] "Worth a look" card: the same service listed twice (e.g. bank-detected plus a manual entry, which double counts it), and 2+ subscriptions of the same kind (video streaming, music, gaming, gym)
+- [x] Renewal calendar: month grid for the next ~3 months with per-month renewal count and total
+- [x] "New" badge (first seen in the last 45 days); trial-like start (a $1-or-less first charge that grew to $5+)
+- [x] "How to cancel" link on each active subscription (a web search, not a guessed URL)
+- [x] 16 new tests (119 total)
+- [ ] Not built: per-service direct cancel links (would need a maintained, verified list); trial-ending warnings before conversion (Plaid only shows the conversion after it happens)
+
 - [ ] Step 9: Savings goals
 - [ ] Step 10: Overview redesign (net worth sparkline, pace bar, bills timeline)
 
