@@ -1,0 +1,140 @@
+import { describe, expect, it } from "vitest";
+import {
+  BUDGETABLE_CATEGORIES,
+  budgetProgress,
+  budgetStatus,
+  budgetTotals,
+  daysInMonth,
+  suggestBudget,
+  unbudgetedSpending,
+  type Budget,
+} from "@/lib/budgets";
+import { categoryTotalsForMonth, type SpendingTransaction } from "@/lib/spending-aggregation";
+
+const tx = (o: Partial<SpendingTransaction>): SpendingTransaction => ({
+  date: "2026-09-10",
+  amount: 10,
+  pfc_primary: "FOOD_AND_DRINK",
+  merchant_name: "Cafe",
+  name: "CAFE",
+  pending: false,
+  ...o,
+});
+
+const budget = (category: string, monthly_amount: number): Budget => ({ id: category, category, monthly_amount });
+const day = (d: number) => ({ year: 2026, month: 8, isoDate: `2026-09-${String(d).padStart(2, "0")}` });
+
+describe("budgetStatus", () => {
+  it("is ok under 80%, warning from 80% through the limit, over past it", () => {
+    expect(budgetStatus(79, 100)).toBe("ok");
+    expect(budgetStatus(80, 100)).toBe("warning");
+    expect(budgetStatus(100, 100)).toBe("warning");
+    expect(budgetStatus(100.01, 100)).toBe("over");
+  });
+});
+
+describe("budgetProgress", () => {
+  const totals = categoryTotalsForMonth(
+    [tx({ amount: 90 }), tx({ pfc_primary: "TRAVEL", amount: 20 })],
+    2026,
+    8
+  );
+
+  it("computes spent, remaining and status, most used first", () => {
+    const p = budgetProgress(totals, [budget("TRAVEL", 200), budget("FOOD_AND_DRINK", 100)], day(20));
+    expect(p.map((x) => x.category)).toEqual(["FOOD_AND_DRINK", "TRAVEL"]);
+    expect(p[0]).toMatchObject({ spent: 90, remaining: 10, status: "warning" });
+    expect(p[1]).toMatchObject({ spent: 20, remaining: 180, status: "ok" });
+  });
+
+  it("still lists a budgeted category that has no spending yet", () => {
+    const p = budgetProgress(totals, [budget("MEDICAL", 50)], day(20));
+    expect(p[0]).toMatchObject({ category: "MEDICAL", spent: 0, remaining: 50, status: "ok", percentUsed: 0 });
+  });
+
+  it("reports over-budget as negative remaining", () => {
+    const p = budgetProgress(totals, [budget("FOOD_AND_DRINK", 60)], day(20));
+    expect(p[0]).toMatchObject({ status: "over", remaining: -30 });
+    expect(p[0].projectedOver).toBe(false); // already over, no separate projection warning
+  });
+
+  it("projects month-end spend from the pace, but not in the first days", () => {
+    // 30-day month, day 15, $90 spent -> $180 projected against a $150 budget.
+    const p = budgetProgress(totals, [budget("FOOD_AND_DRINK", 150)], day(15));
+    expect(p[0].projected).toBeCloseTo(180);
+    expect(p[0].projectedOver).toBe(true);
+    expect(budgetProgress(totals, [budget("FOOD_AND_DRINK", 150)], day(3))[0].projected).toBeNull();
+  });
+
+  it("uses the OTHER bucket for uncategorized spending", () => {
+    const other = categoryTotalsForMonth([tx({ pfc_primary: null, amount: 40 })], 2026, 8);
+    expect(budgetProgress(other, [budget("OTHER", 100)], day(20))[0]).toMatchObject({
+      label: "Other/Uncategorized",
+      spent: 40,
+    });
+  });
+});
+
+describe("unbudgetedSpending / budgetTotals", () => {
+  it("lists only categories without a budget, largest first", () => {
+    const totals = categoryTotalsForMonth(
+      [tx({ amount: 90 }), tx({ pfc_primary: "TRAVEL", amount: 20 }), tx({ pfc_primary: "MEDICAL", amount: 55 })],
+      2026,
+      8
+    );
+    expect(unbudgetedSpending(totals, [budget("FOOD_AND_DRINK", 100)]).map((c) => c.category)).toEqual([
+      "MEDICAL",
+      "TRAVEL",
+    ]);
+  });
+
+  it("sums budgeted categories", () => {
+    const totals = categoryTotalsForMonth([tx({ amount: 90 })], 2026, 8);
+    const progress = budgetProgress(totals, [budget("FOOD_AND_DRINK", 100), budget("TRAVEL", 50)], day(20));
+    expect(budgetTotals(progress)).toEqual({ budget: 150, spent: 90, remaining: 60 });
+  });
+});
+
+describe("suggestBudget", () => {
+  const history = [
+    tx({ date: "2026-06-05", amount: 100 }),
+    tx({ date: "2026-07-05", amount: 200 }),
+    tx({ date: "2026-08-05", amount: 300 }),
+  ];
+
+  it("averages the previous full months and rounds up to $5", () => {
+    expect(suggestBudget(history, "FOOD_AND_DRINK", { year: 2026, month: 8 })).toBe(200);
+    expect(suggestBudget([...history, tx({ date: "2026-08-06", amount: 1 })], "FOOD_AND_DRINK", { year: 2026, month: 8 })).toBe(
+      205 // (100 + 200 + 301) / 3 = 200.33 -> 205
+    );
+  });
+
+  it("does not count months before the first transaction", () => {
+    const short = [tx({ date: "2026-08-05", amount: 90 })];
+    expect(suggestBudget(short, "FOOD_AND_DRINK", { year: 2026, month: 8 })).toBe(90); // only August counts
+  });
+
+  it("returns null with no history, and does not include the current month", () => {
+    expect(suggestBudget([], "FOOD_AND_DRINK", { year: 2026, month: 8 })).toBeNull();
+    expect(suggestBudget([tx({ date: "2026-09-05", amount: 500 })], "FOOD_AND_DRINK", { year: 2026, month: 8 })).toBeNull();
+  });
+
+  it("counts a category with no spending in a counted month as zero", () => {
+    expect(suggestBudget(history, "TRAVEL", { year: 2026, month: 8 })).toBe(5); // floor of $5
+  });
+});
+
+describe("misc", () => {
+  it("knows month lengths, including leap February", () => {
+    expect(daysInMonth(2026, 8)).toBe(30);
+    expect(daysInMonth(2028, 1)).toBe(29);
+  });
+
+  it("only offers categories the spending views actually count", () => {
+    expect(BUDGETABLE_CATEGORIES).toContain("FOOD_AND_DRINK");
+    expect(BUDGETABLE_CATEGORIES).toContain("OTHER");
+    for (const excluded of ["INCOME", "TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS", "LOAN_DISBURSEMENTS"]) {
+      expect(BUDGETABLE_CATEGORIES).not.toContain(excluded);
+    }
+  });
+});

@@ -19,7 +19,14 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] 11 new tests (39 total)
 - [ ] Not done: editing manual transactions' rules (they already have their own edit dialog); a pending charge that posts gets a new Plaid id and loses its per-transaction edit (rules still apply)
 
-- [ ] Step 3: Budgets with progress and over-budget alerts
+## Step 3: Budgets  (branch `step3/budgets`)
+- [x] Per-category monthly budgets: progress bars, left/over, month-end pace warning, spending without a budget, suggested amount from the last 3 months
+- [x] New /budgets page, sidebar link, budgets card on the overview
+- [x] Migration `0008_budgets.sql` (**must be applied: `supabase db push`**)
+- [x] Shared `loadSpendingData` loader for the new pages (14 new tests, 53 total)
+- [ ] Over-budget push alerts come in step 4 with the other alerts
+- [ ] Cleanup later: move overview/spending onto `loadSpendingData` (three pages still load the same data separately)
+
 - [ ] Step 4: Alerts (large/unusual charge, price increase, upcoming renewal, low balance)
 - [ ] Step 5: Trends (month over month, spending pace, category drill-down)
 - [ ] Step 6: Cash-flow forecast / safe to spend

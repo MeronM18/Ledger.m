@@ -71,6 +71,9 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Price-increase detection (a charge meaningfully above its rolling average, not just any variance)
 - Lapsed-subscription detection (a predicted charge date that's come and gone with nothing new to show for it)
 
+**Budgets**
+- Monthly budget per spending category, with progress against the month, what's left or over, a warning when the month's pace will overshoot, spending that has no budget yet, and a suggested starting amount from your last three months
+
 **Net worth**
 - Real-time, across connected accounts, manual assets/liabilities, and precious metals
 - Daily snapshot history with a trend chart that waits for enough history to mean something instead of plotting a single point and calling it a trend

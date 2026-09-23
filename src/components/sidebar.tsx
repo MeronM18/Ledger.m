@@ -7,6 +7,7 @@ import {
   ArrowLeftRight,
   RefreshCcw,
   PieChart,
+  Target,
   Wallet,
   Landmark,
 } from "lucide-react";
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/subscriptions", label: "Subscriptions", icon: RefreshCcw },
   { href: "/spending", label: "Spending", icon: PieChart },
+  { href: "/budgets", label: "Budgets", icon: Target },
   { href: "/assets", label: "Assets", icon: Wallet },
   { href: "/accounts", label: "Accounts", icon: Landmark },
 ];

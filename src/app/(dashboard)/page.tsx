@@ -24,6 +24,8 @@ import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { calendarNow } from "@/lib/time";
+import { BudgetBar } from "@/components/budgets-manager";
+import { budgetProgress } from "@/lib/budgets";
 import { applyEditsToAll } from "@/lib/transaction-edits";
 import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
@@ -66,6 +68,7 @@ export default async function OverviewPage() {
     { data: recentManualData, error: recentManualError },
     { data: creditAccounts, error: creditAcctError },
     edits,
+    { data: budgetRows, error: budgetsError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -101,6 +104,7 @@ export default async function OverviewPage() {
       .limit(5),
     admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
     loadTransactionEdits(admin),
+    admin.from("budgets").select("id, category, monthly_amount"),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -114,6 +118,7 @@ export default async function OverviewPage() {
   if (recentError) console.error("Failed to load recent transactions for overview", recentError);
   if (recentManualError) console.error("Failed to load recent manual transactions for overview", recentManualError);
   if (creditAcctError) console.error("Failed to load connected credit accounts for overview", creditAcctError);
+  if (budgetsError) console.error("Failed to load budgets for overview", budgetsError);
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
@@ -146,6 +151,12 @@ export default async function OverviewPage() {
   const monthLabel = now.monthLabel;
   const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
   const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month);
+
+  const budgetsToShow = budgetProgress(
+    categoryTotals,
+    (budgetRows ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) })),
+    now
+  ).slice(0, 3);
 
   const manualSubsAsStreams = (manualSubsData ?? []).map((m) => ({
     average_amount: m.amount,
@@ -298,6 +309,38 @@ export default async function OverviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Budgets</CardTitle>
+          <SectionLink href="/budgets" />
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {budgetsError || spendingError ? (
+            <QueryErrorState message="Couldn't load budgets." />
+          ) : budgetsToShow.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No budgets yet.{" "}
+              <Link href="/budgets" className="text-champagne hover:underline">
+                Set one up
+              </Link>
+              .
+            </p>
+          ) : (
+            budgetsToShow.map((b) => (
+              <div key={b.id} className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium">{b.label}</span>
+                  <span className="text-muted-foreground">
+                    {formatCurrency(b.spent, currency)} of {formatCurrency(b.budget, currency)}
+                  </span>
+                </div>
+                <BudgetBar progress={b} />
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
