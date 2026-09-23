@@ -167,6 +167,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* One over-wide element should never make the whole page scroll sideways. */
+    overflow-x: clip;
   }
   html {
     @apply font-sans;
@@ -176,6 +178,25 @@
      lines never touch. One rule instead of a margin on every such pair. */
   p + p.text-xs {
     margin-top: 0.25rem;
+  }
+  /* Touch screens: buttons and fields get a 40px minimum (the desktop sizes
+     are 28-32px, too small for a thumb), and text fields use 16px, because
+     iOS Safari zooms the whole page when a smaller field is focused. Mouse
+     users keep the compact sizes. */
+  @media (pointer: coarse) {
+    [data-slot="button"],
+    [data-slot="input"],
+    [data-slot="select-trigger"] {
+      min-height: 2.5rem;
+    }
+    [data-slot="button"][data-size^="icon"] {
+      min-width: 2.5rem;
+    }
+    input,
+    textarea,
+    [data-slot="select-trigger"] {
+      font-size: 16px;
+    }
   }
   /* Keyboard focus is always visible, including on plain links. */
   :where(a, button, [role="button"], summary):focus-visible {

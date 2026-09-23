@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Bodoni_Moda, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -22,6 +22,11 @@ const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
   weight: ["400", "500"],
 });
+
+// Colors the phone's browser bar to match the app instead of a white strip.
+export const viewport: Viewport = {
+  themeColor: "#0a0a0b",
+};
 
 export const metadata: Metadata = {
   // Each page sets its own title ("Budgets"), shown as "Budgets · Ledger.m"

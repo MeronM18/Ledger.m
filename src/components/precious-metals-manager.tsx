@@ -328,8 +328,8 @@ function HoldingRow({
   }
 
   return (
-    <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-3 border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
+      <div className="flex min-w-0 items-center gap-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-champagne">
           <Coins className="size-4" />
         </span>

@@ -238,9 +238,9 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
           {assets.map((asset) => (
             <div
               key={asset.id}
-              className="flex items-center justify-between border-t py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40"
+              className="flex items-center justify-between gap-3 border-t py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40"
             >
-              <div>
+              <div className="min-w-0">
                 <p className="text-sm font-medium">{asset.name}</p>
                 <p className="text-xs text-muted-foreground">
                   {CATEGORY_LABEL[asset.category]} · {asset.is_liability ? "Liability" : "Asset"}

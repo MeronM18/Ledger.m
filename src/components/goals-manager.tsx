@@ -233,8 +233,8 @@ function GoalCard({ goal, accounts, currency }: { goal: GoalRow; accounts: Accou
   return (
     <Card>
       <CardContent className="flex flex-col gap-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+          <div className="min-w-0">
             <p className="text-base font-medium">{goal.name}</p>
             <p className="text-xs text-muted-foreground">
               {goal.tracksAccount ? "Following an account balance" : "Tracked by hand"}

@@ -106,7 +106,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
   const trial = trialStart(stream.firstChargeAmount, stream.average_amount);
 
   return (
-    <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
+    <div className="flex flex-col gap-3 border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="flex items-center gap-2 text-sm font-medium">
           {label}
@@ -140,7 +140,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
         </p>
         {stream.is_active && !stream.user_marked_cancelled && <CancelHelpLink name={label} />}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Money amount={stream.average_amount ?? 0} tone="negative" className="text-sm font-medium" />
         {stream.is_active && (
           <CancelSubscriptionSwitch streamId={stream.id} cancelled={stream.user_marked_cancelled} />
@@ -155,7 +155,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
   const displayNextDate = projectNextOccurrence(subscription.next_billing_date, subscription.frequency);
 
   return (
-    <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
+    <div className="flex flex-col gap-3 border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <p className="flex items-center gap-2 text-sm font-medium">
           {subscription.name}
@@ -177,7 +177,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
         </p>
         {subscription.is_active && <CancelHelpLink name={subscription.name} />}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Money amount={subscription.amount} tone="negative" className="text-sm font-medium" />
         <ManualSubscriptionRowActions subscription={subscription} />
       </div>

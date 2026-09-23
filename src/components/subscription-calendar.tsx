@@ -90,7 +90,7 @@ export function SubscriptionCalendar({
             </div>
           ))}
           {Array.from({ length: leadingBlanks }, (_, i) => (
-            <div key={`blank-${i}`} className="min-h-14 bg-card/60" />
+            <div key={`blank-${i}`} className="min-h-12 bg-card/60 sm:min-h-14" />
           ))}
           {Array.from({ length: daysInMonth }, (_, i) => {
             const day = i + 1;
@@ -100,16 +100,24 @@ export function SubscriptionCalendar({
             return (
               <div
                 key={date}
-                className={cn("flex min-h-14 flex-col gap-0.5 bg-card p-1.5", isToday && "ring-1 ring-inset ring-champagne")}
+                className={cn("flex min-h-12 flex-col gap-0.5 bg-card p-1 sm:min-h-14 sm:p-1.5", isToday && "ring-1 ring-inset ring-champagne")}
                 title={dayEvents.map((e) => `${e.name} ${formatCurrency(e.amount, currency)}`).join("\n") || undefined}
               >
                 <span className={cn("text-[11px]", isToday ? "font-semibold text-champagne" : "text-muted-foreground")}>{day}</span>
+                {/* Names only fit from tablet width up; a phone cell shows dots and the list below has the detail. */}
+                <span className="flex flex-wrap gap-0.5 sm:hidden" aria-hidden>
+                  {dayEvents.slice(0, 3).map((_, idx) => (
+                    <span key={idx} className="size-1.5 rounded-full bg-champagne" />
+                  ))}
+                </span>
                 {dayEvents.slice(0, 2).map((e, idx) => (
-                  <span key={idx} className="truncate rounded bg-muted px-1 text-[10px] leading-4">
+                  <span key={idx} className="hidden truncate rounded bg-muted px-1 text-[10px] leading-4 sm:block">
                     {e.name}
                   </span>
                 ))}
-                {dayEvents.length > 2 && <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 2} more</span>}
+                {dayEvents.length > 2 && (
+                  <span className="hidden text-[10px] text-muted-foreground sm:block">+{dayEvents.length - 2} more</span>
+                )}
               </div>
             );
           })}

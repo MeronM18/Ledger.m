@@ -105,3 +105,11 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [x] Donut legend text is neutral (it was tinted per series, hard to read); pace chart fills its card; month names drop a repeated year
 - [x] Top merchants get proportional bars; over-budget bars show how far over (soft red up to the budget, full red beyond); renewal calendar sits below the list; doubled card padding removed
 - [ ] Still needs a look on a phone: menu drawer and each page at narrow width
+
+## Phone pass (branch `mobile/phone-pass`)
+- [x] Touch screens: 40px minimum for buttons and fields (desktop sizes are 28-32px) and 16px field text so iOS Safari doesn't zoom the page on focus
+- [x] Transactions: Account and Category fold under the merchant name instead of forcing a sideways-scrolling table
+- [x] Subscriptions: each row stacks (name, then amount and controls) instead of squeezing five things in a line; the calendar shows dots on phones, names from tablet width
+- [x] Filters: search full width, dropdowns share rows; dialogs never exceed the screen height; long names truncate instead of pushing amounts off screen (overview, assets, goals, budgets, accounts)
+- [x] Browser bar takes the app's dark color; nothing can make the whole page scroll sideways
+- [ ] Needs a real phone to confirm: how each page reads at ~390px, chart legibility, dialogs with the keyboard open
