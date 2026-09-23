@@ -27,7 +27,7 @@ import {
   summarizeSubscriptions,
 } from "@/lib/subscriptions-aggregation";
 import { effectiveNextDate } from "@/lib/subscription-insights";
-import { humanizeTransactionName } from "@/lib/transaction-display";
+import { humanizeTransactionName, streamDisplayName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { calendarNow } from "@/lib/time";
@@ -168,7 +168,7 @@ export default async function OverviewPage() {
   const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
   const monthLabel = now.monthLabel;
   const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
-  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month);
+  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month, connectedCardIssuers);
 
   const allBudgetProgress = budgetProgress(
     categoryTotals,
@@ -207,7 +207,7 @@ export default async function OverviewPage() {
       .filter(({ date }) => isWithinNextDays(date, UPCOMING_WINDOW_DAYS))
       .map(({ s, date }) => ({
         key: `plaid-${s.id}`,
-        label: s.merchant_name || s.description || "Unknown",
+        label: streamDisplayName(s),
         amount: s.average_amount ?? 0,
         date: date as string,
         isManual: false,

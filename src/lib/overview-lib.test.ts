@@ -100,11 +100,32 @@ describe("attentionItems", () => {
     expect(items[2].href).toBe("/subscriptions");
   });
 
-  it("caps the list and is empty when nothing needs attention", () => {
-    const many = Array.from({ length: 8 }, (_, i) =>
-      progress({ category: `c${i}`, label: `c${i}`, status: "over", remaining: -1, percentUsed: 1.1 })
+  it("collapses a pile of over-budget rows into one line that names the worst", () => {
+    const over = (n: string, remaining: number) =>
+      progress({ category: n, label: n, status: "over", remaining, percentUsed: 1.5, budget: 100, spent: 100 - remaining });
+    const items = attentionItems(
+      [over("Small", -5), over("Huge", -400), over("Mid", -50), over("Tiny", -1), over("Big", -120)],
+      [],
+      today,
+      "USD"
     );
-    expect(attentionItems(many, [], today, "USD")).toHaveLength(5);
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe("5 budgets are over");
+    expect(items[0].detail).toBe("Huge (+$400.00), Big (+$120.00), Mid (+$50.00), and 2 more");
+  });
+
+  it("keeps one or two of a kind as their own rows", () => {
+    const over = (n: string) =>
+      progress({ category: n, label: n, status: "over", remaining: -10, percentUsed: 1.1 });
+    expect(attentionItems([over("A"), over("B")], [], today, "USD").map((i) => i.title)).toEqual([
+      "A is over budget",
+      "B is over budget",
+    ]);
+  });
+
+  it("caps the total and is empty when nothing needs attention", () => {
+    const renewals = Array.from({ length: 8 }, (_, i) => ({ key: `r${i}`, label: `R${i}`, amount: 5, date: "2026-09-24" }));
+    expect(attentionItems([], renewals, today, "USD")).toHaveLength(5);
     expect(attentionItems([progress({})], [], today, "USD")).toEqual([]);
   });
 });

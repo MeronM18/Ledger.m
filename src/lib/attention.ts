@@ -18,33 +18,68 @@ export type UpcomingLike = { key: string; label: string; amount: number; date: s
 const MAX_ITEMS = 5;
 const RENEWAL_DAYS = 3;
 
+// More than this many rows of the same kind collapse into one, so a month
+// where most budgets are blown reads as one line, not a wall of five.
+const GROUP_ABOVE = 2;
+
+function group(
+  kind: "over" | "warning",
+  rows: BudgetProgress[],
+  currency: string
+): AttentionItem[] {
+  if (rows.length === 0) return [];
+
+  if (rows.length <= GROUP_ABOVE) {
+    return rows.map((b) =>
+      kind === "over"
+        ? {
+            key: `over-${b.category}`,
+            tone: "over" as const,
+            title: `${b.label} is over budget`,
+            detail: `${formatCurrency(-b.remaining, currency)} over your ${formatCurrency(b.budget, currency)} budget`,
+            href: "/budgets",
+          }
+        : {
+            key: `warn-${b.category}`,
+            tone: "warning" as const,
+            title: `${b.label} budget is ${Math.round(b.percentUsed * 100)}% used`,
+            detail: `${formatCurrency(b.remaining, currency)} left this month`,
+            href: "/budgets",
+          }
+    );
+  }
+
+  // Biggest problems first, named, with the rest counted.
+  const ranked = [...rows].sort((a, b) =>
+    kind === "over" ? a.remaining - b.remaining : b.percentUsed - a.percentUsed
+  );
+  const named = ranked
+    .slice(0, 3)
+    .map((b) => (kind === "over" ? `${b.label} (+${formatCurrency(-b.remaining, currency)})` : `${b.label} (${Math.round(b.percentUsed * 100)}%)`))
+    .join(", ");
+  const more = rows.length - 3;
+
+  return [
+    {
+      key: `${kind}-group`,
+      tone: kind,
+      title: kind === "over" ? `${rows.length} budgets are over` : `${rows.length} budgets are nearly used up`,
+      detail: `${named}${more > 0 ? `, and ${more} more` : ""}`,
+      href: "/budgets",
+    },
+  ];
+}
+
 export function attentionItems(
   budgets: BudgetProgress[],
   upcoming: UpcomingLike[],
   todayIso: string,
   currency: string
 ): AttentionItem[] {
-  const items: AttentionItem[] = [];
-
-  for (const b of budgets.filter((b) => b.status === "over")) {
-    items.push({
-      key: `over-${b.category}`,
-      tone: "over",
-      title: `${b.label} is over budget`,
-      detail: `${formatCurrency(-b.remaining, currency)} over your ${formatCurrency(b.budget, currency)} budget`,
-      href: "/budgets",
-    });
-  }
-
-  for (const b of budgets.filter((b) => b.status === "warning")) {
-    items.push({
-      key: `warn-${b.category}`,
-      tone: "warning",
-      title: `${b.label} budget is ${Math.round(b.percentUsed * 100)}% used`,
-      detail: `${formatCurrency(b.remaining, currency)} left this month`,
-      href: "/budgets",
-    });
-  }
+  const items: AttentionItem[] = [
+    ...group("over", budgets.filter((b) => b.status === "over"), currency),
+    ...group("warning", budgets.filter((b) => b.status === "warning"), currency),
+  ];
 
   for (const u of upcoming) {
     const daysAway = Math.round(

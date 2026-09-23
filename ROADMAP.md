@@ -97,4 +97,11 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [x] Visible keyboard focus on links and buttons; `aria-current` on the active nav link
 - [x] Each page has its own tab title ("Budgets · Ledger.m")
 - [x] Loading skeleton for the overview and accounts, which showed nothing while loading
-- [ ] Needs screenshots to judge: real spacing and hierarchy on each page at desktop and phone width, chart legibility, dialog layouts
+- [x] From real screenshots: the overview's income card reported less spending ($1,517) than the spending card beside it ($2,306), because it skipped payments to unconnected cards
+- [x] From real screenshots: Cash flow named the paycheck by its raw bank descriptor ("UNITED MORTGAGE PAYROLL 925644358895XMS 091526"); recurring bills and paychecks now get cleaned names everywhere (forecast, alerts, subscriptions, overview)
+- [x] Bank names in capitals ("FIFTH THIRD MOMENTUM CHECKING", "Chase CREDIT CARD") are title-cased on Accounts, Assets, filters and credit utilization
+- [x] "Needs your attention" collapses a pile of over-budget rows into one line that names the worst three, instead of a wall of five
+- [x] Filters and their action buttons (Export, Add) wrap as one group instead of stranding a dropdown on a second line
+- [x] Donut legend text is neutral (it was tinted per series, hard to read); pace chart fills its card; month names drop a repeated year
+- [x] Top merchants get proportional bars; over-budget bars show how far over (soft red up to the budget, full red beyond); renewal calendar sits below the list; doubled card padding removed
+- [ ] Still needs a look on a phone: menu drawer and each page at narrow width

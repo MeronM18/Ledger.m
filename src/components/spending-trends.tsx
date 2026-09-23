@@ -98,11 +98,11 @@ export function SpendingTrends({
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
-      <Card>
+      <Card className="flex flex-col">
         <CardHeader>
           <CardTitle>Pace vs {previousMonthLabel}</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4">
+        <CardContent className="flex flex-1 flex-col gap-4">
           <PaceHeadline
             pace={pace}
             monthLabel={monthLabel}
@@ -111,7 +111,8 @@ export function SpendingTrends({
             currency={currency}
           />
           {pace.hasPrevious && (
-            <ResponsiveContainer width="100%" height={220}>
+            <div className="min-h-[220px] flex-1">
+            <ResponsiveContainer width="100%" height="100%">
               <LineChart data={pace.series}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
                 <XAxis
@@ -158,6 +159,7 @@ export function SpendingTrends({
                 />
               </LineChart>
             </ResponsiveContainer>
+            </div>
           )}
         </CardContent>
       </Card>

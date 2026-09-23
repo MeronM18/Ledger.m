@@ -1,6 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { prettyName } from "@/lib/transaction-display";
 import {
   Select,
   SelectContent,
@@ -30,7 +31,8 @@ export type MonthOption = { value: string; label: string };
 
 export function accountLabel(account: AccountOption | null): string {
   if (!account) return "Unknown account";
-  return account.mask ? `${account.name} ••${account.mask}` : account.name;
+  const name = prettyName(account.name);
+  return account.mask ? `${name} ••${account.mask}` : name;
 }
 
 /**
@@ -52,6 +54,7 @@ export function FilterBar({
   months,
   monthValue,
   onMonthChange,
+  actions,
 }: {
   search?: string;
   onSearchChange?: (value: string) => void;
@@ -64,6 +67,9 @@ export function FilterBar({
   months?: MonthOption[];
   monthValue?: string;
   onMonthChange?: (value: string) => void;
+  // Buttons pinned to the end of the same row (Export, Add ...), so the
+  // filters and actions wrap as one group instead of stranding a control.
+  actions?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -123,6 +129,7 @@ export function FilterBar({
           </SelectContent>
         </Select>
       )}
+      {actions && <div className="ml-auto flex items-center gap-2">{actions}</div>}
     </div>
   );
 }
