@@ -14,7 +14,12 @@ import {
 import { Money } from "@/components/money";
 import { FilterBar, type AccountOption } from "@/components/filter-bar";
 import { humanizeFrequency } from "@/lib/plaid-categories";
-import { hasLapsed, hasPriceIncrease, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
+import {
+  hasLapsed,
+  hasPriceIncrease,
+  projectNextOccurrence,
+  summarizeSubscriptions,
+} from "@/lib/subscriptions-aggregation";
 
 export type StreamRow = {
   id: string;
@@ -64,6 +69,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
     stream.is_active && !stream.user_marked_cancelled && hasPriceIncrease(stream.average_amount, stream.last_amount);
   const lapsed =
     stream.is_active && !stream.user_marked_cancelled && hasLapsed(stream.predicted_next_date);
+  const displayNextDate = projectNextOccurrence(stream.predicted_next_date, stream.frequency);
 
   return (
     <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
@@ -85,7 +91,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
         </p>
         <p className="text-xs text-muted-foreground">
           {accountLabel} · {humanizeFrequency(stream.frequency)} · last {formatDate(stream.last_date)}
-          {stream.predicted_next_date ? ` · next ~${formatDate(stream.predicted_next_date)}` : ""}
+          {displayNextDate ? ` · next ~${formatDate(displayNextDate)}` : ""}
           {priceIncreased
             ? ` · last charged $${stream.last_amount?.toFixed(2)} (avg $${stream.average_amount?.toFixed(2)})`
             : ""}
@@ -104,6 +110,7 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
 
 function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubscription }) {
   const lapsed = subscription.is_active && hasLapsed(subscription.next_billing_date);
+  const displayNextDate = projectNextOccurrence(subscription.next_billing_date, subscription.frequency);
 
   return (
     <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
@@ -122,9 +129,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
         </p>
         <p className="text-xs text-muted-foreground">
           {humanizeFrequency(subscription.frequency)}
-          {subscription.next_billing_date
-            ? ` · next ~${formatDate(subscription.next_billing_date)}`
-            : ""}
+          {displayNextDate ? ` · next ~${formatDate(displayNextDate)}` : ""}
           {subscription.notes ? ` · ${subscription.notes}` : ""}
           {lapsed ? " · may have lapsed" : ""}
         </p>

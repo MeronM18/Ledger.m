@@ -15,7 +15,11 @@ import {
   manualTransactionToSpendingTransaction,
   monthlyIncomeVsSpending,
 } from "@/lib/spending-aggregation";
-import { isWithinNextDays, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
+import {
+  isWithinNextDays,
+  projectNextOccurrence,
+  summarizeSubscriptions,
+} from "@/lib/subscriptions-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -150,21 +154,29 @@ export default async function OverviewPage() {
   type UpcomingCharge = { key: string; label: string; amount: number; date: string; isManual: boolean };
   const upcoming: UpcomingCharge[] = [
     ...(streamsData ?? [])
-      .filter((s) => s.is_active && !s.user_marked_cancelled && isWithinNextDays(s.predicted_next_date, UPCOMING_WINDOW_DAYS))
-      .map((s) => ({
+      .filter((s) => s.is_active && !s.user_marked_cancelled)
+      // A stored predicted_next_date only advances when a new matching
+      // charge lands, so once it's passed without one (the normal case for
+      // most of a billing cycle) it needs rolling forward to reflect
+      // what's actually still coming up.
+      .map((s) => ({ s, date: projectNextOccurrence(s.predicted_next_date, s.frequency) }))
+      .filter(({ date }) => isWithinNextDays(date, UPCOMING_WINDOW_DAYS))
+      .map(({ s, date }) => ({
         key: `plaid-${s.id}`,
         label: s.merchant_name || s.description || "Unknown",
         amount: s.average_amount ?? 0,
-        date: s.predicted_next_date as string,
+        date: date as string,
         isManual: false,
       })),
     ...(manualSubsData ?? [])
-      .filter((m) => m.is_active && isWithinNextDays(m.next_billing_date, UPCOMING_WINDOW_DAYS))
-      .map((m) => ({
+      .filter((m) => m.is_active)
+      .map((m) => ({ m, date: projectNextOccurrence(m.next_billing_date, m.frequency) }))
+      .filter(({ date }) => isWithinNextDays(date, UPCOMING_WINDOW_DAYS))
+      .map(({ m, date }) => ({
         key: `manual-${m.id}`,
         label: m.name,
         amount: m.amount,
-        date: m.next_billing_date as string,
+        date: date as string,
         isManual: true,
       })),
   ].sort((a, b) => a.date.localeCompare(b.date));
