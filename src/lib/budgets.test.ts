@@ -69,7 +69,7 @@ describe("budgetProgress", () => {
   it("uses the OTHER bucket for uncategorized spending", () => {
     const other = categoryTotalsForMonth([tx({ pfc_primary: null, amount: 40 })], 2026, 8);
     expect(budgetProgress(other, [budget("OTHER", 100)], day(20))[0]).toMatchObject({
-      label: "Other/Uncategorized",
+      label: "Other",
       spent: 40,
     });
   });

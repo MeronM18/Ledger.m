@@ -6,6 +6,7 @@ import { MerchantRulesManager } from "@/components/merchant-rules-manager";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { applyEditsToAll } from "@/lib/transaction-edits";
 import { loadTransactionEdits } from "@/lib/transaction-edits-server";
+import { loadManualAccounts } from "@/lib/manual-accounts";
 
 export const metadata = { title: "Transactions" };
 
@@ -16,6 +17,7 @@ export default async function TransactionsPage() {
     { data: transactions, error: txError },
     { data: manualTransactions, error: manualTxError },
     { data: accounts, error: acctError },
+    { accounts: manualCards, error: manualCardsError },
     edits,
   ] = await Promise.all([
     fetchAllRows((from, to) =>
@@ -30,9 +32,10 @@ export default async function TransactionsPage() {
     ),
     admin
       .from("manual_transactions")
-      .select("id, date, name, amount, pfc_primary, payment_method, notes")
+      .select("id, date, name, amount, pfc_primary, payment_method, notes, manual_account_id")
       .order("date", { ascending: false }),
     admin.from("accounts").select("id, name, mask").order("name"),
+    loadManualAccounts(admin),
     loadTransactionEdits(admin),
   ]);
 
@@ -45,7 +48,10 @@ export default async function TransactionsPage() {
     edits.overrides,
     edits.rules
   );
-  const manualRows: TransactionRow[] = ((manualTransactions ?? []) as ManualTransaction[]).map((m) => ({
+  // A manual card account (Apple Card) shows up as an account, filterable
+  // like a connected one; plain manual entries stay "Cash / Manual".
+  const manualById = new Map(manualCards.map((c) => [c.id, { id: `manual:${c.id}`, name: c.name, mask: c.mask }]));
+  const manualRows: TransactionRow[] = ((manualTransactions ?? []) as (ManualTransaction & { manual_account_id: string | null })[]).map((m) => ({
     id: m.id,
     date: m.date,
     name: null,
@@ -55,7 +61,7 @@ export default async function TransactionsPage() {
     amount: m.amount,
     iso_currency_code: null,
     pending: false,
-    account: null,
+    account: (m.manual_account_id && manualById.get(m.manual_account_id)) || null,
     isManual: true,
     manualSource: m,
   }));
@@ -63,11 +69,14 @@ export default async function TransactionsPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Transactions</h1>
-      {txError || manualTxError || acctError || edits.error ? (
+      {txError || manualTxError || acctError || manualCardsError || edits.error ? (
         <QueryErrorState message="Couldn't load your transactions. Try refreshing the page." />
       ) : (
         <>
-          <TransactionsExplorer transactions={[...plaidRows, ...manualRows]} accounts={accounts ?? []} />
+          <TransactionsExplorer
+            transactions={[...plaidRows, ...manualRows]}
+            accounts={[...(accounts ?? []), ...Array.from(manualById.values())]}
+          />
           <MerchantRulesManager rules={edits.rules} />
         </>
       )}

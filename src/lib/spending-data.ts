@@ -7,6 +7,7 @@ import {
   type SpendingTransaction,
 } from "@/lib/spending-aggregation";
 import { applyEditsToAll } from "@/lib/transaction-edits";
+import { loadConnectedCardIssuers } from "@/lib/manual-accounts";
 import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -25,7 +26,7 @@ export async function loadSpendingData(admin: AdminClient): Promise<{
   currency: string;
   error: boolean;
 }> {
-  const [txRes, manualRes, creditRes, edits] = await Promise.all([
+  const [txRes, manualRes, issuersRes, edits] = await Promise.all([
     fetchAllRows<SpendingTransaction & { id: string; iso_currency_code: string | null }>((from, to) =>
       admin
         .from("transactions")
@@ -35,13 +36,12 @@ export async function loadSpendingData(admin: AdminClient): Promise<{
         .range(from, to)
     ),
     admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
-    admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
+    loadConnectedCardIssuers(admin),
     loadTransactionEdits(admin),
   ]);
 
   if (txRes.error) console.error("Failed to load transactions", txRes.error);
   if (manualRes.error) console.error("Failed to load manual transactions", manualRes.error);
-  if (creditRes.error) console.error("Failed to load connected credit accounts", creditRes.error);
 
   const plaid = applyEditsToAll(txRes.data ?? [], edits.overrides, edits.rules);
   const all: SpendingTransaction[] = [
@@ -49,20 +49,10 @@ export async function loadSpendingData(admin: AdminClient): Promise<{
     ...(manualRes.data ?? []).map(manualTransactionToSpendingTransaction),
   ];
 
-  // Only institutions with a connected *credit*-type account count as a
-  // connected card (see filterSpendingTransactions / isPaymentToUnconnectedCard).
-  const connectedCardIssuers = Array.from(
-    new Set(
-      (creditRes.data ?? [])
-        .map((a) => (a.item as unknown as { institution_name: string | null } | null)?.institution_name)
-        .filter((name): name is string => Boolean(name))
-    )
-  );
-
   return {
     all,
-    spending: filterSpendingTransactions(all, connectedCardIssuers),
+    spending: filterSpendingTransactions(all, issuersRes.issuers),
     currency: txRes.data?.[0]?.iso_currency_code ?? "USD",
-    error: Boolean(txRes.error || manualRes.error || creditRes.error || edits.error),
+    error: Boolean(txRes.error || manualRes.error || issuersRes.error || edits.error),
   };
 }

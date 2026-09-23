@@ -145,7 +145,7 @@ export function TransactionsExplorer({
         t.date,
         displayName,
         displayCategoryLabel,
-        t.isManual ? "Cash / Manual" : accountLabel(t.account),
+        t.account ? accountLabel(t.account) : t.isManual ? "Cash / Manual" : accountLabel(t.account),
         t.amount.toFixed(2),
         t.pending ? "Yes" : "No",
         t.isManual ? "Manual" : "Plaid",
@@ -262,13 +262,13 @@ export function TransactionsExplorer({
                       {/* On a phone the Account and Category columns are hidden;
                           their details sit under the name instead. */}
                       <span className="truncate text-xs text-muted-foreground md:hidden">
-                        {displayCategoryLabel} · {t.isManual ? "Cash / Manual" : accountLabel(t.account)}
+                        {displayCategoryLabel} · {t.account ? accountLabel(t.account) : t.isManual ? "Cash / Manual" : accountLabel(t.account)}
                       </span>
                       </span>
                     </div>
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
-                    {t.isManual ? "Cash / Manual" : accountLabel(t.account)}
+                    {t.account ? accountLabel(t.account) : t.isManual ? "Cash / Manual" : accountLabel(t.account)}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground md:table-cell">
                     {displayCategoryLabel}

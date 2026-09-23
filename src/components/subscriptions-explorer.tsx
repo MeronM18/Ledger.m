@@ -14,6 +14,8 @@ import {
 import { Money } from "@/components/money";
 import { FilterBar, type AccountOption } from "@/components/filter-bar";
 import { SubscriptionCalendar, type CalendarEvent } from "@/components/subscription-calendar";
+import { DetectedSubscriptionsCard } from "@/components/detected-subscriptions-card";
+import type { DetectedSubscription } from "@/lib/recurring-detection";
 import { SubscriptionInsightsCard } from "@/components/subscription-insights-card";
 import { formatCurrency } from "@/lib/format";
 import { humanizeFrequency } from "@/lib/plaid-categories";
@@ -190,6 +192,7 @@ export function SubscriptionsExplorer({
   manualSubscriptions,
   accounts,
   insights,
+  suggestions,
   calendarEvents,
   todayIso,
 }: {
@@ -197,6 +200,7 @@ export function SubscriptionsExplorer({
   manualSubscriptions: ManualSubscription[];
   accounts: AccountOption[];
   insights: Insight[];
+  suggestions: DetectedSubscription[];
   calendarEvents: CalendarEvent[];
   todayIso: string;
 }) {
@@ -272,6 +276,8 @@ export function SubscriptionsExplorer({
       />
 
       <SubscriptionInsightsCard insights={insights} />
+
+      <DetectedSubscriptionsCard suggestions={suggestions} />
 
       <Card>
         <CardHeader>

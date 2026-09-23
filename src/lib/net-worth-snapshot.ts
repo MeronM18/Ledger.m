@@ -1,5 +1,6 @@
 import "server-only";
-import { computeNetWorth } from "@/lib/net-worth";
+import { computeNetWorth, manualCardsAsAccounts } from "@/lib/net-worth";
+import { loadManualAccounts } from "@/lib/manual-accounts";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -29,14 +30,16 @@ export async function takeNetWorthSnapshot(): Promise<NetWorthSnapshotResult> {
     { data: manualData, error: manualError },
     { data: holdingsData, error: holdingsError },
     { data: pricesData, error: pricesError },
+    { accounts: manualCards, error: manualCardsError },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
     admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),
+    loadManualAccounts(admin),
   ]);
 
-  const queryError = acctError ?? manualError ?? holdingsError ?? pricesError;
+  const queryError = acctError ?? manualError ?? holdingsError ?? pricesError ?? (manualCardsError ? { message: "manual accounts" } : null);
   if (queryError) {
     console.error("Failed to load data for net worth snapshot", queryError);
     return { ok: false, error: queryError.message };
@@ -44,7 +47,7 @@ export async function takeNetWorthSnapshot(): Promise<NetWorthSnapshotResult> {
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(
-    accountsData ?? [],
+    [...(accountsData ?? []), ...manualCardsAsAccounts(manualCards)],
     manualData ?? [],
     preciousMetalsValue
   );

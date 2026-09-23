@@ -194,7 +194,7 @@ export function categoryTotalsForMonth(
     .filter(([, amount]) => amount > 0)
     .map(([category, amount]) => ({
       category,
-      label: category === "OTHER" ? "Other/Uncategorized" : humanizeCategory(category),
+      label: category === "OTHER" ? "Other" : humanizeCategory(category),
       amount,
       colorSlot: categoryColorSlot(category) ?? OTHER_CATEGORY_COLOR_SLOT,
     }))

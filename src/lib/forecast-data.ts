@@ -2,6 +2,7 @@ import "server-only";
 import { ALERT_THRESHOLDS } from "@/lib/config";
 import { buildForecast, typicalDailySpend, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
+import { loadManualAccounts } from "@/lib/manual-accounts";
 import { effectiveNextDate } from "@/lib/subscription-insights";
 import { streamDisplayName } from "@/lib/transaction-display";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -31,7 +32,7 @@ function amountOf(...values: (number | string | null)[]): number {
 }
 
 export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
-  const [spending, accountsRes, streamsRes, manualRes] = await Promise.all([
+  const [spending, accountsRes, streamsRes, manualRes, manualCardsRes] = await Promise.all([
     loadSpendingData(admin),
     admin.from("accounts").select("type, subtype, available_balance, current_balance").eq("is_hidden", false),
     admin
@@ -40,12 +41,13 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
       .eq("is_active", true)
       .eq("user_marked_cancelled", false),
     admin.from("manual_subscriptions").select("id, name, amount, frequency, next_billing_date").eq("is_active", true),
+    loadManualAccounts(admin),
   ]);
 
   if (accountsRes.error) console.error("Failed to load accounts for forecast", accountsRes.error);
   if (streamsRes.error) console.error("Failed to load recurring streams for forecast", streamsRes.error);
   if (manualRes.error) console.error("Failed to load manual subscriptions for forecast", manualRes.error);
-  if (spending.error || accountsRes.error || streamsRes.error || manualRes.error) return { error: true };
+  if (spending.error || accountsRes.error || streamsRes.error || manualRes.error || manualCardsRes.error) return { error: true };
 
   const accounts = accountsRes.data ?? [];
   // Day-to-day cash: checking-type accounts. Savings is usually set aside, so
@@ -57,9 +59,9 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
   const checkingLike = depository.filter((a) => SPENDABLE_SUBTYPES.has((a.subtype ?? "").toLowerCase()));
   const cashAccounts = checkingLike.length > 0 ? checkingLike : depository;
   const cash = cashAccounts.reduce((sum, a) => sum + Number(a.available_balance ?? a.current_balance ?? 0), 0);
-  const creditOwed = accounts
-    .filter((a) => a.type === "credit")
-    .reduce((sum, a) => sum + Number(a.current_balance ?? 0), 0);
+  const creditOwed =
+    accounts.filter((a) => a.type === "credit").reduce((sum, a) => sum + Number(a.current_balance ?? 0), 0) +
+    manualCardsRes.accounts.reduce((sum, c) => sum + Math.max(0, c.balance), 0);
 
   const streams = streamsRes.data ?? [];
   const streamName = (

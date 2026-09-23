@@ -11,7 +11,8 @@ import { SpendingPaceCard } from "@/components/spending-pace-card";
 import { SafeToSpendCard, SafeToSpendSkeleton } from "@/components/safe-to-spend-card";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
-import { computeNetWorth } from "@/lib/net-worth";
+import { computeNetWorth, manualCardsAsAccounts } from "@/lib/net-worth";
+import { loadConnectedCardIssuers, loadManualAccounts } from "@/lib/manual-accounts";
 import { formatCurrency, timeAgo } from "@/lib/format";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import {
@@ -78,7 +79,8 @@ export default async function OverviewPage() {
     { data: manualSubsData, error: manualSubsError },
     { data: recentData, error: recentError },
     { data: recentManualData, error: recentManualError },
-    { data: creditAccounts, error: creditAcctError },
+    { issuers: connectedCardIssuers, error: creditAcctError },
+    { accounts: manualCards, error: manualCardsError },
     edits,
     { data: budgetRows, error: budgetsError },
     { data: alertRows, error: alertsError },
@@ -116,7 +118,8 @@ export default async function OverviewPage() {
       .select("id, date, name, amount")
       .order("date", { ascending: false })
       .limit(5),
-    admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
+    loadConnectedCardIssuers(admin),
+    loadManualAccounts(admin),
     loadTransactionEdits(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(5),
@@ -133,13 +136,16 @@ export default async function OverviewPage() {
   if (manualSubsError) console.error("Failed to load manual subscriptions for overview", manualSubsError);
   if (recentError) console.error("Failed to load recent transactions for overview", recentError);
   if (recentManualError) console.error("Failed to load recent manual transactions for overview", recentManualError);
-  if (creditAcctError) console.error("Failed to load connected credit accounts for overview", creditAcctError);
   if (budgetsError) console.error("Failed to load budgets for overview", budgetsError);
   if (alertsError) console.error("Failed to load alerts for overview", alertsError);
   if (snapshotsError) console.error("Failed to load net worth history for overview", snapshotsError);
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
-  const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
+  const { netWorth } = computeNetWorth(
+    [...(accountsData ?? []), ...manualCardsAsAccounts(manualCards)],
+    manualData ?? [],
+    preciousMetalsValue
+  );
 
   const allTransactions = [
     ...applyEditsToAll(txData ?? [], edits.overrides, edits.rules),
@@ -153,14 +159,6 @@ export default async function OverviewPage() {
   // to be processed under (Amex here is a savings account, not a card)
   // must never accidentally suppress that payment as if it were the card
   // itself.
-  const connectedCardIssuers = Array.from(
-    new Set(
-      (creditAccounts ?? [])
-        .map((a) => (a.item as unknown as { institution_name: string | null } | null)?.institution_name)
-        .filter((name): name is string => Boolean(name))
-    )
-  );
-
   const spending = filterSpendingTransactions(allTransactions, connectedCardIssuers);
   const now = calendarNow();
   const categoryTotals = categoryTotalsForMonth(spending, now.year, now.month);
@@ -262,8 +260,8 @@ export default async function OverviewPage() {
   const previousMonthName = new Date(prev.year, prev.month, 1).toLocaleDateString("en-US", { month: "long" });
   const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency);
 
-  const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError);
-  const spendingError = Boolean(txError || manualTxError || creditAcctError || edits.error);
+  const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError || manualCardsError);
+  const spendingError = Boolean(txError || manualTxError || creditAcctError || manualCardsError || edits.error);
   const subscriptionsError = Boolean(streamsError || manualSubsError);
   const recentTransactionsError = Boolean(recentError || recentManualError || edits.error);
 
