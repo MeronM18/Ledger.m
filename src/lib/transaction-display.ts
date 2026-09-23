@@ -15,6 +15,10 @@ export type NameableTransaction = {
 
 export type DisplayableTransaction = NameableTransaction & {
   pfc_primary: string | null;
+  // A category the user chose by hand (or via a merchant rule). Wins over
+  // both Plaid's pfc_primary and the heuristic override layer below — an
+  // explicit decision is never second-guessed.
+  category_override?: string | null;
 };
 
 // Beyond the PayPal/Venmo/Cash App/Zelle named in spec, the live data is
@@ -190,7 +194,7 @@ export function overrideCategory(tx: DisplayableTransaction): string | null {
 
 /** Effective category after the override layer — null means "uncategorized", matching pfc_primary's own null semantics. */
 export function effectiveCategory(tx: DisplayableTransaction): string | null {
-  return overrideCategory(tx) ?? tx.pfc_primary;
+  return tx.category_override ?? overrideCategory(tx) ?? tx.pfc_primary;
 }
 
 export function humanizeTransaction(tx: DisplayableTransaction): {

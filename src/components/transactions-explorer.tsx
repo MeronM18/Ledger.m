@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Download, Store } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, StickyNote, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
@@ -18,9 +18,10 @@ import {
   ManualTransactionRowActions,
   type ManualTransaction,
 } from "@/components/manual-transaction-form";
+import { EditTransactionButton } from "@/components/edit-transaction-dialog";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { humanizeCategory } from "@/lib/plaid-categories";
-import { effectiveCategory, humanizeTransaction } from "@/lib/transaction-display";
+import { effectiveCategory, humanizeTransaction, humanizeTransactionName } from "@/lib/transaction-display";
 
 type SortDirection = "asc" | "desc" | null;
 
@@ -31,6 +32,11 @@ export type TransactionRow = {
   merchant_name: string | null;
   logo_url: string | null;
   pfc_primary: string | null;
+  // Set by applyEditsToAll (src/lib/transaction-edits.ts) for Plaid rows.
+  category_override?: string | null;
+  notes?: string | null;
+  edited?: boolean;
+  original_merchant_name?: string | null;
   amount: number;
   iso_currency_code: string | null;
   pending: boolean;
@@ -132,7 +138,7 @@ export function TransactionsExplorer({
   // active filter (search/account/category/month) and the current sort, so
   // this never silently exports the full unfiltered history.
   function exportCsv() {
-    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Pending", "Source"];
+    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Pending", "Source", "Notes"];
     const rows = sorted.map((t) => {
       const { displayName, displayCategoryLabel } = humanizeTransaction(t);
       return [
@@ -143,6 +149,7 @@ export function TransactionsExplorer({
         t.amount.toFixed(2),
         t.pending ? "Yes" : "No",
         t.isManual ? "Manual" : "Plaid",
+        t.notes ?? t.manualSource?.notes ?? "",
       ];
     });
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
@@ -240,6 +247,16 @@ export function TransactionsExplorer({
                             Pending
                           </Badge>
                         )}
+                        {t.edited && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            Edited
+                          </Badge>
+                        )}
+                        {t.notes && (
+                          <span title={t.notes} className="text-muted-foreground">
+                            <StickyNote className="size-3.5" aria-label={`Note: ${t.notes}`} />
+                          </span>
+                        )}
                       </span>
                     </div>
                   </TableCell>
@@ -261,6 +278,24 @@ export function TransactionsExplorer({
                   <TableCell>
                     {t.isManual && t.manualSource && (
                       <ManualTransactionRowActions transaction={t.manualSource} />
+                    )}
+                    {!t.isManual && (
+                      <EditTransactionButton
+                        transaction={{
+                          id: t.id,
+                          displayName,
+                          originalDisplayName: humanizeTransactionName({
+                            ...t,
+                            merchant_name: t.original_merchant_name ?? t.merchant_name,
+                          }),
+                          ruleSeed:
+                            t.original_merchant_name ||
+                            humanizeTransactionName({ ...t, merchant_name: t.original_merchant_name ?? null }),
+                          categoryOverride: t.category_override ?? null,
+                          notes: t.notes ?? null,
+                          edited: Boolean(t.edited),
+                        }}
+                      />
                     )}
                   </TableCell>
                 </TableRow>

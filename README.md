@@ -79,6 +79,9 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Manual asset and liability tracking (cash, crypto, vehicles, property, other)
 - Precious metals by weight and purity, valued against live gold/silver spot prices, refreshed daily
 
+**Editing**
+- Rename a transaction, recategorize it, or add a note without touching the stored bank data. "Apply to every matching transaction" saves a merchant rule that also covers past and future charges; a per-transaction edit always beats a rule
+
 **Manual entry**
 - Manual transactions share the exact same category taxonomy as Plaid-sourced ones, so they land in the same totals, search, and export instead of a second-class shadow system
 - A manual transaction logged against a cash payment method adjusts a running Cash asset balance automatically

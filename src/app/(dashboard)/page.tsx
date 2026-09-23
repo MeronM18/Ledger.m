@@ -24,6 +24,8 @@ import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { calendarNow } from "@/lib/time";
+import { applyEditsToAll } from "@/lib/transaction-edits";
+import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
 type RecentTransaction = {
   id: string;
@@ -63,6 +65,7 @@ export default async function OverviewPage() {
     { data: recentData, error: recentError },
     { data: recentManualData, error: recentManualError },
     { data: creditAccounts, error: creditAcctError },
+    edits,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -71,7 +74,7 @@ export default async function OverviewPage() {
     fetchAllRows((from, to) =>
       admin
         .from("transactions")
-        .select("date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code")
+        .select("id, date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code")
         .order("date", { ascending: false })
         .order("id")
         .range(from, to)
@@ -97,6 +100,7 @@ export default async function OverviewPage() {
       .order("date", { ascending: false })
       .limit(5),
     admin.from("accounts").select("item:items(institution_name)").eq("type", "credit"),
+    loadTransactionEdits(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -115,7 +119,7 @@ export default async function OverviewPage() {
   const { netWorth } = computeNetWorth(accountsData ?? [], manualData ?? [], preciousMetalsValue);
 
   const allTransactions = [
-    ...(txData ?? []),
+    ...applyEditsToAll(txData ?? [], edits.overrides, edits.rules),
     ...(manualTxData ?? []).map(manualTransactionToSpendingTransaction),
   ];
   const currency = txData?.[0]?.iso_currency_code ?? "USD";
@@ -193,7 +197,9 @@ export default async function OverviewPage() {
   // manual entry is more recent than some/all of the Plaid ones, rather
   // than always showing 5 Plaid rows plus manual ones bolted on separately.
   const recent = [
-    ...((recentData ?? []) as Omit<RecentTransaction, "isManual">[]).map((t) => ({ ...t, isManual: false })),
+    ...applyEditsToAll((recentData ?? []) as Omit<RecentTransaction, "isManual">[], edits.overrides, edits.rules).map(
+      (t) => ({ ...t, isManual: false })
+    ),
     ...(recentManualData ?? []).map((m) => ({
       id: m.id,
       date: m.date,
@@ -210,9 +216,9 @@ export default async function OverviewPage() {
     .slice(0, 5);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError);
-  const spendingError = Boolean(txError || manualTxError || creditAcctError);
+  const spendingError = Boolean(txError || manualTxError || creditAcctError || edits.error);
   const subscriptionsError = Boolean(streamsError || manualSubsError);
-  const recentTransactionsError = Boolean(recentError || recentManualError);
+  const recentTransactionsError = Boolean(recentError || recentManualError || edits.error);
 
   return (
     <div className="flex flex-col gap-6">
