@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle, TrendingUp } from "lucide-react";
+import { AlertTriangle, ExternalLink, Sparkles, TrendingUp } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,18 @@ import {
 } from "@/components/manual-subscription-form";
 import { Money } from "@/components/money";
 import { FilterBar, type AccountOption } from "@/components/filter-bar";
+import { SubscriptionCalendar, type CalendarEvent } from "@/components/subscription-calendar";
+import { SubscriptionInsightsCard } from "@/components/subscription-insights-card";
+import { formatCurrency } from "@/lib/format";
 import { humanizeFrequency } from "@/lib/plaid-categories";
+import {
+  cancelSearchUrl,
+  effectiveNextDate,
+  isNewSubscription,
+  trialStart,
+  type Insight,
+} from "@/lib/subscription-insights";
+import { calendarNow } from "@/lib/time";
 import {
   hasLapsed,
   hasPriceIncrease,
@@ -30,6 +41,9 @@ export type StreamRow = {
   last_amount: number | null;
   last_date: string | null;
   predicted_next_date: string | null;
+  first_date: string | null;
+  // Amount of the stream's earliest charge, when its transactions are known.
+  firstChargeAmount: number | null;
   is_active: boolean;
   user_marked_cancelled: boolean;
   account: { id: string; name: string; mask: string | null } | null;
@@ -60,6 +74,21 @@ function formatDate(d: string | null): string {
   });
 }
 
+function CancelHelpLink({ name }: { name: string }) {
+  return (
+    <a
+      href={cancelSearchUrl(name)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-champagne hover:underline"
+    >
+      How to cancel
+      <ExternalLink className="size-3" aria-hidden />
+      <span className="sr-only"> {name} (opens a web search in a new tab)</span>
+    </a>
+  );
+}
+
 function StreamRowView({ stream }: { stream: StreamRow }) {
   const label = stream.merchant_name || stream.description || "Unknown";
   const accountLabel = stream.account
@@ -67,9 +96,13 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
     : "Unknown account";
   const priceIncreased =
     stream.is_active && !stream.user_marked_cancelled && hasPriceIncrease(stream.average_amount, stream.last_amount);
-  const lapsed =
-    stream.is_active && !stream.user_marked_cancelled && hasLapsed(stream.predicted_next_date);
-  const displayNextDate = projectNextOccurrence(stream.predicted_next_date, stream.frequency);
+  // Plaid sometimes has no prediction (an annual fee seen once); derive it
+  // from the last charge so the row still says when it's due.
+  const nextDate = effectiveNextDate(stream.predicted_next_date, stream.last_date, stream.frequency);
+  const lapsed = stream.is_active && !stream.user_marked_cancelled && hasLapsed(nextDate);
+  const displayNextDate = projectNextOccurrence(nextDate, stream.frequency);
+  const isNew = stream.is_active && isNewSubscription(stream.first_date, calendarNow().isoDate);
+  const trial = trialStart(stream.firstChargeAmount, stream.average_amount);
 
   return (
     <div className="flex items-center justify-between border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
@@ -80,6 +113,12 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
             <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood">
               <TrendingUp className="size-3" />
               Price increased
+            </Badge>
+          )}
+          {isNew && (
+            <Badge variant="secondary" className="gap-1 text-[10px]">
+              <Sparkles className="size-3" />
+              New
             </Badge>
           )}
           {lapsed && (
@@ -96,7 +135,9 @@ function StreamRowView({ stream }: { stream: StreamRow }) {
             ? ` · last charged $${stream.last_amount?.toFixed(2)} (avg $${stream.average_amount?.toFixed(2)})`
             : ""}
           {lapsed ? " · may have lapsed" : ""}
+          {trial ? ` · started with a ${formatCurrency(trial.firstAmount, "USD")} charge, likely a trial that converted` : ""}
         </p>
+        {stream.is_active && !stream.user_marked_cancelled && <CancelHelpLink name={label} />}
       </div>
       <div className="flex items-center gap-4">
         <Money amount={stream.average_amount ?? 0} tone="negative" className="text-sm font-medium" />
@@ -133,6 +174,7 @@ function ManualSubscriptionRowView({ subscription }: { subscription: ManualSubsc
           {subscription.notes ? ` · ${subscription.notes}` : ""}
           {lapsed ? " · may have lapsed" : ""}
         </p>
+        {subscription.is_active && <CancelHelpLink name={subscription.name} />}
       </div>
       <div className="flex items-center gap-4">
         <Money amount={subscription.amount} tone="negative" className="text-sm font-medium" />
@@ -146,10 +188,16 @@ export function SubscriptionsExplorer({
   streams,
   manualSubscriptions,
   accounts,
+  insights,
+  calendarEvents,
+  todayIso,
 }: {
   streams: StreamRow[];
   manualSubscriptions: ManualSubscription[];
   accounts: AccountOption[];
+  insights: Insight[];
+  calendarEvents: CalendarEvent[];
+  todayIso: string;
 }) {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
@@ -224,6 +272,8 @@ export function SubscriptionsExplorer({
         <AddManualSubscriptionButton />
       </div>
 
+      <SubscriptionInsightsCard insights={insights} />
+
       <Card>
         <CardHeader>
           <CardTitle>Active subscriptions cost</CardTitle>
@@ -239,6 +289,8 @@ export function SubscriptionsExplorer({
           </div>
         </CardContent>
       </Card>
+
+      <SubscriptionCalendar events={calendarEvents} todayIso={todayIso} currency="USD" />
 
       <Tabs defaultValue="active">
         <TabsList>

@@ -1,0 +1,146 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Money } from "@/components/money";
+import { formatCurrency } from "@/lib/format";
+import { cn } from "@/lib/utils";
+
+export type CalendarEvent = { date: string; name: string; amount: number };
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function iso(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/**
+ * A month grid of upcoming renewals. `todayIso` comes from the server (the
+ * Eastern calendar day) so the highlighted day and the starting month agree
+ * with every other page instead of following the browser's clock.
+ */
+export function SubscriptionCalendar({
+  events,
+  todayIso,
+  currency,
+}: {
+  events: CalendarEvent[];
+  todayIso: string;
+  currency: string;
+}) {
+  const startYear = Number(todayIso.slice(0, 4));
+  const startMonth = Number(todayIso.slice(5, 7)) - 1;
+  const [offset, setOffset] = useState(0); // months from the current one
+
+  const view = new Date(startYear, startMonth + offset, 1);
+  const year = view.getFullYear();
+  const month = view.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const leadingBlanks = view.getDay();
+
+  // Only months that can hold data: this one and the ones the events reach.
+  const lastEventMonth = useMemo(() => {
+    const last = events.reduce((max, e) => (e.date > max ? e.date : max), todayIso);
+    return (Number(last.slice(0, 4)) - startYear) * 12 + (Number(last.slice(5, 7)) - 1 - startMonth);
+  }, [events, todayIso, startYear, startMonth]);
+
+  const byDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const e of events) map.set(e.date, [...(map.get(e.date) ?? []), e]);
+    return map;
+  }, [events]);
+
+  const monthEvents = events.filter((e) => e.date.startsWith(iso(year, month, 1).slice(0, 7)));
+  const monthTotal = monthEvents.reduce((sum, e) => sum + e.amount, 0);
+  const monthLabel = view.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Renewal calendar</CardTitle>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Previous month"
+            disabled={offset <= 0}
+            onClick={() => setOffset((o) => o - 1)}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="min-w-32 text-center text-sm">{monthLabel}</span>
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Next month"
+            disabled={offset >= lastEventMonth}
+            onClick={() => setOffset((o) => o + 1)}
+          >
+            <ChevronRight className="size-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-border bg-border text-xs">
+          {WEEKDAYS.map((d) => (
+            <div key={d} className="bg-card px-2 py-1.5 text-center text-muted-foreground">
+              {d}
+            </div>
+          ))}
+          {Array.from({ length: leadingBlanks }, (_, i) => (
+            <div key={`blank-${i}`} className="min-h-14 bg-card/60" />
+          ))}
+          {Array.from({ length: daysInMonth }, (_, i) => {
+            const day = i + 1;
+            const date = iso(year, month, day);
+            const dayEvents = byDay.get(date) ?? [];
+            const isToday = date === todayIso;
+            return (
+              <div
+                key={date}
+                className={cn("flex min-h-14 flex-col gap-0.5 bg-card p-1.5", isToday && "ring-1 ring-inset ring-champagne")}
+                title={dayEvents.map((e) => `${e.name} ${formatCurrency(e.amount, currency)}`).join("\n") || undefined}
+              >
+                <span className={cn("text-[11px]", isToday ? "font-semibold text-champagne" : "text-muted-foreground")}>{day}</span>
+                {dayEvents.slice(0, 2).map((e, idx) => (
+                  <span key={idx} className="truncate rounded bg-muted px-1 text-[10px] leading-4">
+                    {e.name}
+                  </span>
+                ))}
+                {dayEvents.length > 2 && <span className="text-[10px] text-muted-foreground">+{dayEvents.length - 2} more</span>}
+              </div>
+            );
+          })}
+        </div>
+
+        {monthEvents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No renewals expected in {monthLabel}.</p>
+        ) : (
+          <div className="flex flex-col">
+            <p className="pb-2 text-sm text-muted-foreground">
+              {monthEvents.length} renewal{monthEvents.length === 1 ? "" : "s"} in {monthLabel},{" "}
+              <Money amount={monthTotal} currency={currency} tone="negative" /> in total.
+            </p>
+            {monthEvents.map((e, i) => (
+              <div
+                key={`${e.date}-${e.name}-${i}`}
+                className="flex items-center justify-between border-t border-border py-2 first:border-t-0"
+              >
+                <span className="text-sm">
+                  <span className="font-medium">{e.name}</span>
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · {new Date(`${e.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                  </span>
+                </span>
+                <Money amount={e.amount} currency={currency} tone="negative" className="text-sm font-medium" />
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

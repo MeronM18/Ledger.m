@@ -22,6 +22,7 @@ import {
   projectNextOccurrence,
   summarizeSubscriptions,
 } from "@/lib/subscriptions-aggregation";
+import { effectiveNextDate } from "@/lib/subscription-insights";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -89,7 +90,7 @@ export default async function OverviewPage() {
     admin
       .from("recurring_streams")
       .select(
-        "id, merchant_name, description, average_amount, frequency, predicted_next_date, is_active, user_marked_cancelled"
+        "id, merchant_name, description, average_amount, frequency, predicted_next_date, last_date, is_active, user_marked_cancelled"
       )
       .eq("direction", "outflow"),
     admin
@@ -186,7 +187,10 @@ export default async function OverviewPage() {
       // charge lands, so once it's passed without one (the normal case for
       // most of a billing cycle) it needs rolling forward to reflect
       // what's actually still coming up.
-      .map((s) => ({ s, date: projectNextOccurrence(s.predicted_next_date, s.frequency) }))
+      .map((s) => ({
+        s,
+        date: projectNextOccurrence(effectiveNextDate(s.predicted_next_date, s.last_date, s.frequency), s.frequency),
+      }))
       .filter(({ date }) => isWithinNextDays(date, UPCOMING_WINDOW_DAYS))
       .map(({ s, date }) => ({
         key: `plaid-${s.id}`,

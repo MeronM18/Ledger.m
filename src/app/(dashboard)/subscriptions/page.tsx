@@ -1,7 +1,20 @@
 import { SubscriptionsExplorer, type StreamRow } from "@/components/subscriptions-explorer";
+import type { CalendarEvent } from "@/components/subscription-calendar";
 import type { ManualSubscription } from "@/components/manual-subscription-form";
 import { QueryErrorState } from "@/components/query-error";
+import { occurrencesBetween } from "@/lib/forecast";
+import { effectiveNextDate, subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
+import { loadFirstChargeAmounts } from "@/lib/subscription-data";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calendarNow, easternToday } from "@/lib/time";
+
+// How far ahead the renewal calendar looks: about three months of days.
+const CALENDAR_DAYS = 92;
+
+type StreamQueryRow = Omit<StreamRow, "firstChargeAmount"> & {
+  pfc_detailed: string | null;
+  transaction_ids: string[] | null;
+};
 
 export default async function SubscriptionsPage() {
   const admin = createAdminClient();
@@ -13,7 +26,7 @@ export default async function SubscriptionsPage() {
       admin
         .from("recurring_streams")
         .select(
-          "id, description, merchant_name, frequency, average_amount, last_amount, last_date, predicted_next_date, is_active, user_marked_cancelled, account:accounts(id, name, mask)"
+          "id, description, merchant_name, frequency, average_amount, last_amount, first_date, last_date, predicted_next_date, is_active, user_marked_cancelled, pfc_detailed, transaction_ids, account:accounts(id, name, mask)"
         )
         .eq("direction", "outflow"),
       admin
@@ -27,8 +40,82 @@ export default async function SubscriptionsPage() {
   if (manualError) console.error("Failed to load manual subscriptions", manualError);
   if (acctError) console.error("Failed to load accounts for subscriptions page", acctError);
 
-  const streams = (data ?? []) as unknown as StreamRow[];
+  const rawStreams = (data ?? []) as unknown as StreamQueryRow[];
   const manualSubscriptions = (manualData ?? []) as ManualSubscription[];
+
+  // Trial detection is a bonus: if it can't load, the page still works
+  // without it (loadFirstChargeAmounts logs the failure).
+  const { amounts: firstCharges } = await loadFirstChargeAmounts(
+    admin,
+    rawStreams.map((s) => ({ id: s.id, transaction_ids: s.transaction_ids }))
+  );
+  // Drop the raw transaction id lists before handing rows to the client
+  // component; they're only needed for the first-charge lookup above.
+  const categoryByStream = new Map(rawStreams.map((s) => [s.id, s.pfc_detailed]));
+  const streams: StreamRow[] = rawStreams.map((s) => ({
+    id: s.id,
+    description: s.description,
+    merchant_name: s.merchant_name,
+    frequency: s.frequency,
+    average_amount: s.average_amount,
+    last_amount: s.last_amount,
+    first_date: s.first_date,
+    last_date: s.last_date,
+    predicted_next_date: s.predicted_next_date,
+    is_active: s.is_active,
+    user_marked_cancelled: s.user_marked_cancelled,
+    account: s.account,
+    firstChargeAmount: firstCharges.get(s.id) ?? null,
+  }));
+
+  const streamName = (s: StreamRow) => s.merchant_name || s.description || "Unknown";
+  const activeStreams = streams.filter((s) => s.is_active && !s.user_marked_cancelled);
+  const activeManual = manualSubscriptions.filter((m) => m.is_active);
+
+  const insights = subscriptionInsights(
+    [
+      ...activeStreams.map((s) => ({
+        key: `plaid-${s.id}`,
+        name: streamName(s),
+        source: "plaid" as const,
+        amount: s.average_amount ?? 0,
+        frequency: s.frequency,
+        categoryDetailed: categoryByStream.get(s.id) ?? null,
+      })),
+      ...activeManual.map((m) => ({
+        key: `manual-${m.id}`,
+        name: m.name,
+        source: "manual" as const,
+        amount: m.amount,
+        frequency: m.frequency,
+      })),
+    ] satisfies InsightItem[],
+    "USD"
+  );
+
+  const today = easternToday();
+  const end = new Date(today.getTime() + CALENDAR_DAYS * 86_400_000);
+  const calendarEvents: CalendarEvent[] = [
+    ...activeStreams.map((s) => ({
+      id: `plaid-${s.id}`,
+      name: streamName(s),
+      amount: s.average_amount ?? 0,
+      frequency: s.frequency,
+      date: effectiveNextDate(s.predicted_next_date, s.last_date, s.frequency),
+    })),
+    ...activeManual.map((m) => ({
+      id: `manual-${m.id}`,
+      name: m.name,
+      amount: m.amount,
+      frequency: m.frequency as string | null,
+      date: m.next_billing_date,
+    })),
+  ]
+    .filter((i) => i.amount > 0)
+    .flatMap((item) =>
+      occurrencesBetween(item, today, end).map((date) => ({ date, name: item.name, amount: item.amount }))
+    )
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <div className="flex flex-col gap-6">
@@ -40,6 +127,9 @@ export default async function SubscriptionsPage() {
           streams={streams}
           manualSubscriptions={manualSubscriptions}
           accounts={accounts ?? []}
+          insights={insights}
+          calendarEvents={calendarEvents}
+          todayIso={calendarNow().isoDate}
         />
       )}
     </div>
