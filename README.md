@@ -78,6 +78,9 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 **Cash flow**
 - "Safe to spend" until the next detected paycheck (checking cash minus the bills due first), a 30-day balance forecast, and a heads-up when the balance is projected to run low. Bills and paychecks come from Plaid's recurring detection plus manual subscriptions; a stream that has stopped charging is left out
 
+**Credit**
+- Utilization per card and overall against each card's limit, with the amount to pay down to get under 30%; cards that report no limit are left out rather than counted as 0%
+
 **Net worth**
 - Real-time, across connected accounts, manual assets/liabilities, and precious metals
 - Daily snapshot history with a trend chart that waits for enough history to mean something instead of plotting a single point and calling it a trend

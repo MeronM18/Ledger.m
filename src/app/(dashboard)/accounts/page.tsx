@@ -6,6 +6,9 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { QueryErrorState } from "@/components/query-error";
 import { SyncAllButton } from "@/components/sync-all-button";
 import { SyncNowButton } from "@/components/sync-now-button";
+import { CreditUtilizationCard } from "@/components/credit-utilization-card";
+import { summarizeUtilization } from "@/lib/credit-utilization";
+import { formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 
@@ -18,6 +21,7 @@ type AccountRow = {
   subtype: string | null;
   current_balance: number | null;
   available_balance: number | null;
+  credit_limit: number | null;
   iso_currency_code: string | null;
 };
 
@@ -48,7 +52,7 @@ export default async function AccountsPage() {
     admin
       .from("items")
       .select(
-        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, iso_currency_code)"
+        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code)"
       )
       .order("created_at", { ascending: false }),
     // Earliest transaction per item — surfaces how much history Plaid
@@ -85,6 +89,21 @@ export default async function AccountsPage() {
     if (!earliestDateByItem.has(itemId)) earliestDateByItem.set(itemId, t.date);
   }
 
+  const utilization = summarizeUtilization(
+    rows.flatMap((item) =>
+      item.accounts
+        .filter((a) => a.type === "credit")
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          mask: a.mask,
+          institution: item.institution_name,
+          balance: a.current_balance === null ? null : Number(a.current_balance),
+          limit: a.credit_limit === null ? null : Number(a.credit_limit),
+        }))
+    )
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -104,6 +123,8 @@ export default async function AccountsPage() {
               No accounts connected yet. Use the button above to connect one via Plaid.
             </p>
           )}
+
+          <CreditUtilizationCard summary={utilization} currency="USD" />
 
           <div className="flex flex-col gap-4">
             {rows.map((item) => (
@@ -139,6 +160,9 @@ export default async function AccountsPage() {
                         <p className="text-xs text-muted-foreground">
                           {account.type}
                           {account.subtype ? ` · ${account.subtype}` : ""}
+                          {account.type === "credit" && account.credit_limit && account.current_balance !== null
+                            ? ` · ${Math.round((Math.max(0, Number(account.current_balance)) / Number(account.credit_limit)) * 100)}% of ${formatCurrency(Number(account.credit_limit), account.iso_currency_code)} limit`
+                            : ""}
                         </p>
                       </div>
                       {account.current_balance === null ? (

@@ -51,7 +51,12 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] Uses the shared `ALERT_THRESHOLDS.lowBalance` (one $100 setting for alerts and the forecast)
 - [ ] Not built: choosing which accounts count; credit card balances are shown but not deducted
 
-- [ ] Step 7: Credit utilization
+## Step 7: Credit utilization  (branch `step7/credit-utilization`, no migration)
+- [x] Utilization per card and overall (total owed / total limits), bands at 10% / 30% / 50%, "pay $X to get under 30%", cards with no reported limit left out and named
+- [x] Card on the Accounts page, plus "N% of $limit limit" on each credit account row
+- [x] 8 new tests (61 total on this branch)
+- [ ] Not built: statement-balance-based utilization (needs data Plaid's balance endpoint doesn't give us here); a high-utilization alert
+
 - [ ] Step 8: Subscription extras (trials, duplicates, renewal calendar, annual dates)
 - [ ] Step 9: Savings goals
 - [ ] Step 10: Overview redesign (net worth sparkline, pace bar, bills timeline)
