@@ -27,9 +27,30 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [ ] Over-budget push alerts come in step 4 with the other alerts
 - [ ] Cleanup later: move overview/spending onto `loadSpendingData` (three pages still load the same data separately)
 
-- [ ] Step 4: Alerts (large/unusual charge, price increase, upcoming renewal, low balance)
-- [ ] Step 5: Trends (month over month, spending pace, category drill-down)
-- [ ] Step 6: Cash-flow forecast / safe to spend
+## Step 4: Alerts  (branch `step4/alerts`)
+- [x] Push alerts (ntfy) for: category over budget / 80% used, subscription renewing in 3 days, price increase, low balance (under $100), large charge (a debit of $250+ is labeled on its normal push and never folded into a batch summary)
+- [x] Each alert is recorded first (unique key), so it is sent once per situation: per category per month, per billing cycle, per new charge amount, per week for low balance. A failed push is retried next run
+- [x] More than 5 alerts in one run (first run, long gap): 5 pushes + one summary, the rest visible in the app
+- [x] Recent alerts card on the overview; daily cron `/api/alerts/check` plus a check after every item sync
+- [x] Migration `0009_alert_events.sql` (**must be applied: `supabase db push`**); thresholds in `src/lib/config.ts`
+- [x] 18 new tests (71 total), including the dispatcher against a fake database
+- [ ] Not built: "unusual charge" (a charge far above that merchant's norm) beyond the $250 large-charge label; per-alert on/off settings
+
+## Step 5: Trends  (branch `step5/trends`, no migration)
+- [x] Pace card: this month vs last month day by day, compared at the same day of the month, plus last month's total and a typical-month figure
+- [x] Biggest changes vs last month by category (dollars, bars, new-this-month), click one to drill into its transactions
+- [x] Respects the account/search/month filters already on the Spending page
+- [x] 9 new tests (pure trend math)
+- [ ] Not built: income-vs-spending trend on this page (it only receives spending transactions); year-over-year
+
+## Step 6: Cash flow / safe to spend  (branch `step6/cash-flow`, no migration)
+- [x] "Safe to spend until your next paycheck" = checking cash minus the bills due before it; per-day figure; warnings when bills exceed cash, when your usual spending would overshoot, and when the balance is projected under $100
+- [x] /cash-flow page: 30-day balance chart (bills/paychecks only, plus a dashed line with typical spending), upcoming bills and paychecks list, and a plain-language "how this is worked out"
+- [x] Safe to spend card on the overview (loads independently, so it never slows the rest)
+- [x] 15 new tests (forecast engine), 69 total
+- [x] Uses the shared `ALERT_THRESHOLDS.lowBalance` (one $100 setting for alerts and the forecast)
+- [ ] Not built: choosing which accounts count; credit card balances are shown but not deducted
+
 ## Step 7: Credit utilization  (branch `step7/credit-utilization`, no migration)
 - [x] Utilization per card and overall (total owed / total limits), bands at 10% / 30% / 50%, "pay $X to get under 30%", cards with no reported limit left out and named
 - [x] Card on the Accounts page, plus "N% of $limit limit" on each credit account row

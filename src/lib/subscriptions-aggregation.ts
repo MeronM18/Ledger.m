@@ -118,11 +118,28 @@ function addMonths(d: Date, months: number): Date {
   return firstOfTargetMonth;
 }
 
-function toDateString(d: Date): string {
+export function toDateString(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+/** One billing period after `current`, by the subscription's own cadence. */
+export function stepDate(current: Date, frequency: string | null): Date {
+  switch (frequency) {
+    case "WEEKLY":
+      return addDays(current, 7);
+    case "BIWEEKLY":
+      return addDays(current, 14);
+    case "SEMI_MONTHLY":
+      return addDays(current, 15);
+    case "ANNUALLY":
+      return addMonths(current, 12);
+    case "MONTHLY":
+    default:
+      return addMonths(current, 1);
+  }
 }
 
 // Safety cap on the roll-forward loop below — well beyond any realistic
@@ -153,24 +170,7 @@ export function projectNextOccurrence(
   if (current.getTime() >= today.getTime()) return date;
 
   for (let i = 0; i < MAX_ROLL_FORWARD_STEPS && current.getTime() < today.getTime(); i++) {
-    switch (frequency) {
-      case "WEEKLY":
-        current = addDays(current, 7);
-        break;
-      case "BIWEEKLY":
-        current = addDays(current, 14);
-        break;
-      case "SEMI_MONTHLY":
-        current = addDays(current, 15);
-        break;
-      case "ANNUALLY":
-        current = addMonths(current, 12);
-        break;
-      case "MONTHLY":
-      default:
-        current = addMonths(current, 1);
-        break;
-    }
+    current = stepDate(current, frequency);
   }
   return toDateString(current);
 }

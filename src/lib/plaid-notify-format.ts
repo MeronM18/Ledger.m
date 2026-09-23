@@ -1,4 +1,5 @@
 import type { Transaction as PlaidTransaction } from "plaid";
+import { ALERT_THRESHOLDS } from "@/lib/config";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure logic only — no server-only, no DB/network access — so this module
@@ -43,6 +44,11 @@ export function selectTransactionsToNotify(
   return { toPush, deduped };
 }
 
+/** A single debit at or above the large-charge threshold. Money in never counts. */
+export function isLargeCharge(t: PlaidTransaction, threshold: number = ALERT_THRESHOLDS.largeCharge): boolean {
+  return t.amount >= threshold;
+}
+
 /**
  * Message formatting. A settled amount/merchant that differs from what was
  * in the original pending push is not flagged here — the row is just
@@ -59,6 +65,7 @@ export function formatTransactionNotification(
 
   let subtitle = isDebit ? `${amountStr} at ${merchant}` : `+${amountStr} from ${merchant}`;
   if (t.pending) subtitle = `Pending: ${subtitle}`;
+  if (isLargeCharge(t)) subtitle = `Large charge: ${subtitle}`;
   const body = `${isDebit ? "Debit" : "Credit"} on ${accountLabel}`;
 
   return { subtitle, body };
