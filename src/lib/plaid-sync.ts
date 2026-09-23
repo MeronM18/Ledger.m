@@ -3,7 +3,8 @@ import type { Transaction as PlaidTransaction, TransactionStream } from "plaid";
 import { decrypt } from "@/lib/crypto";
 import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
-import { selectTransactionsToNotify, formatTransactionNotification } from "@/lib/plaid-notify-format";
+import { selectTransactionsToNotify, formatTransactionNotification, isLargeCharge } from "@/lib/plaid-notify-format";
+import { runAlertChecks } from "@/lib/alerts";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -135,6 +136,16 @@ async function notifyNewTransactions(
         `${toPush.length} new transactions`,
         `Synced ${toPush.length} new transactions across your accounts.`
       );
+      // A batch summary must not swallow a large charge: those still get
+      // their own push.
+      for (const t of toPush.filter((t) => isLargeCharge(t))) {
+        const account = accountByPlaidId.get(t.account_id);
+        const accountLabel = account
+          ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}`
+          : "your account";
+        const { subtitle, body } = formatTransactionNotification(t, accountLabel);
+        await sendNotification(subtitle, body);
+      }
     } else {
       for (const t of toPush) {
         const account = accountByPlaidId.get(t.account_id);
@@ -339,6 +350,16 @@ export async function syncItemTransactions(
   const recurringResult = await syncItemRecurring(itemDbId, accessToken);
   if (!recurringResult.ok) {
     console.error(`Recurring sync failed for item ${itemDbId}: ${recurringResult.error}`);
+  }
+
+  // Fresh transactions, balances and recurring data are all in, so this is
+  // when a budget, renewal, price-increase or low-balance alert can become
+  // true. Deduped per situation, so re-running it every sync is safe, and a
+  // failure here must never fail a sync that already succeeded.
+  try {
+    await runAlertChecks(admin);
+  } catch (err) {
+    console.error(`Alert checks failed after syncing item ${itemDbId}`, err);
   }
 
   return {

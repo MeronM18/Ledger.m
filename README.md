@@ -58,6 +58,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 
 **Spending**
 - Category totals by month, top merchants, and a dedicated refunds view (refunds net against their category while staying individually traceable, never silently absorbed)
+- Pace against last month (compared at the same day of the month, so a half-finished month isn't judged against a full one), the categories that changed most, and click-through from a category to its transactions
 - Search, account/category/month filtering, sortable transaction table
 - CSV export of exactly the currently-filtered set, not always the full history, manual entries clearly marked
 
@@ -94,7 +95,8 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Manual subscriptions and assets are fully editable and deletable, not insert-only
 
 **Notifications**
-- Push notifications (via ntfy) fire on new transactions synced through a webhook, so a card swipe shows up on a phone before the receipt does
+- Push notifications (via ntfy) fire on new transactions synced through a webhook, so a card swipe shows up on a phone before the receipt does; a debit of $250 or more is labeled as a large charge
+- Alerts for a category over (or 80% of) its budget, a subscription renewing within three days, a subscription charging more than usual, and a checking/savings balance under $100. Each fires once per situation, is kept in a recent-alerts list on the overview, and is checked after every sync and once a day
 
 ## Security
 

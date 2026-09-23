@@ -3,7 +3,8 @@ import { ArrowRight } from "lucide-react";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FORECAST_LOW_BALANCE, loadForecast } from "@/lib/forecast-data";
+import { ALERT_THRESHOLDS } from "@/lib/config";
+import { loadForecast } from "@/lib/forecast-data";
 import { formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -56,7 +57,7 @@ export async function SafeToSpendCard() {
             </p>
             {data.forecast.firstBelowThreshold && (
               <p className="text-sm text-champagne">
-                Balance projected to dip under {formatCurrency(FORECAST_LOW_BALANCE, data.currency)} on{" "}
+                Balance projected to dip under {formatCurrency(ALERT_THRESHOLDS.lowBalance, data.currency)} on{" "}
                 {shortDate(data.forecast.firstBelowThreshold.date)}.
               </p>
             )}

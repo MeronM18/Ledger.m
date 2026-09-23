@@ -2,7 +2,8 @@ import { ForecastChart } from "@/components/forecast-chart";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FORECAST_LOW_BALANCE, loadForecast } from "@/lib/forecast-data";
+import { ALERT_THRESHOLDS } from "@/lib/config";
+import { loadForecast } from "@/lib/forecast-data";
 import { formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -97,7 +98,7 @@ export default async function CashFlowPage() {
           )}
           {f.firstBelowThreshold && (
             <p className="text-sm text-champagne">
-              Your balance is projected to drop under {formatCurrency(FORECAST_LOW_BALANCE, currency)} on{" "}
+              Your balance is projected to drop under {formatCurrency(ALERT_THRESHOLDS.lowBalance, currency)} on{" "}
               {longDate(f.firstBelowThreshold.date)}
               {f.firstBelowThreshold.balance < 0 ? " and go negative" : ""}, if you spend at your usual pace.
             </p>
@@ -118,7 +119,7 @@ export default async function CashFlowPage() {
           <ForecastChart
             points={f.points}
             showExpected={f.typicalDailySpend !== null}
-            threshold={FORECAST_LOW_BALANCE}
+            threshold={ALERT_THRESHOLDS.lowBalance}
             currency={currency}
           />
         </CardContent>

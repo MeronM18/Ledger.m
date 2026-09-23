@@ -1,15 +1,11 @@
 import "server-only";
+import { ALERT_THRESHOLDS } from "@/lib/config";
 import { buildForecast, typicalDailySpend, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow, easternToday } from "@/lib/time";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
-
-// The balance the forecast warns about dipping under. Same $100 as the
-// low-balance alert; kept as its own constant so this feature doesn't depend
-// on the alerts work (unify the two once both are merged).
-export const FORECAST_LOW_BALANCE = 100;
 
 // Inflow streams under this are more likely a small transfer than a
 // paycheck; counting on them would make "next payday" flicker.
@@ -104,7 +100,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     bills,
     income,
     typicalDailySpend: typicalDailySpend(spending.spending, calendarNow().isoDate, bills),
-    lowBalanceThreshold: FORECAST_LOW_BALANCE,
+    lowBalanceThreshold: ALERT_THRESHOLDS.lowBalance,
   });
 
   return {
