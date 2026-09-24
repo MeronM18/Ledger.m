@@ -52,6 +52,14 @@ test("reports: cash flow shows where the money came from and went", async ({ pag
   await expect(page.getByText(/^Jan 1 – /)).toBeVisible();
   // The forecast is still below.
   await expect(page.getByText("Looking ahead")).toBeVisible();
+
+  // The same money as a treemap, and month by month.
+  await page.getByRole("radio", { name: "Treemap" }).click();
+  await expect(page.getByRole("img", { name: "Where your money went, as tiles" })).toBeVisible();
+  await expect(page.getByText(/Each tile is as big as its share of your income/)).toBeVisible();
+  await page.getByRole("radio", { name: "Monthly bars" }).click();
+  await expect(page.locator(".recharts-bar-rectangle").first()).toBeVisible();
+  await expect(page.getByText("Income", { exact: true }).last()).toBeVisible();
 });
 
 test("year in review switches years", async ({ page }) => {

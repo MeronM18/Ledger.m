@@ -1,11 +1,24 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, ChartColumnStacked, LayoutDashboard } from "lucide-react";
+import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { cashFlowReport, type Flow, type FlowNode } from "@/lib/cash-flow-report";
-import { formatCurrency } from "@/lib/format";
+import {
+  cashFlowReport,
+  monthlyCashFlow,
+  monthsFor,
+  squarify,
+  treemapTiles,
+  type CashFlowReport,
+  type Flow,
+  type FlowNode,
+  type MonthColumn,
+  type MonthlyCashFlow,
+} from "@/lib/cash-flow-report";
+import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
+import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 import { PERIOD_PRESETS, periodRange, rangeLabel } from "@/lib/spending-report";
 import { cn } from "@/lib/utils";
@@ -250,11 +263,254 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: "po
  * the savings rate for a period, and a diagram of where the money came from
  * and went.
  */
+
+// ---- Treemap ----------------------------------------------------------------
+
+const TREE_H = 460;
+const GAP_PX = 3;
+const HEADER = 34; // a category's name strip, when its tile is big enough
+
+/** A tile's fill: its color mixed down into the card, lighter for the larger parts. */
+const shade = (color: string, pct: number) => `color-mix(in oklab, ${color} ${pct}%, var(--card))`;
+
+function Treemap({ report }: { report: CashFlowReport }) {
+  const [measure, measured] = useWidth();
+  const W = Math.max(320, measured || 1000);
+  const [hover, setHover] = useState<string | null>(null);
+  const base = report.nodes.find((n) => n.id === "income")?.amount ?? 0;
+  const tiles = useMemo(() => treemapTiles(report), [report]);
+
+  const layoutTiles = useMemo(() => {
+    const rects = squarify(tiles.map((t) => t.amount), { x: 0, y: 0, w: W, h: TREE_H });
+    return tiles.map((t, i) => {
+      const r = rects[i];
+      const inner = { x: r.x + GAP_PX / 2, y: r.y + GAP_PX / 2, w: Math.max(0, r.w - GAP_PX), h: Math.max(0, r.h - GAP_PX) };
+      const withHeader = t.children.length > 1 && inner.h > HEADER + 40 && inner.w > 110;
+      const body = withHeader ? { ...inner, y: inner.y + HEADER, h: inner.h - HEADER } : inner;
+      const kids =
+        t.children.length > 1
+          ? squarify(t.children.map((c) => c.amount), body).map((cr, k) => ({ ...t.children[k], rect: cr }))
+          : [];
+      return { ...t, rect: inner, withHeader, kids };
+    });
+  }, [tiles, W]);
+
+  const hovered =
+    layoutTiles.flatMap((t) => [{ ...t, parent: null as string | null }, ...t.kids.map((k) => ({ ...k, parent: t.label, color: t.color }))]).find((x) => x.id === hover) ?? null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div ref={measure}>
+        <svg width={W} height={TREE_H} className="block" role="img" aria-label="Where your money went, as tiles" onMouseLeave={() => setHover(null)}>
+          {layoutTiles.map((t) => {
+            const r = t.rect;
+            const dim = hover !== null && hover !== t.id && !t.kids.some((k) => k.id === hover);
+            return (
+              <g key={t.id} style={{ opacity: dim ? 0.6 : 1, transition: "opacity 200ms ease" }}>
+                <rect
+                  x={r.x}
+                  y={r.y}
+                  width={r.w}
+                  height={r.h}
+                  rx={6}
+                  fill={shade(t.color, hover === t.id ? 78 : 62)}
+                  onMouseEnter={() => setHover(t.id)}
+                  style={{ transition: "fill 200ms ease" }}
+                >
+                  <title>{`${t.label}: ${formatCurrency(t.amount, "USD")} (${((t.amount / base) * 100).toFixed(1)}% of income)`}</title>
+                </rect>
+                {t.kids.map((k, idx) => {
+                  const kr = { x: k.rect.x + 1.5, y: k.rect.y + 1.5, w: Math.max(0, k.rect.w - 3), h: Math.max(0, k.rect.h - 3) };
+                  const fits = kr.w > 64 && kr.h > 34;
+                  return (
+                    <g key={k.id} onMouseEnter={() => setHover(k.id)}>
+                      <rect
+                        x={kr.x}
+                        y={kr.y}
+                        width={kr.w}
+                        height={kr.h}
+                        rx={4}
+                        fill={shade(t.color, hover === k.id ? 92 : Math.max(46, 82 - idx * 9))}
+                        style={{ transition: "fill 200ms ease" }}
+                      >
+                        <title>{`${t.label} › ${k.label}: ${formatCurrency(k.amount, "USD")} (${((k.amount / base) * 100).toFixed(1)}% of income)`}</title>
+                      </rect>
+                      {fits && (
+                        <text x={kr.x + 8} y={kr.y + 17} className="pointer-events-none fill-bone text-[12px]">
+                          {truncate(k.label, kr.w - 16, 6.6)}
+                          {kr.h > 44 && (
+                            <tspan x={kr.x + 8} dy={16} className="fill-bone/70 font-mono text-[11px]">
+                              {formatCurrency(k.amount, "USD")}
+                            </tspan>
+                          )}
+                        </text>
+                      )}
+                    </g>
+                  );
+                })}
+                {(t.withHeader || t.kids.length === 0) && r.w > 70 && r.h > 34 && (() => {
+                  const amount = `${formatCurrency(t.amount, "USD")} · ${((t.amount / base) * 100).toFixed(1)}%`;
+                  // The amount beside the name only when both fit; else beneath it, if there's room.
+                  const inline = t.label.length * 7.4 + amount.length * 7 + 36 <= r.w;
+                  return (
+                    <text x={r.x + 10} y={r.y + 21} className="pointer-events-none fill-bone text-[13px] font-medium">
+                      {truncate(t.label, r.w - 20, 7.4)}
+                      {inline ? (
+                        <tspan className="fill-bone/70 font-mono text-[11.5px] font-normal">{`  ${amount}`}</tspan>
+                      ) : (
+                        t.kids.length === 0 &&
+                        r.h > 50 && (
+                          <tspan x={r.x + 10} dy={17} className="fill-bone/70 font-mono text-[11.5px] font-normal">
+                            {truncate(amount, r.w - 20, 7)}
+                          </tspan>
+                        )
+                      )}
+                    </text>
+                  );
+                })()}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <p className="min-h-5 text-sm text-muted-foreground" aria-live="polite">
+        {hovered ? (
+          <>
+            <span className="text-bone">{hovered.parent ? `${hovered.parent} › ${hovered.label}` : hovered.label}</span>
+            {" · "}
+            <span className="font-mono text-bone tabular-nums">{formatCurrency(hovered.amount, "USD")}</span>
+            {" · "}
+            {((hovered.amount / base) * 100).toFixed(1)}% of income
+          </>
+        ) : (
+          "Each tile is as big as its share of your income. Point at one for its details."
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** Cut a label to about `width` pixels at `perChar` pixels a character. */
+function truncate(text: string, width: number, perChar: number): string {
+  const max = Math.floor(width / perChar);
+  return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
+}
+
+// ---- Monthly bars -----------------------------------------------------------
+
+function MonthlyTooltip({ active, payload, series }: { active?: boolean; payload?: { payload: MonthColumn }[]; series: MonthlyCashFlow["series"] }) {
+  if (!active || !payload?.[0]) return null;
+  const m = payload[0].payload;
+  const net = m.income - m.expenses;
+  const parts = series.filter((s) => (m.byCategory[s.key] ?? 0) > 0).sort((a, b) => (m.byCategory[b.key] ?? 0) - (m.byCategory[a.key] ?? 0));
+  return (
+    <div className="min-w-52 rounded-md border border-border bg-popover p-3 text-xs shadow-lg">
+      <p className="mb-2 font-medium text-bone">{new Date(`${m.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}</p>
+      <div className="flex flex-col gap-1">
+        <Row label="Income" value={m.income} className="text-moss" />
+        <Row label="Expenses" value={m.expenses} className="text-oxblood-text" />
+        <Row label={net >= 0 ? "Kept" : "Short"} value={Math.abs(net)} className="font-semibold text-bone" />
+      </div>
+      {parts.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
+          {parts.map((s) => (
+            <div key={s.key} className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
+                {s.label}
+              </span>
+              <span className="font-mono text-bone tabular-nums">{formatCurrency(m.byCategory[s.key], "USD")}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Row({ label, value, className }: { label: string; value: number; className?: string }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={cn("font-mono tabular-nums", className)}>{formatCurrency(value, "USD")}</span>
+    </div>
+  );
+}
+
+function MonthlyBars({ data }: { data: MonthlyCashFlow }) {
+  const rows = data.months.map((m) => ({ ...m, ...Object.fromEntries(data.series.map((s) => [s.key, m.byCategory[s.key] ?? 0])) }));
+  const top = data.series.at(-1)?.key;
+  return (
+    <div className="flex flex-col gap-3">
+      <ResponsiveContainer {...CHART_RESIZE} width="100%" height={380}>
+        <ComposedChart data={rows} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
+          <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+          <YAxis
+            tickFormatter={(v: number) => formatCompactCurrency(v, "USD")}
+            tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
+            axisLine={false}
+            tickLine={false}
+            width={52}
+          />
+          <Tooltip {...chartTooltipProps} cursor={{ fill: "var(--muted)", opacity: 0.5 }} content={<MonthlyTooltip series={data.series} />} />
+          {data.series.map((s) => (
+            <Bar
+              key={s.key}
+              dataKey={s.key}
+              stackId="spent"
+              fill={s.color}
+              fillOpacity={0.88}
+              radius={s.key === top ? [4, 4, 0, 0] : 0}
+              maxBarSize={44}
+              isAnimationActive={false}
+            />
+          ))}
+          <Line
+            dataKey="income"
+            type="linear"
+            stroke="var(--cat-travel)"
+            strokeWidth={2}
+            dot={{ r: 3, fill: "var(--card)", stroke: "var(--cat-travel)", strokeWidth: 2 }}
+            activeDot={{ r: 4.5 }}
+            isAnimationActive={false}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
+        <li className="flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded-full bg-[var(--cat-travel)]" />
+          Income
+        </li>
+        {data.series.map((s) => (
+          <li key={s.key} className="flex items-center gap-1.5">
+            <span className="size-2 rounded-sm" style={{ backgroundColor: s.color }} />
+            {s.label}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The Sankey's icon: bars joined by curving flows. */
+function FlowIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" className={className} aria-hidden>
+      <path d="M2 3v10M14 2v4M14 9v5" />
+      <path d="M2 5c6 0 6-2 12-2M2 11c6 0 6 1.5 12 1.5" />
+    </svg>
+  );
+}
+
+type ChartKind = "flow" | "treemap" | "bars";
+
 export function CashFlowFlows({ transactions, connectedCardIssuers }: { transactions: SpendingTransaction[]; connectedCardIssuers: string[] }) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
   const [period, setPeriod] = useState("this-month");
   const range = useMemo(() => periodRange(period, today), [period, today]);
   const report = useMemo(() => cashFlowReport(transactions, connectedCardIssuers, range), [transactions, connectedCardIssuers, range]);
+  const [chart, setChart] = useState<ChartKind>("flow");
 
   const months = useMemo(() => {
     const present = new Set(transactions.map((t) => t.date.slice(0, 7)));
@@ -264,6 +520,10 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
   }, [transactions]);
   const earliest = months.length > 0 ? `${months[months.length - 1].value}-01` : null;
   const base = report.nodes.find((n) => n.id === "income")?.amount ?? 0;
+  const monthly = useMemo(
+    () => (chart === "bars" ? monthlyCashFlow(transactions, connectedCardIssuers, monthsFor(range, today, earliest)) : null),
+    [chart, transactions, connectedCardIssuers, range, today, earliest]
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -302,20 +562,56 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
       </div>
 
       <Card>
-        <CardHeader className="flex flex-col gap-1">
-          <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">Cash flow</p>
-          <p className="text-base font-medium text-bone">{rangeLabel(range, today, earliest)}</p>
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">Cash flow</p>
+            <p className="text-base font-medium text-bone">
+              {chart === "bars" && monthly && monthly.months.length > 0
+                ? rangeLabel({ start: `${monthly.months[0].month}-01`, end: null }, today, earliest)
+                : rangeLabel(range, today, earliest)}
+            </p>
+          </div>
+          <div role="radiogroup" aria-label="Chart" className="flex rounded-md border border-border p-0.5">
+            {(
+              [
+                { value: "flow", label: "Flow", icon: <FlowIcon className="size-3.5" /> },
+                { value: "treemap", label: "Treemap", icon: <LayoutDashboard className="size-3.5" /> },
+                { value: "bars", label: "Monthly bars", icon: <ChartColumnStacked className="size-3.5" /> },
+              ] as const
+            ).map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                role="radio"
+                aria-checked={chart === o.value}
+                aria-label={o.label}
+                title={o.label}
+                onClick={() => setChart(o.value)}
+                className={cn(
+                  "inline-flex items-center rounded-[5px] px-2.5 py-1.5 transition-colors",
+                  chart === o.value ? "bg-bone/10 text-bone" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {o.icon}
+              </button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent>
-          {report.nodes.length === 0 ? (
+          {chart === "bars" && monthly ? (
+            <MonthlyBars data={monthly} />
+          ) : report.nodes.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">Nothing came in or went out in this period.</p>
+          ) : chart === "treemap" ? (
+            <Treemap report={report} />
           ) : (
             <Sankey nodes={report.nodes} flows={report.flows} base={base} />
           )}
           <p className="mt-3 text-xs text-muted-foreground">
             Income is money in marked as income. Expenses count the way Spending and Budgets do: posted charges, net of
-            refunds, your share of anything paid back. Transfers between your own accounts are left out. Point at a bar to
-            follow its money.
+            refunds, your share of anything paid back. Transfers between your own accounts are left out.
+            {chart === "flow" && " Point at a bar to follow its money."}
+            {chart === "bars" && " Months before the period show when it's shorter than half a year, for context."}
           </p>
         </CardContent>
       </Card>
