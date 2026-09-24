@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { transactionIconName, type IconTransaction } from "@/lib/transaction-icons";
+import { transactionIconColor, transactionIconName, type IconTransaction } from "@/lib/transaction-icons";
 
 const t = (o: Partial<IconTransaction>): IconTransaction => ({ name: null, merchant_name: "Shop", amount: 10, pfc_primary: null, ...o });
 
@@ -30,5 +30,31 @@ describe("transactionIconName", () => {
   it("reads a manual entry's name for the few clear cases", () => {
     expect(transactionIconName(t({ merchant_name: "Levelz Barber Shop", pfc_primary: "PERSONAL_CARE" }))).toBe("Scissors");
     expect(transactionIconName(t({ merchant_name: "Farmers market", pfc_primary: "FOOD_AND_DRINK" }))).toBe("UtensilsCrossed");
+  });
+});
+
+describe("transactionIconColor", () => {
+  it("gives each category one color, whatever its icon", () => {
+    const coffee = t({ pfc_primary: "FOOD_AND_DRINK", pfc_detailed: "FOOD_AND_DRINK_COFFEE" });
+    const groceries = t({ pfc_primary: "FOOD_AND_DRINK", pfc_detailed: "FOOD_AND_DRINK_GROCERIES" });
+    expect(transactionIconColor(coffee)).toBe("var(--cat-food)");
+    expect(transactionIconColor(groceries)).toBe("var(--cat-food)");
+    expect(transactionIconColor(t({ pfc_primary: "INCOME" }))).toBe("var(--cat-income)");
+  });
+
+  it("colors money moving between your own accounts alike, and follows a category you picked", () => {
+    expect(transactionIconColor(t({ pfc_primary: "LOAN_PAYMENTS" }))).toBe("var(--cat-money-movement)");
+    expect(transactionIconColor(t({ pfc_primary: "TRANSFER_IN" }))).toBe("var(--cat-money-movement)");
+    expect(transactionIconColor(t({ pfc_primary: "FOOD_AND_DRINK", category_override: "TRAVEL" }))).toBe("var(--cat-travel)");
+    expect(transactionIconColor(t({ pfc_primary: null }))).toBe("var(--cat-other)");
+  });
+
+  it("has a color defined for every one it uses", async () => {
+    const css = (await import("node:fs")).readFileSync("src/app/globals.css", "utf8");
+    const categories = ["FOOD_AND_DRINK", "GENERAL_MERCHANDISE", "TRANSPORTATION", "TRAVEL", "ENTERTAINMENT", "PERSONAL_CARE", "MEDICAL", "BANK_FEES", "GENERAL_SERVICES", "GOVERNMENT_AND_NON_PROFIT", "RENT_AND_UTILITIES", "HOME_IMPROVEMENT", "INCOME", "TRANSFER", "OTHER"];
+    for (const c of categories) {
+      const token = transactionIconColor(t({ pfc_primary: c })).slice(4, -1);
+      expect(css, token).toContain(`${token}:`);
+    }
   });
 });

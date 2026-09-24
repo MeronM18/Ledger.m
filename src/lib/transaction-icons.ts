@@ -2,8 +2,9 @@ import { effectiveCategory, type DisplayableTransaction } from "@/lib/transactio
 
 // Pure. The icon a transaction shows when the bank sent no logo: from
 // Plaid's detailed category when there is one (coffee, groceries, gas),
-// otherwise its main category. Names come back as strings so the mapping
-// can be tested without React; transaction-avatar.tsx turns them into icons.
+// otherwise its main category, in its main category's color. Names come
+// back as strings so the mapping can be tested without React;
+// transaction-avatar.tsx turns them into icons.
 
 export type TransactionIconName =
   | "ArrowDownLeft"
@@ -142,4 +143,32 @@ export function transactionIconName(t: IconTransaction): TransactionIconName {
     if (hint) return hint[1];
   }
   return (category && PRIMARY[category]) || "Store";
+}
+
+// The --cat-* token (globals.css) for each main category.
+const COLOR: Record<string, string> = {
+  FOOD_AND_DRINK: "food",
+  GENERAL_MERCHANDISE: "shopping",
+  TRANSPORTATION: "transport",
+  TRAVEL: "travel",
+  ENTERTAINMENT: "entertainment",
+  PERSONAL_CARE: "personal-care",
+  MEDICAL: "medical",
+  BANK_FEES: "fees",
+  GENERAL_SERVICES: "services",
+  GOVERNMENT_AND_NON_PROFIT: "government",
+  RENT_AND_UTILITIES: "home",
+  HOME_IMPROVEMENT: "home-improvement",
+  INCOME: "income",
+  TRANSFER_IN: "money-movement",
+  TRANSFER_OUT: "money-movement",
+  TRANSFER: "money-movement",
+  LOAN_PAYMENTS: "money-movement",
+  LOAN_DISBURSEMENTS: "money-movement",
+};
+
+/** The color a transaction's icon is drawn in: one per category, the same everywhere. */
+export function transactionIconColor(t: IconTransaction): string {
+  const category = effectiveCategory(t);
+  return `var(--cat-${(category && COLOR[category]) || "other"})`;
 }

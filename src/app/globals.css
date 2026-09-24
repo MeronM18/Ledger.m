@@ -150,6 +150,26 @@
   --viz-11: #6b7a8f; /* slate */
   --viz-12: #9bb52f; /* lime */
   --viz-13: #b05bd6; /* orchid */
+  /* Transaction icons, by category: the hue a category is usually drawn in
+     (food warm orange, income green, medical red), muted to sit with
+     champagne, moss and oxblood. Drawn as the icon's color over a faint
+     tint of itself. Money that only moves between your own accounts
+     (transfers, card payments) stays champagne. */
+  --cat-food: #d6955e;
+  --cat-shopping: #8fa6dc;
+  --cat-transport: #6fb3a4;
+  --cat-travel: #7fbcd6;
+  --cat-entertainment: #ab93d6;
+  --cat-personal-care: #d196bf;
+  --cat-medical: #db8a8f;
+  --cat-fees: var(--oxblood-text);
+  --cat-services: #93a1b3;
+  --cat-government: #a7ab8c;
+  --cat-home: #d2b36c;
+  --cat-home-improvement: #b39a78;
+  --cat-income: #9dbb7f;
+  --cat-money-movement: var(--champagne);
+  --cat-other: var(--ash-grey);
   --radius: 0.625rem;
   --sidebar: var(--onyx);
   --sidebar-foreground: var(--bone);

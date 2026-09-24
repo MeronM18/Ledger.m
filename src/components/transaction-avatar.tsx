@@ -54,7 +54,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { transactionIconName, type IconTransaction, type TransactionIconName } from "@/lib/transaction-icons";
+import { transactionIconColor, transactionIconName, type IconTransaction, type TransactionIconName } from "@/lib/transaction-icons";
 import { cn } from "@/lib/utils";
 
 const ICONS: Record<TransactionIconName, LucideIcon> = {
@@ -129,11 +129,14 @@ export function TransactionAvatar({ transaction, className }: { transaction: Ico
       />
     );
   }
-  const Icon = ICONS[transactionIconName(transaction)];
+  const name = transactionIconName(transaction);
+  const Icon = ICONS[name];
+  const color = transactionIconColor(transaction);
   return (
     <span
-      className={cn("flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground", className)}
-      data-icon={transactionIconName(transaction)}
+      className={cn("flex size-6 shrink-0 items-center justify-center rounded-full", className)}
+      style={{ color, backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)` }}
+      data-icon={name}
     >
       <Icon className="size-3.5" aria-hidden />
     </span>
