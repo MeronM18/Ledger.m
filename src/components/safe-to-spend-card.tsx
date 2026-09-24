@@ -59,6 +59,11 @@ export async function SafeToSpendCard() {
                 ? ` · about ${formatCurrency(data.forecast.perDay, data.currency)} a day`
                 : ""}
             </p>
+            {data.forecast.cardBalances > 0 && (
+              <p className="text-xs text-muted-foreground">
+                After {formatCurrency(data.forecast.cardBalances, data.currency)} owed on your cards
+              </p>
+            )}
             {data.forecast.firstBelowThreshold && (
               <p className="text-sm text-champagne">
                 Balance projected to dip under {formatCurrency(ALERT_THRESHOLDS.lowBalance, data.currency)} on{" "}

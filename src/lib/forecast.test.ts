@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildForecast, occurrencesBetween, typicalDailySpend, type RecurringItem } from "@/lib/forecast";
+import { buildForecast, nextDueDate, occurrencesBetween, typicalDailySpend, type RecurringItem } from "@/lib/forecast";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 
 const today = new Date(2026, 8, 23); // Wed Sep 23, 2026
@@ -158,5 +158,49 @@ describe("typicalDailySpend", () => {
   it("returns null with under a week of history or none at all", () => {
     expect(typicalDailySpend([tx("2026-09-20", 50)], todayIso, [])).toBeNull();
     expect(typicalDailySpend([], todayIso, [])).toBeNull();
+  });
+});
+
+describe("card balances", () => {
+  const today = new Date(2026, 8, 24);
+
+  it("come off safe to spend in full, and show on their due dates", () => {
+    const f = buildForecast({
+      cash: 2000,
+      today,
+      bills: [],
+      income: [],
+      typicalDailySpend: null,
+      lowBalanceThreshold: 100,
+      cardPayments: [
+        { name: "Freedom Flex ••2792", amount: 82.38, date: "2026-09-28" },
+        { name: "Apple Card", amount: 153.04, date: "2026-09-30" },
+        { name: "Amex", amount: 0, date: null },
+      ],
+    });
+    expect(f.cardBalances).toBeCloseTo(235.42);
+    expect(f.safeToSpend).toBeCloseTo(2000 - 235.42);
+    expect(f.events.map((e) => [e.date, e.name, e.kind])).toEqual([
+      ["2026-09-28", "Freedom Flex ••2792 payment", "card"],
+      ["2026-09-30", "Apple Card payment", "card"],
+    ]);
+    // The balance line drops on each due date.
+    expect(f.points.find((p) => p.date === "2026-09-28")!.committed).toBeCloseTo(2000 - 82.38);
+  });
+
+  it("with no known due date, count as due today", () => {
+    const f = buildForecast({ cash: 500, today, bills: [], income: [], typicalDailySpend: null, lowBalanceThreshold: 100, cardPayments: [{ name: "Card", amount: 50, date: null }] });
+    expect(f.events[0].date).toBe("2026-09-24");
+    expect(f.points[0].committed).toBe(450);
+  });
+});
+
+describe("nextDueDate", () => {
+  it("is this month if the day is still ahead, else next month, clamped to month end", () => {
+    expect(nextDueDate("2026-09-24", 28)).toBe("2026-09-28");
+    expect(nextDueDate("2026-09-24", 23)).toBe("2026-10-23");
+    expect(nextDueDate("2026-09-24", 24)).toBe("2026-09-24");
+    expect(nextDueDate("2026-09-24", 31)).toBe("2026-09-30");
+    expect(nextDueDate("2026-12-28", 5)).toBe("2027-01-05");
   });
 });

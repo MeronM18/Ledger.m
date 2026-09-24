@@ -13,8 +13,10 @@ import {
 // coming, and how much you typically spend on top of those.
 //
 // Deliberate simplifications, all surfaced in the UI rather than hidden:
-// - Only depository (checking/savings) cash counts; credit card balances
-//   owed are NOT deducted, they're shown beside the number.
+// - Only checking cash counts. Everything owed on credit cards is deducted,
+//   as if each card is paid in full on its due date (a card with no known
+//   due date as if due now), so spending already on a card isn't counted
+//   as money still free to spend.
 // - A bill or paycheck whose last-known date lapsed (nothing new landed
 //   well past it) is left out: it may have stopped, and reserving cash for
 //   it, or counting on it, would mislead.
@@ -29,7 +31,10 @@ export type RecurringItem = {
   date: string | null; // stored predicted_next_date / next_billing_date
 };
 
-export type ForecastEvent = { date: string; name: string; amount: number; kind: "bill" | "income" };
+export type ForecastEvent = { date: string; name: string; amount: number; kind: "bill" | "card" | "income" };
+
+/** What's owed on one card, and when it's due (null: not known, treated as due now). */
+export type CardPayment = { name: string; amount: number; date: string | null };
 
 export type ForecastPoint = {
   date: string;
@@ -48,6 +53,8 @@ export type Forecast = {
   // Days from today to that paycheck, or the fallback horizon when none is known.
   daysToPayday: number;
   billsBeforePayday: number;
+  // Everything owed on credit cards, whenever it's due.
+  cardBalances: number;
   safeToSpend: number; // can be negative
   perDay: number | null;
   typicalDailySpend: number | null;
@@ -115,6 +122,23 @@ export function typicalDailySpend(
   return Math.max(0, spent - scaledBills) / historyDays;
 }
 
+/**
+ * The next date a card with payment due on `dueDay` is due, on or after
+ * today: this month if that day hasn't passed, else next month. A day past
+ * the end of a short month is its last day (31 means month-end).
+ */
+export function nextDueDate(todayIso: string, dueDay: number): string {
+  const [y, m, d] = todayIso.split("-").map(Number);
+  const inMonth = (year: number, month0: number) => {
+    const last = new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
+    const day = Math.min(dueDay, last);
+    return `${year}-${String(month0 + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  };
+  const thisMonth = inMonth(y, m - 1);
+  if (Number(thisMonth.slice(8)) >= d) return thisMonth;
+  return m === 12 ? inMonth(y + 1, 0) : inMonth(y, m);
+}
+
 export function buildForecast(input: {
   cash: number;
   today: Date; // local midnight of today's Eastern date
@@ -123,8 +147,10 @@ export function buildForecast(input: {
   typicalDailySpend: number | null;
   lowBalanceThreshold: number;
   horizonDays?: number;
+  cardPayments?: CardPayment[];
 }): Forecast {
   const { cash, today, bills, income, lowBalanceThreshold } = input;
+  const cards = (input.cardPayments ?? []).filter((c) => c.amount > 0);
   const horizon = input.horizonDays ?? 30;
   const todayIso = isoOf(today);
   const end = new Date(today.getTime() + horizon * DAY_MS);
@@ -136,6 +162,13 @@ export function buildForecast(input: {
     ...income.flatMap((i) =>
       occurrencesBetween(i, today, end).map((date) => ({ date, name: i.name, amount: i.amount, kind: "income" as const }))
     ),
+    // Each card paid in full on its due date: today if that's not known (or
+    // already past), the end of the window if it's later than that.
+    ...cards.map((c) => {
+      const endIso = isoOf(end);
+      const date = !c.date || c.date < todayIso ? todayIso : c.date > endIso ? endIso : c.date;
+      return { date, name: `${c.name} payment`, amount: c.amount, kind: "card" as const };
+    }),
   ].sort((a, b) => a.date.localeCompare(b.date) || a.kind.localeCompare(b.kind));
 
   const daily = input.typicalDailySpend ?? 0;
@@ -165,7 +198,10 @@ export function buildForecast(input: {
     .filter((e) => e.kind === "bill" && e.date < cutoff)
     .reduce((sum, e) => sum + e.amount, 0);
 
-  const safeToSpend = cash - billsBeforePayday;
+  // Card balances come off in full whenever they're due: that money is
+  // already spent, even if it hasn't left checking yet.
+  const cardBalances = cards.reduce((sum, c) => sum + c.amount, 0);
+  const safeToSpend = cash - billsBeforePayday - cardBalances;
   const perDay = daysToPayday > 0 ? safeToSpend / daysToPayday : null;
   const projectedShortfall =
     input.typicalDailySpend !== null ? Math.max(0, input.typicalDailySpend * daysToPayday - safeToSpend) : 0;
@@ -180,6 +216,7 @@ export function buildForecast(input: {
     nextIncome,
     daysToPayday,
     billsBeforePayday,
+    cardBalances,
     safeToSpend,
     perDay,
     typicalDailySpend: input.typicalDailySpend,

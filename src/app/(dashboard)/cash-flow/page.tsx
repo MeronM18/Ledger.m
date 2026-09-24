@@ -76,6 +76,14 @@ export default async function CashFlowPage() {
               <dd className="text-right">
                 <Money amount={-f.billsBeforePayday} currency={currency} tone="neutral" />
               </dd>
+              {f.cardBalances > 0 && (
+                <>
+                  <dt className="text-muted-foreground">Card balances</dt>
+                  <dd className="text-right">
+                    <Money amount={-f.cardBalances} currency={currency} tone="neutral" />
+                  </dd>
+                </>
+              )}
               {f.nextIncome && (
                 <>
                   <dt className="text-muted-foreground">Next paycheck</dt>
@@ -89,7 +97,8 @@ export default async function CashFlowPage() {
 
           {f.safeToSpend < 0 && (
             <p className="text-sm text-oxblood-text">
-              Bills due before payday add up to more than the cash you have, by {formatCurrency(-f.safeToSpend, currency)}.
+              {f.cardBalances > 0 ? "Bills and card balances" : "Bills due before payday"} add up to more than the cash you
+              have, by {formatCurrency(-f.safeToSpend, currency)}.
             </p>
           )}
           {f.safeToSpend >= 0 && f.projectedShortfall > 0 && f.typicalDailySpend !== null && (
@@ -181,8 +190,10 @@ export default async function CashFlowPage() {
           </p>
           {creditOwed > 0 && (
             <p>
-              Credit card balances ({formatCurrency(creditOwed, currency)} owed) are not deducted. Only card payments that
-              appear as recurring bills are.
+              Everything owed on your credit cards ({formatCurrency(creditOwed, currency)} now) is deducted, as if each card is
+              paid in full on its due date: the due day you set on the Accounts page, the end of the month for Apple Card, or
+              today for a card with no due day set. Card payments your bank lists as recurring bills are left out of the bills,
+              so they aren&apos;t counted twice.
             </p>
           )}
         </CardContent>
