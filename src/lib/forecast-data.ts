@@ -61,7 +61,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
   const cash = cashAccounts.reduce((sum, a) => sum + Number(a.available_balance ?? a.current_balance ?? 0), 0);
   const creditOwed =
     accounts.filter((a) => a.type === "credit").reduce((sum, a) => sum + Number(a.current_balance ?? 0), 0) +
-    manualCardsRes.accounts.reduce((sum, c) => sum + Math.max(0, c.balance), 0);
+    manualCardsRes.accounts.filter((c) => c.type === "credit").reduce((sum, c) => sum + Math.max(0, c.balance), 0);
 
   const streams = streamsRes.data ?? [];
   const streamName = (

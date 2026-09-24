@@ -53,10 +53,19 @@ export function computeNetWorth(
 }
 
 /**
- * Manual card accounts (Apple Card) as net worth inputs: each is a liability
- * whose balance is the amount owed. A negative balance (overpaid) counts as
- * nothing owed rather than an asset.
+ * Manual accounts (Apple Card, Apple Savings) as net worth inputs. A card is
+ * a liability whose balance is the amount owed (overpaid counts as nothing
+ * owed); a deposit account is an asset. A deposit account with no balance
+ * entered yet is left out rather than counted as zero.
  */
-export function manualCardsAsAccounts(cards: { balance: number }[]): NetWorthAccount[] {
-  return cards.map((c) => ({ type: "credit", current_balance: Math.max(0, c.balance) }));
+export function manualAccountsAsAccounts(
+  accounts: { type: "credit" | "depository"; balance: number; balanceKnown: boolean }[]
+): NetWorthAccount[] {
+  return accounts
+    .filter((a) => a.balanceKnown)
+    .map((a) =>
+      a.type === "credit"
+        ? { type: "credit", current_balance: Math.max(0, a.balance) }
+        : { type: "depository", current_balance: a.balance }
+    );
 }

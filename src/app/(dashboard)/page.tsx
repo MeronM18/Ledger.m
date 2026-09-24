@@ -11,7 +11,7 @@ import { SpendingPaceCard } from "@/components/spending-pace-card";
 import { SafeToSpendCard, SafeToSpendSkeleton } from "@/components/safe-to-spend-card";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
-import { computeNetWorth, manualCardsAsAccounts } from "@/lib/net-worth";
+import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
 import { loadConnectedCardIssuers, loadManualAccounts } from "@/lib/manual-accounts";
 import { formatCurrency, timeAgo } from "@/lib/format";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
@@ -142,7 +142,7 @@ export default async function OverviewPage() {
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { netWorth } = computeNetWorth(
-    [...(accountsData ?? []), ...manualCardsAsAccounts(manualCards)],
+    [...(accountsData ?? []), ...manualAccountsAsAccounts(manualCards)],
     manualData ?? [],
     preciousMetalsValue
   );
