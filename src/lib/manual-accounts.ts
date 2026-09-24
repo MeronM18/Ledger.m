@@ -12,6 +12,8 @@ export type ManualAccount = {
   mask: string | null;
   credit_limit: number | null;
   balance_override: number | null;
+  // Annual percentage yield of a deposit account, as a percent (3.39 = 3.39%).
+  apy: number | null;
   // A card: the amount owed, the typed-in override if there is one, otherwise
   // the sum of the imported transactions (purchases positive, payments
   // negative). A deposit account: the typed-in balance, since a statement
@@ -32,7 +34,7 @@ export async function loadManualAccounts(
   const [accountsRes, txRes] = await Promise.all([
     admin
       .from("manual_accounts")
-      .select("id, type, name, institution_name, mask, credit_limit, balance_override")
+      .select("id, type, name, institution_name, mask, credit_limit, balance_override, apy")
       .order("created_at"),
     fetchAllRows<{ manual_account_id: string; amount: number; date: string; pfc_primary: string }>((from, to) =>
       admin
@@ -71,6 +73,7 @@ export async function loadManualAccounts(
         mask: a.mask as string | null,
         credit_limit: a.credit_limit === null ? null : Number(a.credit_limit),
         balance_override: override,
+        apy: a.apy === null || a.apy === undefined ? null : Number(a.apy),
         balance: override ?? (a.type === "credit" ? Math.round((s?.sum ?? 0) * 100) / 100 : 0),
         balanceKnown: a.type === "credit" || override !== null,
         earned: Math.round((s?.earned ?? 0) * 100) / 100,

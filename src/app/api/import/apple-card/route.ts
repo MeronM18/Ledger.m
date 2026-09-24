@@ -15,6 +15,8 @@ const bodySchema = z.object({
   // Apple Savings: today's balance. The export lists deposits but not the
   // balance, so it has to be given (required the first time).
   balance: z.number().min(0).max(100_000_000).optional(),
+  // Apple Savings: the yield shown on the statement, as a percent.
+  apy: z.number().min(0).max(100).optional(),
 });
 
 /**
@@ -58,6 +60,7 @@ export async function POST(request: Request) {
     const update: Record<string, unknown> = {};
     if (isCard && parsedBody.data.credit_limit !== undefined) update.credit_limit = parsedBody.data.credit_limit;
     if (!isCard && parsedBody.data.balance !== undefined) update.balance_override = parsedBody.data.balance;
+    if (!isCard && parsedBody.data.apy !== undefined) update.apy = parsedBody.data.apy;
     if (Object.keys(update).length > 0) await admin.from("manual_accounts").update(update).eq("id", accountId);
   } else {
     if (!isCard && parsedBody.data.balance === undefined) {
@@ -74,6 +77,7 @@ export async function POST(request: Request) {
         type,
         credit_limit: isCard ? (parsedBody.data.credit_limit ?? null) : null,
         balance_override: isCard ? null : (parsedBody.data.balance ?? null),
+        apy: isCard ? null : (parsedBody.data.apy ?? null),
       })
       .select("id")
       .single();
