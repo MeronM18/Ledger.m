@@ -296,10 +296,53 @@
 }
 
 /* Welcome: the opening on a full page load (components/welcome-overlay.tsx).
-   One authored moment in the same language as .animate-entrance: a ledger
-   rule draws across, the wordmark rises out of it, the date rolls in like
-   a counter, then the screen parts along the rule. Transform and opacity
-   only, so it stays smooth on a phone. */
+   About 2.8 seconds, one continuous moment:
+     0.0s  a soft champagne glow warms up behind the center
+     0.1s  the ledger rule draws out from the center; a glint runs along it
+     0.3s  "Ledger.m" rises out of the rule letter by letter, coming into focus
+     0.5s  the date rolls into place like a mechanical counter
+     1.2s  one sheen of light crosses the wordmark
+     1.85s the screen parts along the rule like two doors, the wordmark and
+           date lifting away a little faster than their doors, and the page
+           behind settles into place.
+   Transform and opacity nearly throughout (a brief blur on the letters and
+   a background sweep for the sheen, both on small elements), so it stays
+   smooth on a phone. Clicks can't skip it; a key press can (data-phase
+   "leaving" below). */
+.welcome {
+  --welcome-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --welcome-part: cubic-bezier(0.83, 0, 0.17, 1);
+  --welcome-glint: #fff6e0;
+  --welcome-part-at: 1850ms;
+  --welcome-part-for: 900ms;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+@keyframes welcome-glow-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.55);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes welcome-glow-out {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+}
+
 @keyframes welcome-rule-draw {
   from {
     transform: translate(-50%, -50%) scaleX(0);
@@ -311,30 +354,65 @@
 
 @keyframes welcome-rule-out {
   from {
-    transform: translate(-50%, -50%) scaleX(1);
     opacity: 1;
+    transform: translate(-50%, -50%) scaleX(1);
   }
   to {
-    transform: translate(-50%, -50%) scaleX(1.9);
     opacity: 0;
+    transform: translate(-50%, -50%) scaleX(2.4);
+  }
+}
+
+@keyframes welcome-glint {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  20%,
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(340%);
   }
 }
 
 @keyframes welcome-rise {
   from {
+    opacity: 0;
+    filter: blur(8px);
     transform: translateY(112%);
   }
+  60% {
+    opacity: 1;
+  }
   to {
+    opacity: 1;
+    filter: blur(0);
     transform: translateY(0);
   }
 }
 
-@keyframes welcome-fade-in {
+@keyframes welcome-sheen {
+  from {
+    background-position: 95% 0;
+  }
+  to {
+    background-position: 5% 0;
+  }
+}
+
+@keyframes welcome-date-in {
   from {
     opacity: 0;
+    filter: blur(4px);
+    transform: translateY(-6px);
   }
   to {
     opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
   }
 }
 
@@ -359,8 +437,30 @@
   }
 }
 
-/* Same motion, separate names: a skip restarts the parting right away
-   instead of the running animation jumping to its end. */
+/* The wordmark and date travel a little further than their doors and fade,
+   so the parting has depth instead of sliding as flat panels. */
+@keyframes welcome-lift-up {
+  to {
+    opacity: 0;
+    transform: translateY(-40px);
+  }
+}
+
+@keyframes welcome-lift-down {
+  to {
+    opacity: 0;
+    transform: translateY(28px);
+  }
+}
+
+@keyframes welcome-seam-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* Same motions, separate names: a skip restarts them right away instead
+   of the running animation jumping to its end. */
 @keyframes welcome-part-up-now {
   to {
     transform: translateY(-100%);
@@ -379,13 +479,49 @@
   }
 }
 
-.welcome {
-  --welcome-settle: cubic-bezier(0.16, 1, 0.3, 1);
-  --welcome-part: cubic-bezier(0.76, 0, 0.24, 1);
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  pointer-events: none;
+/* The page behind, while it's uncovered: from a touch small and dim to
+   exactly itself. Ends on `transform: none`, so nothing is left applied. */
+@keyframes welcome-page-reveal {
+  from {
+    opacity: 0.35;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes welcome-page-reveal-now {
+  from {
+    opacity: 0.35;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.welcome-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: min(46rem, 130vw);
+  aspect-ratio: 1.6;
+  border-radius: 50%;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--champagne) 16%, transparent),
+    color-mix(in oklab, var(--champagne) 6%, transparent) 55%,
+    transparent
+  );
+  mix-blend-mode: screen;
+  transform: translate(-50%, -50%) scale(0.55);
+  animation:
+    welcome-glow-in 1400ms var(--welcome-settle) both,
+    welcome-glow-out 520ms ease-in calc(var(--welcome-part-at) - 150ms) forwards;
 }
 
 .welcome-half {
@@ -395,8 +531,21 @@
   display: flex;
   justify-content: center;
   background: var(--background);
+  /* Clicks land here, not on the page underneath, and don't skip anything. */
   pointer-events: auto;
   will-change: transform;
+}
+
+/* A hairline of champagne along each door's edge, lit as they part. */
+.welcome-half::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--champagne) 45%, transparent), transparent);
+  opacity: 0;
+  animation: welcome-seam-in 240ms ease-out calc(var(--welcome-part-at) - 60ms) forwards;
 }
 
 .welcome-top {
@@ -405,7 +554,34 @@
   height: calc(50% + 1px);
   align-items: flex-end;
   padding-bottom: 0.7rem;
-  animation: welcome-part-up 760ms var(--welcome-part) 1550ms both;
+  animation: welcome-part-up var(--welcome-part-for) var(--welcome-part) var(--welcome-part-at) both;
+}
+
+.welcome-top::after {
+  bottom: 0;
+}
+
+/* Each door casts a soft shadow onto the page as it opens; hidden until
+   then, so nothing darkens the seam while the wordmark is on screen. */
+.welcome-half::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 72px;
+  opacity: 0;
+  pointer-events: none;
+  animation: welcome-seam-in 260ms ease-out var(--welcome-part-at) forwards;
+}
+
+.welcome-top::before {
+  top: 100%;
+  background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
+}
+
+.welcome-bottom::before {
+  bottom: 100%;
+  background: linear-gradient(to top, rgb(0 0 0 / 0.55), transparent);
 }
 
 .welcome-bottom {
@@ -413,40 +589,46 @@
   height: 50%;
   align-items: flex-start;
   padding-top: 1.05rem;
-  animation: welcome-part-down 760ms var(--welcome-part) 1550ms both;
+  animation: welcome-part-down var(--welcome-part-for) var(--welcome-part) var(--welcome-part-at) both;
 }
 
-.welcome[data-phase="leaving"] .welcome-top {
-  animation: welcome-part-up-now 460ms var(--welcome-part) both;
-}
-
-.welcome[data-phase="leaving"] .welcome-bottom {
-  animation: welcome-part-down-now 460ms var(--welcome-part) both;
+.welcome-bottom::after {
+  top: 0;
 }
 
 .welcome-rule {
   position: absolute;
   top: 50%;
   left: 50%;
+  z-index: 2;
   width: min(24rem, 74vw);
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--champagne) 18%, var(--champagne) 82%, transparent);
   transform: translate(-50%, -50%) scaleX(0);
   animation:
-    welcome-rule-draw 720ms var(--welcome-settle) 60ms both,
-    welcome-rule-out 520ms cubic-bezier(0.7, 0, 0.84, 0) 1480ms forwards;
+    welcome-rule-draw 820ms var(--welcome-settle) 80ms both,
+    welcome-rule-out 620ms cubic-bezier(0.7, 0, 0.84, 0) calc(var(--welcome-part-at) - 80ms) forwards;
 }
 
-.welcome[data-phase="leaving"] .welcome-rule {
-  animation: welcome-fade-out 200ms ease-out both;
+/* A point of light running along the rule as it draws. */
+.welcome-glint {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, var(--welcome-glint), transparent);
+  box-shadow: 0 0 10px 1px color-mix(in oklab, var(--welcome-glint) 55%, transparent);
+  opacity: 0;
+  animation: welcome-glint 1150ms cubic-bezier(0.45, 0, 0.25, 1) 320ms both;
 }
 
 .welcome-wordmark {
+  position: relative;
   font-size: clamp(2.75rem, 10vw, 4.75rem);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.015em;
   color: var(--bone);
+  animation: welcome-lift-up 600ms cubic-bezier(0.4, 0, 0.9, 0.6) var(--welcome-part-at) forwards;
 }
 
 /* Each letter rises out of its own clipped box, so it appears to come up
@@ -461,7 +643,23 @@
 
 .welcome-letter {
   display: inline-block;
-  animation: welcome-rise 820ms var(--welcome-settle) calc(240ms + var(--i) * 42ms) both;
+  animation: welcome-rise 950ms var(--welcome-settle) calc(280ms + var(--i) * 48ms) both;
+}
+
+/* The same letters again, laid exactly over the wordmark, drawn only where
+   a band of light passes: the sheen. */
+.welcome-sheen {
+  position: absolute;
+  inset: 0;
+  color: transparent;
+  background: linear-gradient(100deg, transparent 42%, var(--welcome-glint) 50%, transparent 58%) 95% 0 / 300% 100% no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: welcome-sheen 950ms cubic-bezier(0.45, 0, 0.25, 1) 1180ms both;
+}
+
+.welcome-sheen .welcome-letter {
+  animation: none;
 }
 
 .welcome-date {
@@ -471,7 +669,9 @@
   line-height: 1;
   letter-spacing: 0.06em;
   color: var(--ash-grey);
-  animation: welcome-fade-in 520ms ease-out 480ms both;
+  animation:
+    welcome-date-in 700ms var(--welcome-settle) 520ms both,
+    welcome-lift-down 520ms cubic-bezier(0.4, 0, 0.9, 0.6) var(--welcome-part-at) forwards;
 }
 
 .welcome-date-word {
@@ -487,8 +687,8 @@
 .welcome-digit-strip {
   display: flex;
   flex-direction: column;
-  /* The last digit lands (~1.48s) before the parting starts (1.55s). */
-  animation: welcome-roll 850ms var(--welcome-settle) calc(380ms + var(--i) * 50ms) both;
+  /* The last digit lands (~1.6s) before the doors part (1.85s). */
+  animation: welcome-roll 950ms var(--welcome-settle) calc(420ms + var(--i) * 55ms) both;
 }
 
 .welcome-digit-strip > span {
@@ -497,29 +697,74 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Reduced motion: no rising, rolling or parting. The finished frame shows
-   briefly, then fades. */
+/* The page, uncovered as the doors part. Keyed to the overlay being there,
+   so client-side navigation (which keeps the layout) never replays it. */
+.welcome-stage:has(> .welcome) > main {
+  animation: welcome-page-reveal 1100ms var(--welcome-settle) calc(var(--welcome-part-at) + 60ms) both;
+}
+
+/* A key press: everything leaves now. */
+.welcome[data-phase="leaving"] .welcome-top {
+  animation: welcome-part-up-now 520ms var(--welcome-part) both;
+}
+
+.welcome[data-phase="leaving"] .welcome-bottom {
+  animation: welcome-part-down-now 520ms var(--welcome-part) both;
+}
+
+.welcome[data-phase="leaving"] .welcome-rule,
+.welcome[data-phase="leaving"] .welcome-glow,
+.welcome[data-phase="leaving"] .welcome-wordmark,
+.welcome[data-phase="leaving"] .welcome-date {
+  animation: welcome-fade-out 220ms ease-out both;
+}
+
+.welcome-stage:has(> .welcome[data-phase="leaving"]) > main {
+  animation: welcome-page-reveal-now 620ms var(--welcome-settle) 60ms both;
+}
+
+/* Reduced motion: no rising, rolling, sheen or parting. The finished frame
+   shows briefly, then fades. */
 @media (prefers-reduced-motion: reduce) {
+  .welcome-glow {
+    animation: none;
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
   .welcome-rule {
     animation: none;
     transform: translate(-50%, -50%);
   }
+  .welcome-glint,
+  .welcome-sheen {
+    display: none;
+  }
   .welcome-letter,
-  .welcome-date {
+  .welcome-wordmark,
+  .welcome-date,
+  .welcome-half::before,
+  .welcome-half::after {
     animation: none;
   }
   .welcome-digit-strip {
     animation: none;
     transform: translateY(calc((10 + var(--to)) * -1em));
   }
+  .welcome-stage:has(> .welcome) > main,
+  .welcome-stage:has(> .welcome[data-phase="leaving"]) > main {
+    animation: none;
+  }
+  .welcome,
+  .welcome[data-phase="leaving"] {
+    animation: welcome-fade-out 320ms ease-out 650ms both;
+  }
   .welcome-top,
   .welcome-bottom,
   .welcome[data-phase="leaving"] .welcome-top,
   .welcome[data-phase="leaving"] .welcome-bottom {
-    animation: welcome-fade-out 320ms ease-out 650ms both;
+    animation: none;
   }
-  .welcome[data-phase="leaving"] .welcome-top,
-  .welcome[data-phase="leaving"] .welcome-bottom {
+  .welcome[data-phase="leaving"] {
     animation-delay: 0ms;
   }
 }

@@ -19,12 +19,28 @@ function RollingDigit({ digit, index }: { digit: number; index: number }) {
   );
 }
 
+function Wordmark({ animated }: { animated: boolean }) {
+  return WORDMARK.map((ch, i) => (
+    <span key={i} className="welcome-letter-clip">
+      <span
+        className={i >= ACCENT_FROM && animated ? "welcome-letter text-champagne" : "welcome-letter"}
+        style={{ "--i": i } as React.CSSProperties}
+      >
+        {ch}
+      </span>
+    </span>
+  ));
+}
+
 /**
- * The opening on a full page load: a ledger rule draws across the middle,
- * the wordmark rises out of it, today's date rolls into place below, then
- * the screen parts along the rule like a door. About two seconds; any key
- * or click skips it. Client-side navigation doesn't replay it: this lives in
- * the layout, which stays mounted between pages.
+ * The opening on a full page load: a glow warms up, a ledger rule draws
+ * across the middle with a glint running along it, the wordmark rises out
+ * of it into focus and a sheen crosses it, today's date rolls into place
+ * below, then the screen parts along the rule like two doors and the page
+ * settles in behind. About 2.8 seconds (globals.css, "Welcome", has the
+ * timeline). Clicks don't skip it; a key press does. Client-side
+ * navigation doesn't replay it: this lives in the layout, which stays
+ * mounted between pages.
  *
  * Rendered on the server, so it covers the first paint rather than
  * appearing after the page has flashed. The animation itself is CSS
@@ -37,13 +53,11 @@ export function WelcomeOverlay({ month, day, year }: { month: string; day: strin
   useEffect(() => {
     const skip = () => setPhase((p) => (p === "playing" ? "leaving" : p));
     window.addEventListener("keydown", skip);
-    window.addEventListener("pointerdown", skip);
     // A backstop in case the closing animation's end event never arrives
     // (a tab opened in the background doesn't run animations).
-    const done = window.setTimeout(() => setPhase("gone"), 4000);
+    const done = window.setTimeout(() => setPhase("gone"), 4500);
     return () => {
       window.removeEventListener("keydown", skip);
-      window.removeEventListener("pointerdown", skip);
       window.clearTimeout(done);
     };
   }, []);
@@ -56,19 +70,18 @@ export function WelcomeOverlay({ month, day, year }: { month: string; day: strin
       data-phase={phase}
       aria-hidden
       onAnimationEnd={(e) => {
-        // The bottom half finishing (or, with reduced motion, fading) is the end.
-        if (e.animationName.startsWith("welcome-part-down") || e.animationName === "welcome-fade-out") setPhase("gone");
+        // The bottom door finishing is the end; with reduced motion, the
+        // whole overlay fading (not one of its parts).
+        const whole = e.target === e.currentTarget;
+        if (e.animationName.startsWith("welcome-part-down") || (whole && e.animationName === "welcome-fade-out")) setPhase("gone");
       }}
     >
       <div className="welcome-half welcome-top">
         <p className="welcome-wordmark font-serif">
-          {WORDMARK.map((ch, i) => (
-            <span key={i} className="welcome-letter-clip">
-              <span className={i >= ACCENT_FROM ? "welcome-letter text-champagne" : "welcome-letter"} style={{ "--i": i } as React.CSSProperties}>
-                {ch}
-              </span>
-            </span>
-          ))}
+          <Wordmark animated />
+          <span className="welcome-sheen" aria-hidden>
+            <Wordmark animated={false} />
+          </span>
         </p>
       </div>
       <div className="welcome-half welcome-bottom">
@@ -83,7 +96,10 @@ export function WelcomeOverlay({ month, day, year }: { month: string; day: strin
           ))}
         </p>
       </div>
-      <div className="welcome-rule" />
+      <div className="welcome-glow" />
+      <div className="welcome-rule">
+        <span className="welcome-glint" />
+      </div>
     </div>
   );
 }

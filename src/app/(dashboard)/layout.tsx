@@ -13,7 +13,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", { month: "short" });
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    // welcome-stage: while the welcome overlay is up, <main> settles into
+    // place behind it as it parts (globals.css, "Welcome").
+    <div className="welcome-stage flex min-h-screen flex-col md:flex-row">
       <WelcomeOverlay month={monthName} day={String(Number(day))} year={year} />
       <MobileNav />
       <Sidebar />

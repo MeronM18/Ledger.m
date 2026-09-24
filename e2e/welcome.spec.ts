@@ -13,6 +13,17 @@ test("the welcome animation plays on a full load, clears itself and doesn't repl
   await expect(overlay).toHaveCount(0);
 });
 
+test("a click doesn't skip it or reach the page underneath", async ({ page }) => {
+  await page.goto("/");
+  const overlay = page.locator(".welcome");
+  await expect(overlay).toHaveCount(1);
+  await page.mouse.click(640, 200);
+  await page.waitForTimeout(400);
+  await expect(overlay).toHaveAttribute("data-phase", "playing");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(overlay).toHaveCount(0, { timeout: 6_000 });
+});
+
 test("a key press skips it", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".welcome")).toHaveCount(1);
