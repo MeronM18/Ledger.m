@@ -307,7 +307,8 @@ export default async function AccountsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Room at the right for the alerts bell. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
         <h1 className="font-serif text-2xl font-semibold text-bone">Accounts</h1>
         <div className="flex flex-wrap items-center gap-2">
           <SyncAllButton items={rows.map((item) => ({ id: item.id, institution_name: item.institution_name }))} />

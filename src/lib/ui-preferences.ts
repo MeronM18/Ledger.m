@@ -55,3 +55,13 @@ export const loadImportLog = cache(async function loadImportLog(admin: AdminClie
   if (error) console.error("Failed to load the import log", error);
   return { log: resolveImportLog(data?.value), error: Boolean(error) };
 });
+
+export const ALERTS_SEEN_KEY = "alerts_seen_at";
+
+/** When the alerts bell was last opened (the newest alert it showed), or null if never. */
+export async function loadAlertsSeenAt(admin: AdminClient): Promise<string | null> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", ALERTS_SEEN_KEY).maybeSingle();
+  if (error) console.error("Failed to load when alerts were last seen", error);
+  const parsed = z.string().datetime({ offset: true }).safeParse(data?.value);
+  return parsed.success ? parsed.data : null;
+}
