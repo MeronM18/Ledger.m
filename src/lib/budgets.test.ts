@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  budgetMonth,
+  budgetTips,
+  incomeForMonth,
+  shiftBudgetMonth,
+  typicalIncome,
   BUDGETABLE_CATEGORIES,
   budgetProgress,
   budgetStatus,
@@ -136,5 +141,55 @@ describe("misc", () => {
     for (const excluded of ["INCOME", "TRANSFER_IN", "TRANSFER_OUT", "LOAN_PAYMENTS", "LOAN_DISBURSEMENTS"]) {
       expect(BUDGETABLE_CATEGORIES).not.toContain(excluded);
     }
+  });
+});
+
+describe("budget months, income and tips", () => {
+  it("reads the month from the address, but never one still to come", () => {
+    const today = "2026-09-24";
+    expect(budgetMonth(undefined, today)).toMatchObject({ key: "2026-09", day: 24, days: 30, daysLeft: 6, isCurrent: true });
+    expect(budgetMonth("2026-08", today)).toMatchObject({ key: "2026-08", day: 31, fraction: 1, isPast: true, label: "August 2026" });
+    expect(budgetMonth("2026-12", today).key).toBe("2026-09");
+    expect(budgetMonth("garbage", today).key).toBe("2026-09");
+    expect(shiftBudgetMonth("2026-01", -1)).toBe("2025-12");
+  });
+
+  const tx = (date: string, amount: number, pfc_primary = "INCOME"): SpendingTransaction => ({
+    date,
+    amount,
+    pfc_primary,
+    merchant_name: "Pay",
+    name: null,
+    pending: false,
+  });
+
+  it("takes typical income as the median of the complete months before, ignoring the partial first month", () => {
+    const rows = [
+      tx("2026-03-20", -100), // history starts mid-March: not counted
+      tx("2026-04-15", -3000),
+      tx("2026-05-15", -3200),
+      tx("2026-06-15", -9000), // a bonus month doesn't swing the median
+      tx("2026-07-15", -3100),
+      tx("2026-08-15", -3050),
+      tx("2026-09-15", -3000),
+    ];
+    expect(incomeForMonth(rows, "2026-06")).toBe(9000);
+    expect(typicalIncome(rows, "2026-09")).toBe(3100);
+    expect(typicalIncome([], "2026-09")).toBeNull();
+  });
+
+  it("puts what's over first, then what's on pace to go over, and offers budgets to set", () => {
+    const month = budgetMonth(undefined, "2026-09-20");
+    const progress = [
+      { id: "1", category: "FOOD_AND_DRINK", label: "Food & Drink", colorSlot: 1, budget: 300, spent: 388, remaining: -88, percentUsed: 1.29, status: "over" as const, projected: 580, projectedOver: false },
+      { id: "2", category: "PERSONAL_CARE", label: "Personal Care", colorSlot: 5, budget: 150, spent: 120, remaining: 30, percentUsed: 0.8, status: "warning" as const, projected: 180, projectedOver: true },
+      { id: "3", category: "GENERAL_SERVICES", label: "General Services", colorSlot: 6, budget: 20, spent: 10, remaining: 10, percentUsed: 0.5, status: "ok" as const, projected: 15, projectedOver: false },
+    ];
+    const tips = budgetTips(progress, [{ category: "TRAVEL", label: "Travel", amount: 240 }], { GENERAL_SERVICES: 265, TRAVEL: 200 }, month);
+    // More spent than budgeted overall, so no "a day to stay on budget".
+    expect(tips.map((t) => t.key)).toEqual(["over:FOOD_AND_DRINK", "pace:PERSONAL_CARE", "low:GENERAL_SERVICES", "none:TRAVEL"]);
+    expect(tips[1].body).toContain("$3 a day");
+    expect(tips.find((t) => t.key === "low:GENERAL_SERVICES")?.action).toEqual({ category: "GENERAL_SERVICES", amount: 265, label: "Set to $265" });
+    expect(tips.find((t) => t.key === "none:TRAVEL")?.action?.amount).toBe(200);
   });
 });

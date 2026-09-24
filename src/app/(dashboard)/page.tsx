@@ -31,7 +31,7 @@ import { effectiveNextDate } from "@/lib/subscription-insights";
 import { humanizeTransactionName, streamDisplayName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow } from "@/lib/time";
-import { BudgetBar } from "@/components/budgets-manager";
+import { BudgetBar } from "@/components/budget-bar";
 import { attentionItems } from "@/lib/attention";
 import { isDisconnected } from "@/lib/item-status";
 import { importStatus } from "@/lib/import-reminders";

@@ -1,13 +1,18 @@
-import { BudgetsManager } from "@/components/budgets-manager";
-import { Card, CardContent } from "@/components/ui/card";
-import { Money } from "@/components/money";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { BudgetBoard } from "@/components/budget-board";
 import { QueryErrorState } from "@/components/query-error";
+import { Button } from "@/components/ui/button";
 import {
   BUDGETABLE_CATEGORIES,
+  budgetMonth,
   budgetProgress,
-  budgetTotals,
-  daysInMonth,
+  budgetTips,
+  categoryLabel,
+  incomeForMonth,
+  shiftBudgetMonth,
   suggestBudget,
+  typicalIncome,
   unbudgetedSpending,
   type Budget,
 } from "@/lib/budgets";
@@ -18,12 +23,13 @@ import { calendarNow } from "@/lib/time";
 
 export const metadata = { title: "Budgets" };
 
-export default async function BudgetsPage() {
+export default async function BudgetsPage({ searchParams }: { searchParams: Promise<{ month?: string | string[] }> }) {
   const admin = createAdminClient();
 
-  const [data, { data: budgetRows, error: budgetError }] = await Promise.all([
+  const [data, { data: budgetRows, error: budgetError }, params] = await Promise.all([
     loadSpendingData(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
+    searchParams,
   ]);
 
   if (budgetError) console.error("Failed to load budgets", budgetError);
@@ -43,54 +49,69 @@ export default async function BudgetsPage() {
     monthly_amount: Number(b.monthly_amount),
   }));
 
-  const now = calendarNow();
-  const categoryTotals = categoryTotalsForMonth(data.spending, now.year, now.month);
-  const progress = budgetProgress(categoryTotals, budgets, now);
-  const totals = budgetTotals(progress);
-  const unbudgeted = unbudgetedSpending(categoryTotals, budgets);
+  const today = calendarNow();
+  const month = budgetMonth(typeof params.month === "string" ? params.month : undefined, today.isoDate);
+  const categoryTotals = categoryTotalsForMonth(data.spending, month.year, month.month);
+  const progress = budgetProgress(categoryTotals, budgets, month);
+  const unbudgeted = unbudgetedSpending(categoryTotals, budgets).map((c) => ({ category: c.category, label: c.label, amount: c.amount }));
 
+  // Suggestions look back from the month shown: its three before.
   const suggestions: Record<string, number | null> = {};
   for (const category of BUDGETABLE_CATEGORIES) {
-    suggestions[category] = suggestBudget(data.spending, category, now);
+    suggestions[category] = suggestBudget(data.spending, category, month);
   }
 
-  const dayOfMonth = Number(now.isoDate.slice(8, 10));
-  const daysLeft = daysInMonth(now.year, now.month) - dayOfMonth;
+  const taken = new Set([...budgets.map((b) => b.category), ...unbudgeted.map((u) => u.category)]);
+  const others = BUDGETABLE_CATEGORIES.filter((c) => !taken.has(c)).map((c) => ({ category: c, label: categoryLabel(c) }));
+
+  const income = { typical: typicalIncome(data.all, month.key), actual: incomeForMonth(data.all, month.key) };
+  const tips = budgetTips(progress, unbudgeted, suggestions, month);
+
+  const prev = shiftBudgetMonth(month.key, -1);
+  const next = month.isCurrent ? null : shiftBudgetMonth(month.key, 1);
+  const hrefFor = (key: string) => (key === today.isoDate.slice(0, 7) ? "/budgets" : `/budgets?month=${key}`);
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-bone">Budgets</h1>
+      {/* Room at the right for the alerts bell. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
+        <div className="flex items-baseline gap-4">
+          <h1 className="font-serif text-2xl font-semibold text-bone">Budgets</h1>
+          <span className="text-base text-muted-foreground">{month.label}</span>
+        </div>
+        <nav aria-label="Month" className="flex items-center gap-1.5">
+          <Button asChild size="icon-sm" variant="ghost" aria-label="Previous month">
+            <Link href={hrefFor(prev)}>
+              <ChevronLeft className="size-4" />
+            </Link>
+          </Button>
+          {next ? (
+            <Button asChild size="icon-sm" variant="ghost" aria-label="Next month">
+              <Link href={hrefFor(next)}>
+                <ChevronRight className="size-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button size="icon-sm" variant="ghost" aria-label="Next month" disabled>
+              <ChevronRight className="size-4" />
+            </Button>
+          )}
+          <Button asChild size="sm" variant="outline" className={month.isCurrent ? "pointer-events-none opacity-50" : undefined}>
+            <Link href="/budgets" aria-disabled={month.isCurrent}>
+              Today
+            </Link>
+          </Button>
+        </nav>
+      </div>
 
-      {progress.length > 0 && (
-        <Card>
-          <CardContent className="flex flex-wrap items-end justify-between gap-6">
-            <div>
-              <p className="text-xs text-muted-foreground">{now.monthLabel} · {daysLeft} days left</p>
-              <p className="mt-1 text-sm text-muted-foreground">Budgeted categories</p>
-              <p className="text-2xl font-semibold">
-                <Money amount={totals.spent} currency={data.currency} tone="neutral" />
-                <span className="mx-2 text-base font-normal text-muted-foreground">of</span>
-                <Money amount={totals.budget} currency={data.currency} tone="neutral" />
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-muted-foreground">{totals.remaining >= 0 ? "Left to spend" : "Over budget by"}</p>
-              <Money
-                amount={Math.abs(totals.remaining)}
-                currency={data.currency}
-                tone={totals.remaining >= 0 ? "positive" : "negative"}
-                className="text-2xl font-semibold"
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <BudgetsManager
-        progress={progress}
-        unbudgeted={unbudgeted.map((c) => ({ category: c.category, label: c.label, amount: c.amount }))}
+      <BudgetBoard
+        month={month}
+        income={income}
+        rows={progress}
+        unbudgeted={unbudgeted}
+        others={others}
         suggestions={suggestions}
-        currency={data.currency}
+        tips={tips}
       />
     </div>
   );
