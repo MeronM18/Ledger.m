@@ -124,7 +124,7 @@ function AccountLabel({ t, institutions }: { t: TransactionRow; institutions: Re
   const institution = institutionOf(t, institutions);
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <InstitutionAvatar institution={institution} icon={institution ? undefined : "wallet"} size="sm" />
+      <InstitutionAvatar institution={institution} icon={institution ? undefined : "cash"} size="sm" />
       <span className="truncate">{accountText(t)}</span>
     </span>
   );
