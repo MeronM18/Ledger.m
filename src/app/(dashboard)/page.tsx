@@ -277,7 +277,7 @@ export default async function OverviewPage() {
         <Suspense fallback={<SafeToSpendSkeleton />}>
           <SafeToSpendCard />
         </Suspense>
-        <SpendingPaceCard pace={pace} previousMonthName={previousMonthName} currency={currency} error={spendingError} />
+        <SpendingPaceCard pace={pace} monthRef={{ year: now.year, month: now.month }} previousMonthName={previousMonthName} currency={currency} error={spendingError} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">

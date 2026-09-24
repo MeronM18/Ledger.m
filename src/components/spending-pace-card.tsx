@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
-import type { Pace } from "@/lib/trends";
+import { dailyAverage, type MonthRef, type Pace } from "@/lib/trends";
 import { cn } from "@/lib/utils";
 
 function Bar({ label, amount, max, tone, currency }: { label: string; amount: number; max: number; tone: string; currency: string }) {
@@ -25,15 +25,18 @@ function Bar({ label, amount, max, tone, currency }: { label: string; amount: nu
  */
 export function SpendingPaceCard({
   pace,
+  monthRef,
   previousMonthName,
   currency,
   error,
 }: {
   pace: Pace;
+  monthRef: MonthRef;
   previousMonthName: string;
   currency: string;
   error: boolean;
 }) {
+  const daily = dailyAverage(pace, monthRef);
   const max = Math.max(pace.current, pace.previousSamePoint, 1);
   const less = pace.delta < 0;
 
@@ -77,6 +80,16 @@ export function SpendingPaceCard({
                   than {previousMonthName} at this point.
                 </>
               )}
+            </p>
+            <p className="border-t border-border pt-3 text-sm text-muted-foreground">
+              <span className="font-mono tabular-nums text-foreground">{formatCurrency(daily.current, currency)}</span> a day
+              {daily.previous !== null && (
+                <>
+                  {" "}
+                  vs <span className="font-mono tabular-nums">{formatCurrency(daily.previous, currency)}</span> in {previousMonthName}
+                </>
+              )}
+              {daily.projectedMonthTotal !== null && <>, on pace for {formatCurrency(daily.projectedMonthTotal, currency)} this month</>}
             </p>
           </>
         )}
