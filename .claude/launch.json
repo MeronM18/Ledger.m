@@ -4,8 +4,19 @@
     {
       "name": "ledger-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "ledger-e2e",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "e2e/serve.mjs"
+      ],
+      "port": 3100
     }
   ]
 }
