@@ -3,12 +3,18 @@ import { MobileNav } from "@/components/mobile-nav";
 import { PageTransition } from "@/components/page-transition";
 import { Sidebar } from "@/components/sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { WelcomeOverlay } from "@/components/welcome-overlay";
+import { calendarNow } from "@/lib/time";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   await requireUser();
+  // Today in Eastern time, worked out here so the server and browser agree.
+  const [year, month, day] = calendarNow().isoDate.split("-");
+  const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", { month: "short" });
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
+      <WelcomeOverlay month={monthName} day={String(Number(day))} year={year} />
       <MobileNav />
       <Sidebar />
       {/* min-w-0 lets wide content (tables, charts) shrink instead of

@@ -270,3 +270,232 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Welcome: the opening on a full page load (components/welcome-overlay.tsx).
+   One authored moment in the same language as .animate-entrance: a ledger
+   rule draws across, the wordmark rises out of it, the date rolls in like
+   a counter, then the screen parts along the rule. Transform and opacity
+   only, so it stays smooth on a phone. */
+@keyframes welcome-rule-draw {
+  from {
+    transform: translate(-50%, -50%) scaleX(0);
+  }
+  to {
+    transform: translate(-50%, -50%) scaleX(1);
+  }
+}
+
+@keyframes welcome-rule-out {
+  from {
+    transform: translate(-50%, -50%) scaleX(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate(-50%, -50%) scaleX(1.9);
+    opacity: 0;
+  }
+}
+
+@keyframes welcome-rise {
+  from {
+    transform: translateY(112%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes welcome-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes welcome-roll {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc((10 + var(--to)) * -1em));
+  }
+}
+
+@keyframes welcome-part-up {
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes welcome-part-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+/* Same motion, separate names: a skip restarts the parting right away
+   instead of the running animation jumping to its end. */
+@keyframes welcome-part-up-now {
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes welcome-part-down-now {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes welcome-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+.welcome {
+  --welcome-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --welcome-part: cubic-bezier(0.76, 0, 0.24, 1);
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.welcome-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  background: var(--background);
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.welcome-top {
+  top: 0;
+  /* A pixel of overlap so no seam of the page shows between the halves. */
+  height: calc(50% + 1px);
+  align-items: flex-end;
+  padding-bottom: 0.7rem;
+  animation: welcome-part-up 760ms var(--welcome-part) 1550ms both;
+}
+
+.welcome-bottom {
+  bottom: 0;
+  height: 50%;
+  align-items: flex-start;
+  padding-top: 1.05rem;
+  animation: welcome-part-down 760ms var(--welcome-part) 1550ms both;
+}
+
+.welcome[data-phase="leaving"] .welcome-top {
+  animation: welcome-part-up-now 460ms var(--welcome-part) both;
+}
+
+.welcome[data-phase="leaving"] .welcome-bottom {
+  animation: welcome-part-down-now 460ms var(--welcome-part) both;
+}
+
+.welcome-rule {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(24rem, 74vw);
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--champagne) 18%, var(--champagne) 82%, transparent);
+  transform: translate(-50%, -50%) scaleX(0);
+  animation:
+    welcome-rule-draw 720ms var(--welcome-settle) 60ms both,
+    welcome-rule-out 520ms cubic-bezier(0.7, 0, 0.84, 0) 1480ms forwards;
+}
+
+.welcome[data-phase="leaving"] .welcome-rule {
+  animation: welcome-fade-out 200ms ease-out both;
+}
+
+.welcome-wordmark {
+  font-size: clamp(2.75rem, 10vw, 4.75rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--bone);
+}
+
+/* Each letter rises out of its own clipped box, so it appears to come up
+   out of the rule. The padding keeps the "g" descender inside the clip. */
+.welcome-letter-clip {
+  display: inline-block;
+  overflow: hidden;
+  padding-bottom: 0.2em;
+  margin-bottom: -0.2em;
+  vertical-align: bottom;
+}
+
+.welcome-letter {
+  display: inline-block;
+  animation: welcome-rise 820ms var(--welcome-settle) calc(240ms + var(--i) * 42ms) both;
+}
+
+.welcome-date {
+  display: inline-flex;
+  align-items: flex-start;
+  font-size: 0.8125rem;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--ash-grey);
+  animation: welcome-fade-in 520ms ease-out 480ms both;
+}
+
+.welcome-date-word {
+  white-space: pre;
+}
+
+.welcome-digit {
+  display: inline-block;
+  height: 1em;
+  overflow: hidden;
+}
+
+.welcome-digit-strip {
+  display: flex;
+  flex-direction: column;
+  /* The last digit lands (~1.48s) before the parting starts (1.55s). */
+  animation: welcome-roll 850ms var(--welcome-settle) calc(380ms + var(--i) * 50ms) both;
+}
+
+.welcome-digit-strip > span {
+  display: block;
+  height: 1em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Reduced motion: no rising, rolling or parting. The finished frame shows
+   briefly, then fades. */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-rule {
+    animation: none;
+    transform: translate(-50%, -50%);
+  }
+  .welcome-letter,
+  .welcome-date {
+    animation: none;
+  }
+  .welcome-digit-strip {
+    animation: none;
+    transform: translateY(calc((10 + var(--to)) * -1em));
+  }
+  .welcome-top,
+  .welcome-bottom,
+  .welcome[data-phase="leaving"] .welcome-top,
+  .welcome[data-phase="leaving"] .welcome-bottom {
+    animation: welcome-fade-out 320ms ease-out 650ms both;
+  }
+  .welcome[data-phase="leaving"] .welcome-top,
+  .welcome[data-phase="leaving"] .welcome-bottom {
+    animation-delay: 0ms;
+  }
+}
