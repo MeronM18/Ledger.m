@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cashFlowReport, detailedLabel, monthlyCashFlow, monthsFor, squarify } from "@/lib/cash-flow-report";
+import { cashFlowReport, cashFlowSeries, detailedLabel, squarify } from "@/lib/cash-flow-report";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 
 const tx = (o: Partial<SpendingTransaction>): SpendingTransaction => ({
@@ -89,27 +89,32 @@ describe("squarify", () => {
   });
 });
 
-describe("monthlyCashFlow", () => {
-  it("charts a short period's trailing year, and a long one's own months", () => {
-    expect(monthsFor({ start: "2026-09-01", end: "2026-09-30" }, "2026-09-24", "2024-01-05")).toHaveLength(12);
-    expect(monthsFor({ start: "2026-01-01", end: "2026-12-31" }, "2026-09-24", "2024-01-05")).toEqual([
-      "2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09",
-    ]);
-    // Never before there's any history.
-    expect(monthsFor({ start: "2026-09-01", end: "2026-09-30" }, "2026-09-24", "2026-07-10")).toEqual(["2026-07", "2026-08", "2026-09"]);
+describe("cashFlowSeries", () => {
+  const rows = [
+    tx({ date: "2026-08-15", amount: -3000, pfc_primary: "INCOME", pfc_detailed: "INCOME_WAGES" }),
+    tx({ date: "2026-08-20", amount: 100 }),
+    tx({ date: "2026-08-21", amount: 1850, pfc_primary: "RENT_AND_UTILITIES", pfc_detailed: "RENT_AND_UTILITIES_RENT" }),
+    tx({ date: "2026-09-02", amount: 40 }),
+    tx({ date: "2026-09-03", amount: 500, pfc_primary: "TRANSFER_OUT" }),
+    tx({ date: "2026-09-15", amount: -3000, pfc_primary: "INCOME", pfc_detailed: "INCOME_WAGES" }),
+  ];
+
+  it("goes day by day through this month, only up to today, and keeps a running total", () => {
+    const r = cashFlowSeries(rows, [], { start: "2026-09-01", end: "2026-09-30" }, "2026-09-24", "2026-08-01");
+    expect(r.granularity).toBe("day");
+    expect(r.buckets).toHaveLength(24);
+    expect(r.buckets[0]).toMatchObject({ key: "2026-09-01", label: "Sep 1", income: 0, expenses: 0 });
+    expect(r.buckets[1]).toMatchObject({ key: "2026-09-02", expenses: 40, keptSoFar: -40 });
+    expect(r.buckets[14]).toMatchObject({ key: "2026-09-15", income: 3000, keptSoFar: 2960 });
+    // Nothing from August, and a transfer isn't spending.
+    expect(r.buckets.reduce((s, b) => s + b.expenses, 0)).toBe(40);
   });
 
-  it("totals each month's income and stacks its spending by category", () => {
-    const rows = [
-      tx({ date: "2026-08-15", amount: -3000, pfc_primary: "INCOME", pfc_detailed: "INCOME_WAGES" }),
-      tx({ date: "2026-08-20", amount: 100 }),
-      tx({ date: "2026-08-21", amount: 1850, pfc_primary: "RENT_AND_UTILITIES", pfc_detailed: "RENT_AND_UTILITIES_RENT" }),
-      tx({ date: "2026-09-02", amount: 40 }),
-      tx({ date: "2026-09-03", amount: 500, pfc_primary: "TRANSFER_OUT" }),
-    ];
-    const r = monthlyCashFlow(rows, [], ["2026-08", "2026-09"]);
+  it("goes month by month through a longer period", () => {
+    const r = cashFlowSeries(rows, [], { start: "2026-01-01", end: "2026-12-31" }, "2026-09-24", "2026-08-01");
+    expect(r.granularity).toBe("month");
+    expect(r.buckets.map((b) => b.key)).toEqual(["2026-01", "2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]);
+    expect(r.buckets[7]).toMatchObject({ income: 3000, expenses: 1950, byCategory: { RENT_AND_UTILITIES: 1850, FOOD_AND_DRINK: 100 }, keptSoFar: 1050 });
     expect(r.series.map((s) => s.label)).toEqual(["Rent & Utilities", "Food & Drink"]);
-    expect(r.months[0]).toMatchObject({ month: "2026-08", income: 3000, expenses: 1950, byCategory: { RENT_AND_UTILITIES: 1850, FOOD_AND_DRINK: 100 } });
-    expect(r.months[1]).toMatchObject({ income: 0, expenses: 40 });
   });
 });

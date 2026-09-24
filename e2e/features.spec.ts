@@ -57,7 +57,7 @@ test("reports: cash flow shows where the money came from and went", async ({ pag
   await page.getByRole("radio", { name: "Treemap" }).click();
   await expect(page.getByRole("img", { name: "Where your money went, as tiles" })).toBeVisible();
   await expect(page.getByText(/Each tile is as big as its share of your income/)).toBeVisible();
-  await page.getByRole("radio", { name: "Monthly bars" }).click();
+  await page.getByRole("radio", { name: "Over time" }).click();
   await expect(page.locator(".recharts-bar-rectangle").first()).toBeVisible();
   await expect(page.getByText("Income", { exact: true }).last()).toBeVisible();
 });

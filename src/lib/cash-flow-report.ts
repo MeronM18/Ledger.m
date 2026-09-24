@@ -245,64 +245,79 @@ export function squarify(values: number[], box: Rect): Rect[] {
   return out;
 }
 
-// ---- Monthly ----------------------------------------------------------------
+// ---- Over time --------------------------------------------------------------
 
-export type MonthColumn = {
-  month: string; // YYYY-MM
-  label: string; // "Sep '26"
+export type FlowBucket = {
+  key: string; // YYYY-MM-DD for a day, YYYY-MM for a month
+  label: string; // "Sep 3" or "Sep '26"
   income: number;
   expenses: number;
   // Spending by category key (the largest few, the rest under "__rest__").
   byCategory: Record<string, number>;
+  // Income less spending from the start of the period through this bucket.
+  keptSoFar: number;
 };
 
-export type MonthlyCashFlow = {
-  months: MonthColumn[];
-  // The categories stacked, bottom to top, with their labels and colors.
+export type CashFlowSeries = {
+  granularity: "day" | "month";
+  buckets: FlowBucket[];
+  // The categories stacked, largest first, with their labels and colors.
   series: { key: string; label: string; color: string }[];
 };
 
 const MAX_SERIES = 7;
+const DAILY_UP_TO = 62; // days; a longer period goes by month
 
-/** The months to chart for a period: its own months when it spans half a year or more, else the 12 ending with it. */
-export function monthsFor(range: DateRange, todayIso: string, earliest: string | null): string[] {
-  const endIso = range.end && range.end < todayIso ? range.end : todayIso;
-  const startIso = range.start ?? earliest ?? endIso;
-  const toIndex = (iso: string) => Number(iso.slice(0, 4)) * 12 + Number(iso.slice(5, 7)) - 1;
-  const end = toIndex(endIso);
-  let start = toIndex(startIso);
-  if (end - start + 1 < 6) start = end - 11;
-  start = Math.max(start, end - 35, earliest ? toIndex(earliest) : start);
-  const out: string[] = [];
-  for (let m = start; m <= end; m++) out.push(`${Math.floor(m / 12)}-${String((m % 12) + 1).padStart(2, "0")}`);
-  return out;
+function isoAddDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
-/** Each month's income and its spending by category, for the stacked bars. */
-export function monthlyCashFlow(
+/**
+ * The period's money in and out over time: a day at a time for a period up
+ * to two months long, else a month at a time, from its start to its end (or
+ * today, if it hasn't ended). Every bucket is there, empty ones included, so
+ * the time axis is even.
+ */
+export function cashFlowSeries(
   transactions: SpendingTransaction[],
   connectedCardIssuers: string[],
-  months: string[]
-): MonthlyCashFlow {
-  const wanted = new Set(months);
-  const income = new Map<string, number>();
-  for (const t of transactions) {
-    const m = t.date.slice(0, 7);
-    if (!wanted.has(m) || t.pending || effectiveCategory(t) !== "INCOME") continue;
-    income.set(m, (income.get(m) ?? 0) - t.amount);
+  range: DateRange,
+  todayIso: string,
+  earliest: string | null
+): CashFlowSeries {
+  const end = range.end && range.end < todayIso ? range.end : todayIso;
+  const start = range.start ?? earliest ?? end;
+  const days = Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000) + 1;
+  const granularity: "day" | "month" = days <= DAILY_UP_TO ? "day" : "month";
+  const bucketOf = (date: string) => (granularity === "day" ? date : date.slice(0, 7));
+
+  const keys: string[] = [];
+  if (granularity === "day") {
+    for (let d = start; d <= end; d = isoAddDays(d, 1)) keys.push(d);
+  } else {
+    for (let m = start.slice(0, 7); m <= end.slice(0, 7); ) {
+      keys.push(m);
+      const [y, mo] = m.split("-").map(Number);
+      m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
+    }
   }
-  const spending = filterSpendingTransactions(
-    transactions.filter((t) => wanted.has(t.date.slice(0, 7))),
-    connectedCardIssuers
-  );
+
+  const inPeriod = transactions.filter((t) => t.date >= start && t.date <= end);
+  const income = new Map<string, number>();
+  for (const t of inPeriod) {
+    if (t.pending || effectiveCategory(t) !== "INCOME") continue;
+    income.set(bucketOf(t.date), (income.get(bucketOf(t.date)) ?? 0) - t.amount);
+  }
   const cells = new Map<string, Map<string, number>>();
   const totals = new Map<string, number>();
-  for (const t of spending) {
-    const m = t.date.slice(0, 7);
+  for (const t of filterSpendingTransactions(inPeriod, connectedCardIssuers)) {
+    const b = bucketOf(t.date);
     const key = displayCategoryKey(t);
-    const row = cells.get(m) ?? new Map<string, number>();
+    const row = cells.get(b) ?? new Map<string, number>();
     row.set(key, (row.get(key) ?? 0) + t.amount);
-    cells.set(m, row);
+    cells.set(b, row);
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }
   const ranked = Array.from(totals)
@@ -312,7 +327,35 @@ export function monthlyCashFlow(
   const shown = ranked.length > MAX_SERIES ? ranked.slice(0, MAX_SERIES - 1) : ranked;
   const hasRest = ranked.length > shown.length;
 
+  let kept = 0;
+  const buckets = keys.map((key) => {
+    const row = cells.get(key) ?? new Map<string, number>();
+    const byCategory: Record<string, number> = {};
+    for (const [cat, value] of row) {
+      // A bucket where refunds outweigh a category's charges draws nothing for it.
+      if (value <= 0) continue;
+      const into = shown.includes(cat) ? cat : "__rest__";
+      byCategory[into] = round((byCategory[into] ?? 0) + value);
+    }
+    const expenses = round(Array.from(row.values()).reduce((s, v) => s + v, 0));
+    const inc = round(Math.max(0, income.get(key) ?? 0));
+    kept = round(kept + inc - expenses);
+    return {
+      key,
+      label:
+        granularity === "day"
+          ? new Date(`${key}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+          : new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " '"),
+      income: inc,
+      expenses,
+      byCategory,
+      keptSoFar: kept,
+    };
+  });
+
   return {
+    granularity,
+    buckets,
     series: [
       ...shown.map((key) => ({
         key,
@@ -321,23 +364,5 @@ export function monthlyCashFlow(
       })),
       ...(hasRest ? [{ key: "__rest__", label: "Everything else", color: `var(--viz-${OTHER_CATEGORY_COLOR_SLOT})` }] : []),
     ],
-    months: months.map((m) => {
-      const row = cells.get(m) ?? new Map<string, number>();
-      const byCategory: Record<string, number> = {};
-      for (const [key, value] of row) {
-        // A month where refunds outweigh a category's charges draws nothing for it.
-        if (value <= 0) continue;
-        const into = shown.includes(key) ? key : "__rest__";
-        byCategory[into] = round((byCategory[into] ?? 0) + value);
-      }
-      const expenses = round(Array.from(row.values()).reduce((s, v) => s + v, 0));
-      return {
-        month: m,
-        label: new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }).replace(" ", " '"),
-        income: round(Math.max(0, income.get(m) ?? 0)),
-        expenses,
-        byCategory,
-      };
-    }),
   };
 }

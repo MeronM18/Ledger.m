@@ -2,20 +2,19 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { CalendarDays, ChartColumnStacked, LayoutDashboard } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   cashFlowReport,
-  monthlyCashFlow,
-  monthsFor,
+  cashFlowSeries,
   squarify,
   treemapTiles,
   type CashFlowReport,
   type Flow,
   type FlowNode,
-  type MonthColumn,
-  type MonthlyCashFlow,
+  type CashFlowSeries,
+  type FlowBucket,
 } from "@/lib/cash-flow-report";
 import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
@@ -396,34 +395,55 @@ function truncate(text: string, width: number, perChar: number): string {
   return text.length <= max ? text : `${text.slice(0, Math.max(1, max - 1))}…`;
 }
 
-// ---- Monthly bars -----------------------------------------------------------
+// ---- Over time --------------------------------------------------------------
 
-function MonthlyTooltip({ active, payload, series }: { active?: boolean; payload?: { payload: MonthColumn }[]; series: MonthlyCashFlow["series"] }) {
+// Money in wears income's green, as on the cards above (the sky blue is Travel's).
+const IN_COLOR = "var(--cat-income)";
+const KEPT_COLOR = "var(--champagne)";
+
+function OverTimeTooltip({
+  active,
+  payload,
+  data,
+}: {
+  active?: boolean;
+  payload?: { payload: FlowBucket }[];
+  data: CashFlowSeries;
+}) {
   if (!active || !payload?.[0]) return null;
-  const m = payload[0].payload;
-  const net = m.income - m.expenses;
-  const parts = series.filter((s) => (m.byCategory[s.key] ?? 0) > 0).sort((a, b) => (m.byCategory[b.key] ?? 0) - (m.byCategory[a.key] ?? 0));
+  const b = payload[0].payload;
+  const parts = data.series.filter((s) => (b.byCategory[s.key] ?? 0) > 0).sort((x, y) => (b.byCategory[y.key] ?? 0) - (b.byCategory[x.key] ?? 0));
+  const when =
+    data.granularity === "day"
+      ? new Date(`${b.key}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "short", month: "long", day: "numeric", timeZone: "UTC" })
+      : new Date(`${b.key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
   return (
-    <div className="min-w-52 rounded-md border border-border bg-popover p-3 text-xs shadow-lg">
-      <p className="mb-2 font-medium text-bone">{new Date(`${m.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}</p>
+    <div className="min-w-56 rounded-md border border-border bg-popover p-3 text-xs shadow-lg">
+      <p className="mb-2 font-medium text-bone">{when}</p>
       <div className="flex flex-col gap-1">
-        <Row label="Income" value={m.income} className="text-moss" />
-        <Row label="Expenses" value={m.expenses} className="text-oxblood-text" />
-        <Row label={net >= 0 ? "Kept" : "Short"} value={Math.abs(net)} className="font-semibold text-bone" />
+        <Row label="Money in" value={b.income} className="text-[var(--cat-income)]" />
+        <Row label="Money out" value={b.expenses} className="text-bone" />
       </div>
       {parts.length > 0 && (
         <div className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
-          {parts.map((s) => (
-            <div key={s.key} className="flex items-center justify-between gap-4">
+          {parts.map((sr) => (
+            <div key={sr.key} className="flex items-center justify-between gap-4">
               <span className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
-                {s.label}
+                <span className="size-2 rounded-full" style={{ backgroundColor: sr.color }} />
+                {sr.label}
               </span>
-              <span className="font-mono text-bone tabular-nums">{formatCurrency(m.byCategory[s.key], "USD")}</span>
+              <span className="font-mono text-bone tabular-nums">{formatCurrency(b.byCategory[sr.key], "USD")}</span>
             </div>
           ))}
         </div>
       )}
+      <div className="mt-2 flex items-center justify-between gap-4 border-t border-border pt-2">
+        <span className="text-muted-foreground">Kept so far</span>
+        <span className={cn("font-mono font-semibold tabular-nums", b.keptSoFar < 0 ? "text-oxblood-text" : "text-champagne")}>
+          {b.keptSoFar < 0 ? "−" : ""}
+          {formatCurrency(Math.abs(b.keptSoFar), "USD")}
+        </span>
+      </div>
     </div>
   );
 }
@@ -437,57 +457,88 @@ function Row({ label, value, className }: { label: string; value: number; classN
   );
 }
 
-function MonthlyBars({ data }: { data: MonthlyCashFlow }) {
-  const rows = data.months.map((m) => ({ ...m, ...Object.fromEntries(data.series.map((s) => [s.key, m.byCategory[s.key] ?? 0])) }));
-  const top = data.series.at(-1)?.key;
+/**
+ * When money came in and went out: money in above the line, spending below
+ * it stacked by category, and a line for what's been kept so far in the
+ * period. A day at a time for up to two months, else a month at a time.
+ */
+function OverTime({ data }: { data: CashFlowSeries }) {
+  const rows = data.buckets.map((b) => ({
+    ...b,
+    moneyIn: b.income,
+    ...Object.fromEntries(data.series.map((sr) => [sr.key, -(b.byCategory[sr.key] ?? 0)])),
+  }));
+  const bottom = data.series.at(-1)?.key;
+  const daily = data.granularity === "day";
   return (
     <div className="flex flex-col gap-3">
-      <ResponsiveContainer {...CHART_RESIZE} width="100%" height={380}>
-        <ComposedChart data={rows} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barCategoryGap="22%">
+      <ResponsiveContainer {...CHART_RESIZE} width="100%" height={400}>
+        <ComposedChart data={rows} stackOffset="sign" margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barCategoryGap={daily ? "22%" : "28%"}>
           <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
-          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} minTickGap={daily ? 18 : 8} />
           <YAxis
-            tickFormatter={(v: number) => formatCompactCurrency(v, "USD")}
+            yAxisId="flow"
+            tickFormatter={(v: number) => (v < 0 ? `−${formatCompactCurrency(-v, "USD")}` : formatCompactCurrency(v, "USD"))}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             axisLine={false}
             tickLine={false}
-            width={52}
+            width={56}
           />
-          <Tooltip {...chartTooltipProps} cursor={{ fill: "var(--muted)", opacity: 0.5 }} content={<MonthlyTooltip series={data.series} />} />
-          {data.series.map((s) => (
+          {/* What's been kept runs on its own scale, at the right, so a year's total doesn't flatten the bars. */}
+          <YAxis
+            yAxisId="kept"
+            orientation="right"
+            tickFormatter={(v: number) => (v < 0 ? `−${formatCompactCurrency(-v, "USD")}` : formatCompactCurrency(v, "USD"))}
+            tick={{ fontSize: 11, fill: KEPT_COLOR }}
+            axisLine={false}
+            tickLine={false}
+            width={56}
+          />
+          <ReferenceLine yAxisId="flow" y={0} stroke="var(--ash-grey)" strokeOpacity={0.5} />
+          <Tooltip {...chartTooltipProps} cursor={{ fill: "var(--muted)", opacity: 0.45 }} content={<OverTimeTooltip data={data} />} />
+          <Bar yAxisId="flow" dataKey="moneyIn" name="Money in" stackId="flow" fill={IN_COLOR} fillOpacity={0.85} radius={[3, 3, 0, 0]} maxBarSize={daily ? 22 : 44} isAnimationActive={false} />
+          {data.series.map((sr) => (
             <Bar
-              key={s.key}
-              dataKey={s.key}
-              stackId="spent"
-              fill={s.color}
-              fillOpacity={0.88}
-              radius={s.key === top ? [4, 4, 0, 0] : 0}
-              maxBarSize={44}
+              key={sr.key}
+              yAxisId="flow"
+              dataKey={sr.key}
+              name={sr.label}
+              stackId="flow"
+              fill={sr.color}
+              fillOpacity={0.85}
+              radius={sr.key === bottom ? [0, 0, 3, 3] : 0}
+              maxBarSize={daily ? 22 : 44}
               isAnimationActive={false}
             />
           ))}
           <Line
-            dataKey="income"
-            type="linear"
-            stroke="var(--cat-travel)"
+            yAxisId="kept"
+            dataKey="keptSoFar"
+            name="Kept so far"
+            type={daily ? "stepAfter" : "linear"}
+            stroke={KEPT_COLOR}
             strokeWidth={2}
-            dot={{ r: 3, fill: "var(--card)", stroke: "var(--cat-travel)", strokeWidth: 2 }}
-            activeDot={{ r: 4.5 }}
+            dot={daily ? false : { r: 3, fill: "var(--card)", stroke: KEPT_COLOR, strokeWidth: 2 }}
+            activeDot={{ r: 4, fill: KEPT_COLOR }}
             isAnimationActive={false}
           />
         </ComposedChart>
       </ResponsiveContainer>
       <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <li className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4 rounded-full bg-[var(--cat-travel)]" />
-          Income
+          <span className="size-2 rounded-sm" style={{ backgroundColor: IN_COLOR }} />
+          Money in
         </li>
-        {data.series.map((s) => (
-          <li key={s.key} className="flex items-center gap-1.5">
-            <span className="size-2 rounded-sm" style={{ backgroundColor: s.color }} />
-            {s.label}
+        {data.series.map((sr) => (
+          <li key={sr.key} className="flex items-center gap-1.5">
+            <span className="size-2 rounded-sm" style={{ backgroundColor: sr.color }} />
+            {sr.label}
           </li>
         ))}
+        <li className="flex items-center gap-1.5">
+          <span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: KEPT_COLOR }} />
+          Kept so far (right scale)
+        </li>
       </ul>
     </div>
   );
@@ -520,8 +571,8 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
   }, [transactions]);
   const earliest = months.length > 0 ? `${months[months.length - 1].value}-01` : null;
   const base = report.nodes.find((n) => n.id === "income")?.amount ?? 0;
-  const monthly = useMemo(
-    () => (chart === "bars" ? monthlyCashFlow(transactions, connectedCardIssuers, monthsFor(range, today, earliest)) : null),
+  const overTime = useMemo(
+    () => (chart === "bars" ? cashFlowSeries(transactions, connectedCardIssuers, range, today, earliest) : null),
     [chart, transactions, connectedCardIssuers, range, today, earliest]
   );
 
@@ -565,18 +616,14 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">Cash flow</p>
-            <p className="text-base font-medium text-bone">
-              {chart === "bars" && monthly && monthly.months.length > 0
-                ? rangeLabel({ start: `${monthly.months[0].month}-01`, end: null }, today, earliest)
-                : rangeLabel(range, today, earliest)}
-            </p>
+            <p className="text-base font-medium text-bone">{rangeLabel(range, today, earliest)}</p>
           </div>
           <div role="radiogroup" aria-label="Chart" className="flex rounded-md border border-border p-0.5">
             {(
               [
                 { value: "flow", label: "Flow", icon: <FlowIcon className="size-3.5" /> },
                 { value: "treemap", label: "Treemap", icon: <LayoutDashboard className="size-3.5" /> },
-                { value: "bars", label: "Monthly bars", icon: <ChartColumnStacked className="size-3.5" /> },
+                { value: "bars", label: "Over time", icon: <ChartColumnStacked className="size-3.5" /> },
               ] as const
             ).map((o) => (
               <button
@@ -598,8 +645,8 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
           </div>
         </CardHeader>
         <CardContent>
-          {chart === "bars" && monthly ? (
-            <MonthlyBars data={monthly} />
+          {chart === "bars" && overTime ? (
+            <OverTime data={overTime} />
           ) : report.nodes.length === 0 ? (
             <p className="py-16 text-center text-sm text-muted-foreground">Nothing came in or went out in this period.</p>
           ) : chart === "treemap" ? (
@@ -611,7 +658,10 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
             Income is money in marked as income. Expenses count the way Spending and Budgets do: posted charges, net of
             refunds, your share of anything paid back. Transfers between your own accounts are left out.
             {chart === "flow" && " Point at a bar to follow its money."}
-            {chart === "bars" && " Months before the period show when it's shorter than half a year, for context."}
+            {chart === "bars" &&
+              (overTime?.granularity === "day"
+                ? " One bar a day: money in above the line, spending below it by category. The line is what you've kept so far this period."
+                : " One bar a month: money in above the line, spending below it by category. The line is what you've kept so far this period.")}
           </p>
         </CardContent>
       </Card>
