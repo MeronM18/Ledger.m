@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { ArrowRight, Store } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { TransactionAvatar } from "@/components/transaction-avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AttentionCard } from "@/components/attention-card";
@@ -439,18 +440,7 @@ export default async function OverviewPage() {
                     className="flex items-center justify-between gap-3 border-t border-border py-3 first:border-t-0 first:pt-0"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      {t.logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- external Plaid-hosted logo, small avatar, not worth next/image config for a single-user app
-                        <img
-                          src={t.logo_url}
-                          alt=""
-                          className="size-6 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          <Store className="size-3.5" />
-                        </span>
-                      )}
+                      <TransactionAvatar transaction={t} />
                       <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
                         <span className="truncate">{merchant}</span>
                         {t.isManual && (

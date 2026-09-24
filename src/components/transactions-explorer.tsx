@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, Download, StickyNote, Store } from "lucide-react";
+import { ArrowDown, ArrowUp, Download, StickyNote } from "lucide-react";
+import { TransactionAvatar } from "@/components/transaction-avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
@@ -233,18 +234,7 @@ export function TransactionsExplorer({
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
-                      {t.logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- external Plaid-hosted logo, small avatar, not worth next/image config for a single-user app
-                        <img
-                          src={t.logo_url}
-                          alt=""
-                          className="size-6 shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                          <Store className="size-3.5" />
-                        </span>
-                      )}
+                      <TransactionAvatar transaction={t} />
                       <span className="flex min-w-0 flex-col gap-0.5">
                       <span className="flex flex-wrap items-center gap-2">
                         {displayName}
