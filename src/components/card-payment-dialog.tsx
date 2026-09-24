@@ -62,8 +62,8 @@ export function CardPaymentButton({ payment, transactions, cards }: { payment: C
   }, [open, payment, cards, transactions, picked]);
 
   const breakdown = useMemo(
-    () => (resolved ? breakdownForPayment(resolved.card, resolved.date, transactions) : null),
-    [resolved, transactions]
+    () => (resolved ? breakdownForPayment(resolved.card, resolved.date, transactions, payment) : null),
+    [resolved, transactions, payment]
   );
   const amount = Math.abs(payment.amount);
   const difference = breakdown ? Math.round((breakdown.paid - breakdown.total) * 100) / 100 : 0;
@@ -154,6 +154,11 @@ export function CardPaymentButton({ payment, transactions, cards }: { payment: C
                 {breakdown.charges.length} {breakdown.charges.length === 1 ? "charge" : "charges"} on this statement
               </p>
               {breakdown.charges.length === 0 && <p className="text-sm text-muted-foreground">Nothing was charged in this period.</p>}
+              {breakdown.byCategory.length > 1 && (
+                <p className="pb-2 text-xs text-muted-foreground">
+                  {breakdown.byCategory.map((c) => `${humanizeCategory(c.category)} ${formatCurrency(c.amount, "USD")}`).join(" · ")}
+                </p>
+              )}
               {breakdown.charges.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-3 border-t border-border py-2 text-sm">
                   <div className="min-w-0">

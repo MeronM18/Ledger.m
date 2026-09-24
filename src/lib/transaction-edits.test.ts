@@ -88,6 +88,14 @@ describe("edits flow through the display and aggregation layers", () => {
     expect(effectiveCategory({ ...paypal, category_override: "ENTERTAINMENT" })).toBe("ENTERTAINMENT");
   });
 
+  it("a card's payment Plaid filed as Loan Disbursements shows as Loan Payments", () => {
+    const chase = { name: "Payment Thank You-Mobile", merchant_name: null, pfc_primary: "LOAN_DISBURSEMENTS", amount: -785.41 };
+    expect(effectiveCategory(chase)).toBe("LOAN_PAYMENTS");
+    expect(effectiveCategory({ ...chase, name: "AUTOMATIC PAYMENT - THANK YOU", pfc_primary: "TRANSFER_IN" })).toBe("TRANSFER_IN");
+    expect(effectiveCategory({ ...chase, amount: 785.41 })).toBe("LOAN_DISBURSEMENTS");
+    expect(effectiveCategory({ ...chase, category_override: "INCOME" })).toBe("INCOME");
+  });
+
   it("a rename shows as the display name", () => {
     const [row] = applyEditsToAll([tx()], new Map(), [rule({ match_text: "amazon", rename_to: "Amazon Shopping" })]);
     expect(humanizeTransactionName({ ...row, amount: 5 })).toBe("Amazon Shopping");

@@ -93,3 +93,42 @@ describe("cardForBankPayment", () => {
     expect(cardForBankPayment({ ...fromChecking, amount: 12 }, [flex, sapphire], txs)).toBeNull();
   });
 });
+
+describe("Chase's card-side payments, filed by Plaid as Loan Disbursements", () => {
+  // As Plaid sends them: no merchant, the raw description, LOAN_DISBURSEMENTS.
+  const chasePay = (account: string, date: string, amount: number) =>
+    tx(account, date, -amount, { pfc_primary: "LOAN_DISBURSEMENTS", pfc_detailed: "LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT", merchant_name: null, name: "Payment Thank You-Mobile" });
+  const fromChecking = (date: string, amount: number) =>
+    tx("checking", date, amount, { pfc_primary: "LOAN_PAYMENTS", pfc_detailed: "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", merchant_name: "Chase Credit Card" });
+
+  const txs = [
+    tx("sapphire", "2026-08-10", 300),
+    tx("sapphire", "2026-08-20", 150, { pfc_primary: "GENERAL_MERCHANDISE" }),
+    chasePay("sapphire", "2026-08-16", 7941.38), // paid the statement before
+    chasePay("sapphire", "2026-09-21", 450),
+  ];
+  const card = { ...sapphire, closeDay: 29 };
+
+  it("counts them as payments, not charges", () => {
+    const b = breakdownForPayment(card, "2026-09-21", txs)!;
+    expect(b.charges.map((c) => c.amount)).toEqual([150, 300]);
+    expect(b).toMatchObject({ total: 450, paid: 450 });
+  });
+
+  it("matches the checking side of the payment to the card", () => {
+    expect(cardForBankPayment(fromChecking("2026-09-21", 450), [flex, card], txs)?.card.id).toBe("sapphire");
+  });
+
+  it("counts the payment you clicked when the card's copy isn't there, and only once when it is", () => {
+    const withoutCardSide = txs.filter((t) => t.date !== "2026-09-21");
+    expect(breakdownForPayment(card, "2026-09-21", withoutCardSide, fromChecking("2026-09-21", 450))!.paid).toBe(450);
+    expect(breakdownForPayment(card, "2026-09-21", txs, fromChecking("2026-09-20", 450))!.paid).toBe(450);
+  });
+
+  it("sums the statement by category, largest first", () => {
+    expect(breakdownForPayment(card, "2026-09-21", txs)!.byCategory).toEqual([
+      { category: "FOOD_AND_DRINK", amount: 300 },
+      { category: "GENERAL_MERCHANDISE", amount: 150 },
+    ]);
+  });
+});

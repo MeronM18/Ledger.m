@@ -171,12 +171,28 @@ export function humanizeTransactionName(tx: NameableTransaction): string {
 // PayPal-transfer-tagged-LOAN_DISBURSEMENTS case found in the live audit.
 const ALREADY_SENSIBLE_FOR_SERVICE = new Set(["TRANSFER_IN", "TRANSFER_OUT", "INCOME"]);
 
+// A payment as the credit card sees it ("Payment Thank You-Mobile",
+// "AUTOMATIC PAYMENT - THANK YOU"). Plaid files Chase's under
+// LOAN_DISBURSEMENTS, as if the card had lent you money.
+const CARD_PAYMENT_CREDIT = /\bpayment\b.*\bthank\s*you\b|^automatic payment - thank/i;
+const ALREADY_SENSIBLE_FOR_CARD_PAYMENT = new Set(["LOAN_PAYMENTS", "TRANSFER_IN", "TRANSFER"]);
+
+/** Money onto a card whose description says it's a payment. */
+export function isCardPaymentByName(tx: NameableTransaction): boolean {
+  return tx.amount < 0 && CARD_PAYMENT_CREDIT.test(`${tx.name ?? ""} ${tx.merchant_name ?? ""}`);
+}
+
 /**
  * Display-category override. Returns null when Plaid's own pfc_primary
- * should stand as-is — this is deliberately narrow (payroll and detected
- * P2P transfer patterns only), not a general "second-guess Plaid" layer.
+ * should stand as-is — this is deliberately narrow (payroll, detected
+ * P2P transfer patterns and card payments only), not a general
+ * "second-guess Plaid" layer.
  */
 export function overrideCategory(tx: DisplayableTransaction): string | null {
+  if (isCardPaymentByName(tx)) {
+    return tx.pfc_primary && ALREADY_SENSIBLE_FOR_CARD_PAYMENT.has(tx.pfc_primary) ? null : "LOAN_PAYMENTS";
+  }
+
   const raw = (tx.name ?? "").trim();
   if (!raw) return null;
 

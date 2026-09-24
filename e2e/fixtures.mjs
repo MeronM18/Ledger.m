@@ -102,7 +102,8 @@ export function buildFixtures(now = new Date()) {
     // The card payment, seen from checking and (a day later) on the card.
     const cardPayment = 780 + between(0, 260);
     tx(at(20), IDS.checking, cardPayment, "CHASE CREDIT CRD AUTOPAY", "Chase", "LOAN_PAYMENTS", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT");
-    tx(at(21), IDS.freedom, -cardPayment, "Payment Thank You-Mobile", null, "LOAN_PAYMENTS", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT");
+    // Plaid files Chase's side of a card payment under Loan Disbursements.
+    tx(at(21), IDS.freedom, -cardPayment, "Payment Thank You-Mobile", null, "LOAN_DISBURSEMENTS", "LOAN_DISBURSEMENTS_OTHER_DISBURSEMENT");
     if (m % 3 === 1) tx(at(11), IDS.freedom, between(30, 95), "CVS PHARMACY", "CVS Pharmacy", "MEDICAL", "MEDICAL_PHARMACIES_AND_SUPPLEMENTS");
     if (m % 6 === 4) tx(at(3), IDS.checking, 100, "AMERICAN RED CROSS", "American Red Cross", "GOVERNMENT_AND_NON_PROFIT", "GOVERNMENT_AND_NON_PROFIT_DONATIONS");
 

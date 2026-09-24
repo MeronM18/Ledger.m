@@ -26,6 +26,8 @@ export type CloseDaySource = "set" | "month-end" | "payments" | "due-date";
 const DAY_MS = 86_400_000;
 const toDay = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / DAY_MS);
 const toIso = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
+const cents = (n: number) => Math.round(n * 100);
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 function daysIn(year: number, month0: number): number {
   return new Date(Date.UTC(year, month0 + 1, 0)).getUTCDate();
@@ -129,11 +131,11 @@ export function closeDayFor(card: Card, cardTxs: CardTx[]): { day: number; sourc
  */
 export function cardForBankPayment(payment: CardTx, cards: Card[], transactions: CardTx[]): { card: Card; credit: CardTx } | null {
   const cardIds = new Set(cards.map((c) => c.id));
-  const cents = Math.round(payment.amount * 100);
+  const amount = cents(payment.amount);
   let best: { card: Card; credit: CardTx; gap: number } | null = null;
   for (const t of transactions) {
     if (!t.account || !cardIds.has(t.account.id) || !isCardPaymentCredit(t)) continue;
-    if (Math.round(-t.amount * 100) !== cents) continue;
+    if (cents(-t.amount) !== amount) continue;
     const gap = Math.abs(toDay(t.date) - toDay(payment.date));
     if (gap > 5) continue;
     if (best === null || gap < best.gap) best = { card: cards.find((c) => c.id === t.account!.id)!, credit: t, gap };
@@ -150,17 +152,33 @@ export type StatementBreakdown = {
   // The statement's purchases, refunds, fees and interest, newest first.
   charges: CardTx[];
   total: number;
+  // Charges netted by category (refunds included), largest first.
+  byCategory: { category: string | null; amount: number }[];
   // Every payment made toward this statement (after it closed, before the next one did).
   payments: CardTx[];
   paid: number;
 };
 
+function netByCategory(charges: CardTx[]): { category: string | null; amount: number }[] {
+  const sums = new Map<string | null, number>();
+  for (const t of charges) {
+    const c = effectiveCategory(t);
+    sums.set(c, (sums.get(c) ?? 0) + t.amount);
+  }
+  return [...sums]
+    .map(([category, amount]) => ({ category, amount: round2(amount) }))
+    .filter((c) => c.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
+
 /**
  * What a payment paid for. `paymentDate` is the day the card received it
  * (for a payment seen from the bank side, the matching card-side credit's
- * date when there is one).
+ * date when there is one). `clicked` is the payment itself: it counts
+ * toward the statement even when the card's copy of it hasn't synced (or
+ * the card's copy was never recognized as a payment).
  */
-export function breakdownForPayment(card: Card, paymentDate: string, transactions: CardTx[]): StatementBreakdown | null {
+export function breakdownForPayment(card: Card, paymentDate: string, transactions: CardTx[], clicked?: CardTx): StatementBreakdown | null {
   const cardTxs = transactions.filter((t) => t.account?.id === card.id);
   const close = closeDayFor(card, cardTxs);
   if (!close) return null;
@@ -168,7 +186,14 @@ export function breakdownForPayment(card: Card, paymentDate: string, transaction
   const charges = cardTxs
     .filter((t) => t.date >= start && t.date <= end && !isCardPaymentCredit(t) && !t.pending)
     .sort((a, b) => b.date.localeCompare(a.date));
-  const payments = cardTxs.filter((t) => isCardPaymentCredit(t) && t.date > end && t.date <= nextEnd).sort((a, b) => a.date.localeCompare(b.date));
+  const payments = cardTxs.filter((t) => isCardPaymentCredit(t) && t.date > end && t.date <= nextEnd);
+  if (clicked && clicked.account?.id !== card.id) {
+    const landed = payments.some(
+      (p) => cents(-p.amount) === cents(clicked.amount) && Math.abs(toDay(p.date) - toDay(clicked.date)) <= 5
+    );
+    if (!landed) payments.push({ ...clicked, amount: -Math.abs(clicked.amount) });
+  }
+  payments.sort((a, b) => a.date.localeCompare(b.date));
   return {
     card,
     closeDay: close.day,
@@ -176,8 +201,9 @@ export function breakdownForPayment(card: Card, paymentDate: string, transaction
     start,
     end,
     charges,
-    total: Math.round(charges.reduce((s, t) => s + t.amount, 0) * 100) / 100,
+    total: round2(charges.reduce((s, t) => s + t.amount, 0)),
+    byCategory: netByCategory(charges),
     payments,
-    paid: Math.round(payments.reduce((s, t) => s - t.amount, 0) * 100) / 100,
+    paid: round2(payments.reduce((s, t) => s - t.amount, 0)),
   };
 }
