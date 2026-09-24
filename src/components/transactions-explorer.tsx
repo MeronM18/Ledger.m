@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, Download, StickyNote } from "lucide-react";
 import { TransactionAvatar } from "@/components/transaction-avatar";
+import { TransactionFiltersMenu } from "@/components/transaction-filters-menu";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
@@ -26,8 +27,7 @@ import { EditTransactionButton } from "@/components/edit-transaction-dialog";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import { effectiveCategory, humanizeTransaction, humanizeTransactionName } from "@/lib/transaction-display";
-
-type SortDirection = "asc" | "desc" | null;
+import { applyListOptions, DEFAULT_LIST_OPTIONS, listTotals, type ListOptions } from "@/lib/transaction-list";
 
 export type TransactionRow = {
   id: string;
@@ -68,7 +68,7 @@ export function TransactionsExplorer({
   const [accountFilter, setAccountFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [monthFilter, setMonthFilter] = useState<string>("all");
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [listOptions, setListOptions] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
 
   const categories = useMemo(() => {
     const present = new Set<string>();
@@ -120,26 +120,19 @@ export function TransactionsExplorer({
     });
   }, [transactions, accountFilter, categoryFilter, monthFilter, search]);
 
-  // Sort works together with the filters above, applied on top of the
-  // already-filtered set rather than replacing it. Toggles between
-  // desc/asc on repeated header clicks; no "unsorted" state to cycle back
-  // to — falls back to date-descending, which must be enforced here rather
-  // than trusted from the caller, since `transactions` merges two
-  // independently-sorted sources (Plaid + manual) that are concatenated,
-  // not interleaved by date, so the merged array is not actually in date
-  // order even though each source query is.
-  const sorted = useMemo(() => {
-    const copy = [...filtered];
-    if (sortDirection) {
-      copy.sort((a, b) => (sortDirection === "asc" ? a.amount - b.amount : b.amount - a.amount));
-    } else {
-      copy.sort((a, b) => b.date.localeCompare(a.date));
-    }
-    return copy;
-  }, [filtered, sortDirection]);
+  // The Filters menu (sort, money in/out, amount range, status, transfers,
+  // notes) applies on top of the bar's filters. Sorting always happens
+  // here rather than trusting the caller's order: `transactions` merges
+  // Plaid and manual rows, which aren't interleaved by date.
+  const sorted = useMemo(() => applyListOptions(filtered, listOptions), [filtered, listOptions]);
+  const totals = useMemo(() => listTotals(sorted), [sorted]);
 
-  function toggleSort() {
-    setSortDirection((d) => (d === "desc" ? "asc" : "desc"));
+  // The column headers set the same sort as the menu.
+  function toggleAmountSort() {
+    setListOptions((o) => ({ ...o, sort: o.sort === "amount-desc" ? "amount-asc" : "amount-desc" }));
+  }
+  function toggleDateSort() {
+    setListOptions((o) => ({ ...o, sort: o.sort === "newest" ? "oldest" : "newest" }));
   }
 
   const accountOptions = useMemo(() => [...accounts, MANUAL_ACCOUNT_OPTION], [accounts]);
@@ -183,6 +176,7 @@ export function TransactionsExplorer({
         onMonthChange={setMonthFilter}
         actions={
           <>
+            <TransactionFiltersMenu options={listOptions} onChange={setListOptions} />
             <Button size="sm" variant="outline" onClick={exportCsv}>
               <Download className="size-3.5" />
               Export CSV
@@ -192,6 +186,18 @@ export function TransactionsExplorer({
         }
       />
 
+      <p className="-mt-1 text-xs text-muted-foreground" aria-live="polite">
+        {totals.count} {totals.count === 1 ? "transaction" : "transactions"}
+        {totals.count > 0 && (
+          <>
+            {" · "}
+            <span className="font-mono tabular-nums">{formatCurrency(totals.out, "USD")}</span> out
+            {" · "}
+            <span className="font-mono tabular-nums">{formatCurrency(totals.in, "USD")}</span> in
+          </>
+        )}
+      </p>
+
       {sorted.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">
           No transactions match these filters.
@@ -200,19 +206,29 @@ export function TransactionsExplorer({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead>
+                <button
+                  type="button"
+                  onClick={toggleDateSort}
+                  className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
+                >
+                  Date
+                  {listOptions.sort === "newest" && <ArrowDown className="size-3" />}
+                  {listOptions.sort === "oldest" && <ArrowUp className="size-3" />}
+                </button>
+              </TableHead>
               <TableHead>Merchant</TableHead>
               <TableHead className="hidden md:table-cell">Account</TableHead>
               <TableHead className="hidden md:table-cell">Category</TableHead>
               <TableHead className="text-right">
                 <button
                   type="button"
-                  onClick={toggleSort}
+                  onClick={toggleAmountSort}
                   className="inline-flex items-center gap-1 transition-colors hover:text-foreground"
                 >
                   Amount
-                  {sortDirection === "asc" && <ArrowUp className="size-3" />}
-                  {sortDirection === "desc" && <ArrowDown className="size-3" />}
+                  {listOptions.sort === "amount-asc" && <ArrowUp className="size-3" />}
+                  {listOptions.sort === "amount-desc" && <ArrowDown className="size-3" />}
                 </button>
               </TableHead>
               <TableHead className="w-16" />

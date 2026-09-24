@@ -78,7 +78,7 @@ export function FilterBar({
           placeholder="Search merchant or description..."
           value={search}
           onChange={(e) => onSearchChange(e.target.value)}
-          className="w-full sm:max-w-xs sm:flex-1"
+          className="w-full sm:min-w-52 sm:max-w-xs sm:flex-1"
         />
       )}
 
