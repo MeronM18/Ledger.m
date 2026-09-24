@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { humanizeFrequency } from "@/lib/plaid-categories";
 
 export type ManualSubscription = {
@@ -59,7 +58,7 @@ const EMPTY_FORM: FormState = {
   notes: "",
 };
 
-function ManualSubscriptionDialog({
+export function ManualSubscriptionDialog({
   subscription,
   trigger,
 }: {
@@ -215,67 +214,5 @@ export function AddManualSubscriptionButton() {
         </Button>
       }
     />
-  );
-}
-
-export function ManualSubscriptionRowActions({ subscription }: { subscription: ManualSubscription }) {
-  const router = useRouter();
-  const [isSaving, setIsSaving] = useState(false);
-
-  async function handleCancelToggle(checked: boolean) {
-    setIsSaving(true);
-    try {
-      const res = await fetch(`/api/manual-subscriptions/${subscription.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_active: !checked }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to update subscription");
-      }
-      toast.success(checked ? "Marked as cancelled" : "Marked as active again");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update subscription");
-    } finally {
-      setIsSaving(false);
-    }
-  }
-
-  async function handleDelete() {
-    try {
-      const res = await fetch(`/api/manual-subscriptions/${subscription.id}`, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Failed to delete subscription");
-      }
-      toast.success("Subscription removed");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete subscription");
-    }
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">
-          {!subscription.is_active ? "Cancelled" : "Mark cancelled"}
-        </span>
-        <Switch checked={!subscription.is_active} disabled={isSaving} onCheckedChange={handleCancelToggle} />
-      </div>
-      <ManualSubscriptionDialog
-        subscription={subscription}
-        trigger={
-          <Button size="icon" variant="ghost">
-            <Pencil className="size-3.5" />
-          </Button>
-        }
-      />
-      <Button size="icon" variant="ghost" onClick={handleDelete}>
-        <Trash2 className="size-3.5" />
-      </Button>
-    </div>
   );
 }

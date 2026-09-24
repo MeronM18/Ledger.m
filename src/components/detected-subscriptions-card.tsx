@@ -6,7 +6,7 @@ import { Plus, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Money } from "@/components/money";
+import { formatCurrency } from "@/lib/format";
 import { humanizeFrequency } from "@/lib/plaid-categories";
 import type { DetectedSubscription } from "@/lib/recurring-detection";
 
@@ -41,25 +41,21 @@ function Row({ s }: { s: DetectedSubscription }) {
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t border-border py-3 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="min-w-0">
-        <p className="text-sm font-medium">{s.name}</p>
-        <p className="text-xs text-muted-foreground">
+    <div className="flex items-center gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="truncate text-sm text-bone">{s.name}</p>
+        <p className="truncate text-xs text-muted-foreground">
           {humanizeFrequency(s.frequency)} · {s.occurrences} charges · last{" "}
           {new Date(`${s.lastDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          {s.amountVaries ? " · amount varies" : ""}
         </p>
       </div>
-      <div className="flex items-center gap-3">
-        <span className="text-sm">
-          {s.amountVaries && <span className="text-muted-foreground">about </span>}
-          <Money amount={s.amount} tone="negative" className="font-medium" />
-        </span>
-        <Button size="sm" variant="outline" onClick={handleAdd} disabled={saving}>
-          <Plus className="size-3.5" />
-          Add
-        </Button>
-      </div>
+      <span className="shrink-0 text-right font-mono text-sm tabular-nums">
+        {s.amountVaries && <span className="font-sans text-xs text-muted-foreground">~</span>}
+        {formatCurrency(s.amount, "USD")}
+      </span>
+      <Button size="icon-sm" variant="outline" onClick={handleAdd} disabled={saving} aria-label={`Add ${s.name}`} title="Add to your subscriptions">
+        <Plus className="size-3.5" />
+      </Button>
     </div>
   );
 }
@@ -77,9 +73,7 @@ export function DetectedSubscriptionsCard({ suggestions }: { suggestions: Detect
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col">
-        <p className="pb-3 text-xs text-muted-foreground">
-          These charge on a steady rhythm but aren&apos;t in your list yet. Add the ones that are real subscriptions.
-        </p>
+        <p className="pb-3 text-xs text-muted-foreground">These charge on a steady rhythm but aren&apos;t in your list yet. Add the real ones.</p>
         {suggestions.map((s) => (
           <Row key={`${s.name}-${s.amount}-${s.frequency}`} s={s} />
         ))}

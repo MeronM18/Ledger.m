@@ -1,4 +1,4 @@
-import { SubscriptionsExplorer, type StreamRow } from "@/components/subscriptions-explorer";
+import { RecurringBoard, type StreamRow } from "@/components/recurring-board";
 import type { CalendarEvent } from "@/components/subscription-calendar";
 import type { ManualSubscription } from "@/components/manual-subscription-form";
 import { QueryErrorState } from "@/components/query-error";
@@ -14,8 +14,7 @@ import { calendarNow, easternToday } from "@/lib/time";
 // How far ahead the renewal calendar looks: about three months of days.
 const CALENDAR_DAYS = 92;
 
-type StreamQueryRow = Omit<StreamRow, "firstChargeAmount"> & {
-  pfc_detailed: string | null;
+type StreamQueryRow = Omit<StreamRow, "firstChargeAmount" | "institution" | "logoUrl"> & {
   transaction_ids: string[] | null;
 };
 
@@ -31,14 +30,14 @@ export default async function SubscriptionsPage() {
       admin
         .from("recurring_streams")
         .select(
-          "id, description, merchant_name, frequency, average_amount, last_amount, first_date, last_date, predicted_next_date, is_active, user_marked_cancelled, pfc_detailed, transaction_ids, account:accounts(id, name, mask)"
+          "id, description, merchant_name, frequency, average_amount, last_amount, first_date, last_date, predicted_next_date, is_active, user_marked_cancelled, pfc_primary, pfc_detailed, transaction_ids, account:accounts(id, name, mask)"
         )
         .eq("direction", "outflow"),
       admin
         .from("manual_subscriptions")
         .select("id, name, amount, frequency, next_billing_date, notes, is_active")
         .order("created_at", { ascending: false }),
-      admin.from("accounts").select("id, name, mask").order("name"),
+      admin.from("accounts").select("id, name, mask, item:items(institution_name)").order("name"),
     ]);
 
   if (error) console.error("Failed to load recurring streams", error);
@@ -50,13 +49,19 @@ export default async function SubscriptionsPage() {
 
   // Trial detection is a bonus: if it can't load, the page still works
   // without it (loadFirstChargeAmounts logs the failure).
-  const { amounts: firstCharges } = await loadFirstChargeAmounts(
+  const { amounts: firstCharges, logos } = await loadFirstChargeAmounts(
     admin,
     rawStreams.map((s) => ({ id: s.id, transaction_ids: s.transaction_ids }))
   );
+  const accountRows = (accounts ?? []) as unknown as {
+    id: string;
+    name: string;
+    mask: string | null;
+    item: { institution_name: string | null } | null;
+  }[];
+  const institutionByAccount = new Map(accountRows.map((a) => [a.id, a.item?.institution_name ?? null]));
   // Drop the raw transaction id lists before handing rows to the client
   // component; they're only needed for the first-charge lookup above.
-  const categoryByStream = new Map(rawStreams.map((s) => [s.id, s.pfc_detailed]));
   const streams: StreamRow[] = rawStreams.map((s) => ({
     id: s.id,
     description: s.description,
@@ -69,7 +74,11 @@ export default async function SubscriptionsPage() {
     predicted_next_date: s.predicted_next_date,
     is_active: s.is_active,
     user_marked_cancelled: s.user_marked_cancelled,
+    pfc_primary: s.pfc_primary,
+    pfc_detailed: s.pfc_detailed,
     account: s.account,
+    institution: s.account ? (institutionByAccount.get(s.account.id) ?? null) : null,
+    logoUrl: logos.get(s.id) ?? null,
     firstChargeAmount: firstCharges.get(s.id) ?? null,
   }));
 
@@ -85,7 +94,7 @@ export default async function SubscriptionsPage() {
         source: "plaid" as const,
         amount: s.average_amount ?? 0,
         frequency: s.frequency,
-        categoryDetailed: categoryByStream.get(s.id) ?? null,
+        categoryDetailed: s.pfc_detailed,
       })),
       ...activeManual.map((m) => ({
         key: `manual-${m.id}`,
@@ -139,26 +148,28 @@ export default async function SubscriptionsPage() {
   ]
     .filter((i) => i.amount > 0)
     .flatMap((item) =>
-      occurrencesBetween(item, today, end).map((date) => ({ date, name: item.name, amount: item.amount }))
+      occurrencesBetween(item, today, end).map((date) => ({ key: item.id, date, name: item.name, amount: item.amount }))
     )
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  return (
-    <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-bone">Recurring</h1>
-      {error || manualError || acctError ? (
+  if (error || manualError || acctError) {
+    return (
+      <div className="flex flex-col gap-6">
+        <h1 className="font-serif text-2xl font-semibold text-bone">Recurring</h1>
         <QueryErrorState message="Couldn't load your subscriptions. Try refreshing the page." />
-      ) : (
-        <SubscriptionsExplorer
-          streams={streams}
-          manualSubscriptions={manualSubscriptions}
-          accounts={accounts ?? []}
-          insights={insights}
-          suggestions={suggestions}
-          calendarEvents={calendarEvents}
-          todayIso={calendarNow().isoDate}
-        />
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  return (
+    <RecurringBoard
+      streams={streams}
+      manualSubscriptions={manualSubscriptions}
+      accounts={accountRows.map((a) => ({ id: a.id, name: a.name, mask: a.mask }))}
+      insights={insights}
+      suggestions={suggestions}
+      calendarEvents={calendarEvents}
+      todayIso={calendarNow().isoDate}
+    />
   );
 }
