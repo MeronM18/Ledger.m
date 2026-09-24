@@ -15,7 +15,7 @@ export const REPORT_TABS = [
 export function ReportsTabs() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Reports" className="flex items-center gap-1 overflow-x-auto border-b border-border/70">
+    <nav aria-label="Reports" className="flex items-center gap-1 overflow-x-auto">
       {REPORT_TABS.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
