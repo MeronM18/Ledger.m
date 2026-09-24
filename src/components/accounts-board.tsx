@@ -205,9 +205,11 @@ function NetWorthPanel({
 function AccountRow({ row, days, actions }: { row: BoardRow; days: number; actions: React.ReactNode }) {
   const change = row.series ? changeOver(row.series, days) : 0;
   return (
-    <li className="group/row flex items-center gap-2.5 border-t border-border px-3 py-3 first:border-t-0 sm:gap-3 sm:px-4">
+    // Fixed columns, so every row's buttons, trend line and balance line up
+    // down the page and with the group's total, whatever each row has.
+    <li className="group/row grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-2.5 border-t border-border px-3 py-3 first:border-t-0 sm:grid-cols-[auto_minmax(0,1fr)_4.5rem_5rem_8.5rem] sm:gap-3 sm:px-4">
       <InstitutionAvatar institution={row.institution} icon={row.icon ?? undefined} />
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-col gap-0.5">
         <p className="flex min-w-0 items-baseline gap-1.5 text-sm font-medium">
           {row.transactionsHref ? (
             <Link href={row.transactionsHref} className="truncate transition-colors hover:text-champagne" title={`See ${row.name}'s transactions`}>
@@ -220,20 +222,22 @@ function AccountRow({ row, days, actions }: { row: BoardRow; days: number; actio
         </p>
         <p className="truncate text-xs text-muted-foreground">{row.detail}</p>
       </div>
-      {row.series && (
-        <Sparkline
-          values={row.series.slice(row.series.length - 1 - days)}
-          className={cn("hidden shrink-0 sm:block", Math.abs(change) < 0.005 ? "text-muted-foreground/50" : "text-muted-foreground")}
-        />
-      )}
-      <div className="flex shrink-0 flex-col items-end gap-0.5 sm:w-32">
+      <div className="flex items-center justify-end [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:transition-opacity [@media(hover:hover)]:group-focus-within/row:opacity-100 [@media(hover:hover)]:group-hover/row:opacity-100">
+        {actions}
+      </div>
+      <div className="hidden justify-center sm:flex">
+        {row.series && (
+          <Sparkline
+            values={row.series.slice(row.series.length - 1 - days)}
+            className={Math.abs(change) < 0.005 ? "text-muted-foreground/50" : "text-muted-foreground"}
+          />
+        )}
+      </div>
+      <div className="flex min-w-0 flex-col items-end gap-0.5 text-right">
         <Money amount={row.balance} currency="USD" tone="neutral" className="text-sm font-medium" />
         <span className="truncate text-[11px] text-muted-foreground">
           <Updated updated={row.updated} />
         </span>
-      </div>
-      <div className="flex shrink-0 items-center [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:transition-opacity [@media(hover:hover)]:group-focus-within/row:opacity-100 [@media(hover:hover)]:group-hover/row:opacity-100">
-        {actions}
       </div>
     </li>
   );

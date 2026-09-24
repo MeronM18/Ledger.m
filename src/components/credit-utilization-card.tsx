@@ -94,10 +94,12 @@ export function CreditUtilizationCard({ summary, currency }: { summary: Utilizat
           <div className="flex flex-col">
             {summary.cards.map((c) => (
               <div key={c.id} className="flex flex-col gap-1.5 border-t border-border py-3 first:border-t-0 first:pt-0">
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium">{c.label}</span>
-                  <span className={cn("font-mono tabular-nums", BAND_TEXT[c.band])}>
-                    {pct(c.utilization)} · {BAND_LABEL[c.band]}
+                <div className="flex items-baseline justify-between gap-3 text-sm">
+                  <span className="min-w-0 truncate font-medium" title={c.label}>
+                    {c.label}
+                  </span>
+                  <span className={cn("shrink-0 font-mono whitespace-nowrap tabular-nums", BAND_TEXT[c.band])}>
+                    {pct(c.utilization)} <span className="font-sans text-xs">{BAND_LABEL[c.band]}</span>
                   </span>
                 </div>
                 <UtilizationBar utilization={c.utilization} band={c.band} label={c.label} />
