@@ -9,6 +9,7 @@ import { SyncNowButton } from "@/components/sync-now-button";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
+import { AccountApyButton } from "@/components/account-apy-button";
 import { AppleCardSection } from "@/components/apple-card-section";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,6 +26,7 @@ type AccountRow = {
   current_balance: number | null;
   available_balance: number | null;
   credit_limit: number | null;
+  apy: number | null;
   iso_currency_code: string | null;
 };
 
@@ -57,7 +59,7 @@ export default async function AccountsPage() {
     admin
       .from("items")
       .select(
-        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, iso_currency_code)"
+        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, apy, iso_currency_code)"
       )
       .order("created_at", { ascending: false }),
     // Earliest transaction per item — surfaces how much history Plaid
@@ -194,11 +196,16 @@ export default async function AccountsPage() {
                         <p className="text-xs text-muted-foreground">
                           {account.type}
                           {account.subtype ? ` · ${account.subtype}` : ""}
+                          {account.apy !== null ? ` · ${account.apy}% APY` : ""}
                           {account.type === "credit" && account.credit_limit && account.current_balance !== null
                             ? ` · ${Math.round((Math.max(0, Number(account.current_balance)) / Number(account.credit_limit)) * 100)}% of ${formatCurrency(Number(account.credit_limit), account.iso_currency_code)} limit`
                             : ""}
                         </p>
                       </div>
+                      <div className="flex items-center gap-1">
+                      {account.type === "depository" && account.subtype !== "checking" && (
+                        <AccountApyButton accountId={account.id} name={prettyName(account.name)} apy={account.apy === null ? null : Number(account.apy)} />
+                      )}
                       {account.current_balance === null ? (
                         <span className="font-mono text-sm text-muted-foreground">—</span>
                       ) : (
@@ -209,6 +216,7 @@ export default async function AccountsPage() {
                           className="text-sm font-medium"
                         />
                       )}
+                      </div>
                     </div>
                   ))}
                 </CardContent>

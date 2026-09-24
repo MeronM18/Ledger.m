@@ -8,7 +8,9 @@ export type GoalInput = {
   target_amount: number;
   saved_amount: number;
   target_date: string | null; // YYYY-MM-DD
-  account_id: string | null;
+  // Accounts whose balances add up to the amount saved: "plaid:<id>" or
+  // "manual:<id>". Empty means the amount saved is entered by hand.
+  account_refs: string[];
 };
 
 export type GoalProgress = {
@@ -38,17 +40,21 @@ export function monthsUntil(todayIso: string, dateIso: string): number | null {
 }
 
 /**
- * `balances` maps account id to current balance for goals that follow an
- * account. A goal pointing at an account with no known balance falls back to
- * its manual saved_amount rather than showing $0.
+ * `balances` maps an account ref ("plaid:<id>" / "manual:<id>") to its
+ * current balance. A goal that follows accounts saves the sum of the ones
+ * whose balance is known; if none is known (removed, or a manual account
+ * with no balance entered) it falls back to the amount saved by hand rather
+ * than showing $0.
  */
 export function goalProgress(
   goal: GoalInput,
   todayIso: string,
   balances: Map<string, number> = new Map()
 ): GoalProgress {
-  const linked = goal.account_id !== null && balances.has(goal.account_id);
-  const saved = Math.max(0, linked ? (balances.get(goal.account_id as string) as number) : goal.saved_amount);
+  const known = goal.account_refs.filter((ref) => balances.has(ref));
+  const linked = known.length > 0;
+  const followed = known.reduce((sum, ref) => sum + (balances.get(ref) as number), 0);
+  const saved = Math.max(0, linked ? followed : goal.saved_amount);
   const remaining = Math.max(0, goal.target_amount - saved);
   const percent = Math.min(1, saved / goal.target_amount);
   const complete = saved >= goal.target_amount;

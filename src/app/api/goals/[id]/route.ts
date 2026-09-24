@@ -11,7 +11,7 @@ const bodySchema = z
     target_amount: z.number().positive().max(100_000_000),
     saved_amount: z.number().min(0).max(100_000_000),
     target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
-    account_id: z.string().uuid().nullable(),
+    account_refs: z.array(z.string().regex(/^(plaid|manual):[0-9a-f-]{36}$/)).max(10),
     add_amount: z.number().min(-100_000_000).max(100_000_000),
   })
   .partial();

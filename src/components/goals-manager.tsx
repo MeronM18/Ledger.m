@@ -17,14 +17,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency } from "@/lib/format";
 import type { GoalProgress } from "@/lib/goals";
 import { cn } from "@/lib/utils";
 
-const MANUAL = "__manual__";
-
-export type GoalRow = GoalProgress & { savedManual: number; accountId: string | null };
+export type GoalRow = GoalProgress & { savedManual: number; accountRefs: string[] };
 export type AccountChoice = { id: string; label: string };
 
 async function send(url: string, method: string, body?: unknown) {
@@ -55,7 +52,8 @@ function GoalDialog({
   const [target, setTarget] = useState("");
   const [saved, setSaved] = useState("");
   const [date, setDate] = useState("");
-  const [account, setAccount] = useState(MANUAL);
+  // Refs ("plaid:<id>" / "manual:<id>") of the accounts this goal follows; empty = tracked by hand.
+  const [followed, setFollowed] = useState<string[]>([]);
 
   function handleOpenChange(next: boolean) {
     if (next) {
@@ -63,7 +61,7 @@ function GoalDialog({
       setTarget(goal ? String(goal.target) : "");
       setSaved(goal ? String(goal.savedManual) : "");
       setDate(goal?.targetDate ?? "");
-      setAccount(goal?.accountId ?? MANUAL);
+      setFollowed(goal?.accountRefs ?? []);
     }
     setOpen(next);
   }
@@ -82,9 +80,9 @@ function GoalDialog({
         target_amount: targetValue,
         // Only sent when tracking by hand, so linking an account and
         // unlinking later doesn't wipe the amount saved before.
-        ...(account === MANUAL ? { saved_amount: savedValue } : {}),
+        ...(followed.length === 0 ? { saved_amount: savedValue } : {}),
         target_date: date || null,
-        account_id: account === MANUAL ? null : account,
+        account_refs: followed,
       };
       if (goal) await send(`/api/goals/${goal.id}`, "PATCH", payload);
       else await send("/api/goals", "POST", payload);
@@ -121,23 +119,35 @@ function GoalDialog({
               <Input id="goal-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Track progress with</Label>
-            <Select value={account} onValueChange={setAccount}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={MANUAL}>Money I add by hand</SelectItem>
-                {accounts.map((a) => (
-                  <SelectItem key={a.id} value={a.id}>
-                    {a.label} balance
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {account === MANUAL && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1.5 text-sm font-medium">Track progress with</legend>
+            {accounts.length === 0 ? (
+              <p className="text-xs text-muted-foreground">No accounts to follow yet. Progress is tracked by hand.</p>
+            ) : (
+              <div className="flex max-h-44 flex-col gap-1 overflow-y-auto rounded-lg border border-border p-2">
+                {accounts.map((a) => {
+                  const checked = followed.includes(a.id);
+                  return (
+                    <label key={a.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-muted/40">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => setFollowed((f) => (checked ? f.filter((x) => x !== a.id) : [...f, a.id]))}
+                        className="size-4 accent-[var(--champagne)]"
+                      />
+                      {a.label}
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              {followed.length === 0
+                ? "Nothing selected: you add money by hand."
+                : `Following ${followed.length} account${followed.length === 1 ? "" : "s"}; their balances add up.`}
+            </p>
+          </fieldset>
+          {followed.length === 0 && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="goal-saved">Saved so far</Label>
               <Input id="goal-saved" type="number" min="0" step="1" value={saved} onChange={(e) => setSaved(e.target.value)} placeholder="0" />
@@ -237,7 +247,7 @@ function GoalCard({ goal, accounts, currency }: { goal: GoalRow; accounts: Accou
           <div className="min-w-0">
             <p className="text-base font-medium">{goal.name}</p>
             <p className="text-xs text-muted-foreground">
-              {goal.tracksAccount ? "Following an account balance" : "Tracked by hand"}
+              {goal.tracksAccount ? (goal.accountRefs.length > 1 ? `Following ${goal.accountRefs.length} account balances` : "Following an account balance") : "Tracked by hand"}
               {dateLabel ? ` · by ${dateLabel}` : ""}
             </p>
           </div>
