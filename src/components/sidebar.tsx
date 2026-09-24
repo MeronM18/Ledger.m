@@ -14,6 +14,7 @@ import {
   Landmark,
   HandCoins,
   Settings,
+  CalendarRange,
 } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/budgets", label: "Budgets", icon: Target },
   { href: "/cash-flow", label: "Cash flow", icon: TrendingUp },
   { href: "/goals", label: "Goals", icon: PiggyBank },
+  { href: "/year-in-review", label: "Year in review", icon: CalendarRange },
   { href: "/assets", label: "Assets", icon: Wallet },
   { href: "/accounts", label: "Accounts", icon: Landmark },
   { href: "/settings", label: "Settings", icon: Settings },
