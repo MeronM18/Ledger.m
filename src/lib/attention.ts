@@ -1,5 +1,6 @@
 import type { BudgetProgress } from "@/lib/budgets";
 import { formatCurrency } from "@/lib/format";
+import { daysAgo, longDate, type ImportStatus } from "@/lib/import-reminders";
 
 // Pure, dependency-free. The overview's "needs attention" list: the few
 // things worth acting on today, most urgent first. Each item links to the
@@ -77,7 +78,9 @@ export function attentionItems(
   currency: string,
   // Banks that stopped syncing until they're signed in to again: first,
   // since every other number on the page goes stale while they're out.
-  disconnected: { id: string; name: string }[] = []
+  disconnected: { id: string; name: string }[] = [],
+  // Apple accounts whose last statement import is two weeks old or more.
+  importsDue: { id: string; name: string; status: ImportStatus }[] = []
 ): AttentionItem[] {
   const items: AttentionItem[] = [
     ...disconnected.map((bank) => ({
@@ -85,6 +88,13 @@ export function attentionItems(
       tone: "over" as const,
       title: `Sign in to ${bank.name} again`,
       detail: "It stopped syncing. Reconnect it on the Accounts page",
+      href: "/accounts",
+    })),
+    ...importsDue.map((a) => ({
+      key: `import-${a.id}`,
+      tone: "warning" as const,
+      title: `Import your ${a.name} statement`,
+      detail: `Last imported ${longDate(a.status.lastImportDate)} (${daysAgo(a.status.daysSince)}). Export the CSV from Wallet and import it on the Accounts page`,
       href: "/accounts",
     })),
     ...group("over", budgets.filter((b) => b.status === "over"), currency),

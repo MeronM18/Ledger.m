@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
 import { parseAppleCsv } from "@/lib/apple-card-import";
+import { withImport } from "@/lib/import-reminders";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { IMPORT_LOG_KEY, loadImportLog } from "@/lib/ui-preferences";
 
 // A statement export is tens of kilobytes; 5 MB is far past any real one.
 const MAX_CSV_CHARS = 5_000_000;
@@ -117,6 +119,24 @@ export async function POST(request: Request) {
   }
 
   const dates = transactions.map((t) => t.date).sort();
+
+  // Every finished import counts, even one with nothing new in it: the
+  // two-week reminder runs from the date of the last import. If the log
+  // can't be read it isn't overwritten (that would lose its history); the
+  // reminder then goes by when the rows were first saved.
+  const { log, error: logError } = await loadImportLog(admin);
+  if (!logError) {
+    const value = withImport(log, accountId, {
+      at: new Date().toISOString(),
+      added,
+      total: transactions.length,
+      from: dates[0] ?? null,
+      to: dates[dates.length - 1] ?? null,
+    });
+    const { error } = await admin.from("ui_preferences").upsert({ key: IMPORT_LOG_KEY, value }, { onConflict: "key" });
+    if (error) console.error("Failed to log the import", error);
+  }
+
   return NextResponse.json({
     ok: true,
     kind,

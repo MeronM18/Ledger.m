@@ -123,14 +123,17 @@ export function buildFixtures(now = new Date()) {
   tx(today, IDS.freedom, 6.45, "STARBUCKS", "Starbucks", "FOOD_AND_DRINK", "FOOD_AND_DRINK_COFFEE", { pending: true });
 
   const manual_accounts = [
-    { id: IDS.appleCard, name: "Apple Card", institution_name: "Apple", type: "credit", mask: null, credit_limit: 5000, balance_override: null, apy: null, created_at: "2026-09-01T12:00:00Z" },
-    { id: IDS.appleSavings, name: "Apple Savings", institution_name: "Apple", type: "depository", mask: null, credit_limit: null, balance_override: 334.38, apy: 3.65, created_at: "2026-09-02T12:00:00Z" },
+    { id: IDS.appleCard, name: "Apple Card", institution_name: "Apple Card", type: "credit", mask: null, credit_limit: 5000, balance_override: null, apy: null, created_at: "2026-09-01T12:00:00Z" },
+    { id: IDS.appleSavings, name: "Apple Savings", institution_name: "Apple Savings", type: "depository", mask: null, credit_limit: null, balance_override: 334.38, apy: 3.65, created_at: "2026-09-02T12:00:00Z" },
   ];
 
   const manual_transactions = [];
   const mtx = (date, name, amount, primary, accountId = null, extra = {}) => {
     if (date > today) return;
-    manual_transactions.push({ id: uuid("mtx"), date: iso(date), name, amount: money(amount), pfc_primary: primary, payment_method: accountId ? null : "cash", notes: null, manual_account_id: accountId, source: accountId ? "apple" : "manual", external_id: accountId ? `ext-${seq}` : null, ...extra });
+    manual_transactions.push({ id: uuid("mtx"), date: iso(date), name, amount: money(amount), pfc_primary: primary, payment_method: accountId ? null : "cash", notes: null, manual_account_id: accountId, source: accountId ? "apple" : "manual", external_id: accountId ? `ext-${seq}` : null,
+      // Apple Card statements were imported 3 days ago; Apple Savings 20 days ago, so it's due for another.
+      created_at: accountId === IDS.appleSavings ? hoursAgo(20 * 24) : hoursAgo(3 * 24),
+      ...extra });
   };
   for (let m = 8; m <= 14; m++) {
     const at = (day) => new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + m, day));

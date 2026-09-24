@@ -17,6 +17,8 @@ import { AppleAccountCard, AppleEmptyCard, AppleImportButton, type AppleCard } f
 import { DragHandle, SortableCardList, type SortableCard } from "@/components/sortable-card-list";
 import { applyCardOrder } from "@/lib/card-order";
 import { loadManualAccounts } from "@/lib/manual-accounts";
+import { importStatus } from "@/lib/import-reminders";
+import { calendarNow } from "@/lib/time";
 import { loadAccountSettings, loadCardOrder } from "@/lib/ui-preferences";
 import { accountName, type AccountSettings } from "@/lib/account-settings";
 import { AccountSettingsButton } from "@/components/account-settings-button";
@@ -267,6 +269,7 @@ export default async function AccountsPage() {
     ),
   ]);
 
+  const today = calendarNow().isoDate;
   const appleCards: AppleCard[] = manualCards.map((c) => ({
     id: c.id,
     type: c.type,
@@ -280,6 +283,8 @@ export default async function AccountsPage() {
     balanceOverride: c.balance_override,
     transactionCount: c.transactionCount,
     lastTransactionDate: c.lastTransactionDate,
+    importStatus: importStatus(c.lastImportedAt, today),
+    imports: c.imports,
   }));
 
   // Every card below credit utilization, in the order the user dragged them into.
@@ -287,7 +292,7 @@ export default async function AccountsPage() {
     [
       ...(appleCards.length === 0
         ? [{ id: "apple:empty", label: "Apple Card and Apple Savings", node: <AppleEmptyCard /> }]
-        : appleCards.map((card) => ({ id: `apple:${card.id}`, label: card.name, node: <AppleAccountCard card={card} /> }))),
+        : appleCards.map((card) => ({ id: `apple:${card.id}`, label: card.name, node: <AppleAccountCard card={card} hasSavings={appleCards.some((c) => c.type === "depository")} /> }))),
       ...rows.map((item) => ({
         id: `item:${item.id}`,
         label: item.institution_name ?? "Unknown institution",

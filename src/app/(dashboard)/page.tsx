@@ -29,6 +29,7 @@ import { calendarNow } from "@/lib/time";
 import { BudgetBar } from "@/components/budgets-manager";
 import { attentionItems } from "@/lib/attention";
 import { isDisconnected } from "@/lib/item-status";
+import { importStatus } from "@/lib/import-reminders";
 import { budgetProgress } from "@/lib/budgets";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import { paceComparison, previousMonth } from "@/lib/trends";
@@ -186,7 +187,11 @@ export default async function OverviewPage() {
   const disconnected = (itemRows ?? [])
     .filter((i) => isDisconnected(i))
     .map((i) => ({ id: i.id as string, name: (i.institution_name as string | null) ?? "a bank" }));
-  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency, disconnected);
+  const importsDue = manualCards.flatMap((a) => {
+    const status = importStatus(a.lastImportedAt, now.isoDate);
+    return status?.overdue ? [{ id: a.id, name: a.name, status }] : [];
+  });
+  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency, disconnected, importsDue);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError || manualCardsError);
   const spendingError = ledger.error;

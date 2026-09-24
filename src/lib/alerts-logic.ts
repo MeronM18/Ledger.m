@@ -16,7 +16,8 @@ export type AlertKind =
   | "low-balance"
   | "unusual-charge"
   | "bank-signin"
-  | "monthly-summary";
+  | "monthly-summary"
+  | "import-reminder";
 
 export type Alert = { key: string; kind: AlertKind; title: string; body: string };
 

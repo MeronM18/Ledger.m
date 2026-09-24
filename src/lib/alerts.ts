@@ -11,7 +11,9 @@ import {
   type RenewalCandidate,
 } from "@/lib/alerts-logic";
 import type { AlertSettings } from "@/lib/alert-settings";
+import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
+import { loadManualAccounts } from "@/lib/manual-accounts";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
 import { loadAlertSettings } from "@/lib/ui-preferences";
 import { budgetProgress } from "@/lib/budgets";
@@ -93,7 +95,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings] = await Promise.all([
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts] = await Promise.all([
     loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
@@ -113,6 +115,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     admin.from("items").select("id, institution_name, status, error_code"),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
     loadAlertSettings(admin),
+    loadManualAccounts(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -221,6 +224,12 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
         currency
       )
     );
+  }
+
+  if (manualAccounts.error) {
+    console.error("Skipping Apple import reminders: load failed");
+  } else {
+    alerts.push(...importReminderAlerts(manualAccounts.accounts, now.isoDate));
   }
 
   return dispatchAlerts(admin, enabledAlerts(alerts, settings));

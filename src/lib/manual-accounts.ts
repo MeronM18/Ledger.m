@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
+import type { ImportRecord } from "@/lib/import-reminders";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { loadImportLog } from "@/lib/ui-preferences";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -26,34 +28,47 @@ export type ManualAccount = {
   earned: number;
   transactionCount: number;
   lastTransactionDate: string | null;
+  // When statements were last imported (ISO timestamp): the latest logged
+  // import, or, for imports from before the log, when its newest rows were
+  // saved. Null if nothing has been imported.
+  lastImportedAt: string | null;
+  // Logged imports, newest first.
+  imports: ImportRecord[];
 };
+
+function latest(a: string | null, b: string | null): string | null {
+  if (a === null || b === null) return a ?? b;
+  return Date.parse(a) >= Date.parse(b) ? a : b;
+}
 
 /** Every manual account (Apple Card) with its balance worked out from its imported transactions. */
 export const loadManualAccounts = cache(async function loadManualAccounts(
   admin: AdminClient
 ): Promise<{ accounts: ManualAccount[]; error: boolean }> {
-  const [accountsRes, txRes] = await Promise.all([
+  const [accountsRes, txRes, importLog] = await Promise.all([
     admin
       .from("manual_accounts")
       .select("id, type, name, institution_name, mask, credit_limit, balance_override, apy")
       .order("created_at"),
-    fetchAllRows<{ manual_account_id: string; amount: number; date: string; pfc_primary: string }>((from, to) =>
+    fetchAllRows<{ manual_account_id: string; amount: number; date: string; pfc_primary: string; created_at: string | null }>((from, to) =>
       admin
         .from("manual_transactions")
-        .select("manual_account_id, amount, date, pfc_primary")
+        .select("manual_account_id, amount, date, pfc_primary, created_at")
         .not("manual_account_id", "is", null)
         .order("id")
         .range(from, to)
     ),
+    loadImportLog(admin),
   ]);
 
   if (accountsRes.error) console.error("Failed to load manual accounts", accountsRes.error);
   if (txRes.error) console.error("Failed to load manual account transactions", txRes.error);
   if (accountsRes.error || txRes.error) return { accounts: [], error: true };
 
-  const sums = new Map<string, { sum: number; count: number; last: string | null; earned: number }>();
+  const sums = new Map<string, { sum: number; count: number; last: string | null; earned: number; saved: string | null }>();
   for (const t of txRes.data ?? []) {
-    const entry = sums.get(t.manual_account_id) ?? { sum: 0, count: 0, last: null, earned: 0 };
+    const entry = sums.get(t.manual_account_id) ?? { sum: 0, count: 0, last: null, earned: 0, saved: null };
+    if (t.created_at && (entry.saved === null || t.created_at > entry.saved)) entry.saved = t.created_at;
     entry.sum += Number(t.amount);
     entry.count += 1;
     if (t.pfc_primary === "INCOME") entry.earned += -Number(t.amount);
@@ -80,6 +95,8 @@ export const loadManualAccounts = cache(async function loadManualAccounts(
         earned: Math.round((s?.earned ?? 0) * 100) / 100,
         transactionCount: s?.count ?? 0,
         lastTransactionDate: s?.last ?? null,
+        lastImportedAt: latest(importLog.log[a.id]?.[0]?.at ?? null, s?.saved ?? null),
+        imports: importLog.log[a.id] ?? [],
       };
     }),
   };

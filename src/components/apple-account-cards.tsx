@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileUp, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, FileUp, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Money } from "@/components/money";
 import { DragHandle } from "@/components/sortable-card-list";
 import { formatCurrency } from "@/lib/format";
+import { daysAgo, easternDateOf, longDate, type ImportRecord, type ImportStatus } from "@/lib/import-reminders";
 
 export type AppleCard = {
   id: string;
@@ -34,6 +35,9 @@ export type AppleCard = {
   balanceOverride: number | null;
   transactionCount: number;
   lastTransactionDate: string | null;
+  // Where the two-week import reminder stands; null if never imported.
+  importStatus: ImportStatus | null;
+  imports: ImportRecord[];
 };
 
 async function send(url: string, method: string, body?: unknown) {
@@ -330,7 +334,60 @@ export function AppleEmptyCard() {
   );
 }
 
-export function AppleAccountCard({ card }: { card: AppleCard }) {
+const shortDate = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+/** When statements were last imported, when the next reminder starts, and every import so far. */
+function ImportTracking({ card, hasSavings }: { card: AppleCard; hasSavings: boolean }) {
+  const status = card.importStatus;
+  if (!status) return null;
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
+      {status.overdue ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="flex items-center gap-2 text-champagne">
+            <AlertTriangle className="size-4 shrink-0" aria-hidden />
+            Time to import: last imported {longDate(status.lastImportDate)} ({daysAgo(status.daysSince)}).
+          </p>
+          <ImportDialog
+            hasSavings={hasSavings}
+            trigger={
+              <Button size="sm" variant="outline">
+                <FileUp className="size-3.5" />
+                Import now
+              </Button>
+            }
+          />
+        </div>
+      ) : (
+        <p className="text-muted-foreground">
+          Last imported {longDate(status.lastImportDate)} ({daysAgo(status.daysSince)}). Next reminder{" "}
+          {longDate(status.dueDate)}.
+        </p>
+      )}
+      {card.imports.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none hover:text-foreground">
+            Import history ({card.imports.length})
+          </summary>
+          <ul className="mt-2 flex flex-col gap-1">
+            {card.imports.map((r) => (
+              <li key={r.at} className="flex flex-wrap justify-between gap-x-4">
+                <span>{longDate(easternDateOf(r.at))}</span>
+                <span>
+                  {r.added === 0 ? "nothing new" : `${r.added} new`}
+                  {r.from && r.to ? ` · ${shortDate(r.from)} to ${shortDate(r.to)}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+export function AppleAccountCard({ card, hasSavings }: { card: AppleCard; hasSavings: boolean }) {
   const isCard = card.type === "credit";
   const usedPct = isCard && card.creditLimit ? Math.round((Math.max(0, card.balance) / card.creditLimit) * 100) : null;
   return (
@@ -394,6 +451,9 @@ export function AppleAccountCard({ card }: { card: AppleCard }) {
             </div>
           </>
         )}
+        <div className="basis-full">
+          <ImportTracking card={card} hasSavings={hasSavings} />
+        </div>
       </CardContent>
     </Card>
   );

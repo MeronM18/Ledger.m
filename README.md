@@ -90,6 +90,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 **Apple Card and Apple Savings**
 - Apple Savings imports the same way (Daily Cash deposits and interest count as income; its balance is entered by hand and counts in net worth).
 - Apple Card can't connect through Plaid, so its statement CSV (exported from Wallet) is imported instead: purchases are categorized and flow into spending, budgets, trends and subscriptions; the card has a balance, credit limit and utilization, and counts in net worth. Importing an overlapping statement again skips what's already there
+- Every Apple import is logged by date (with how many transactions were new and the dates the file covered), shown on each account's card on the Accounts page. Two weeks after an account's last import, "Needs your attention" on the overview and a daily push remind you to import its statement, until you do; importing starts the two weeks over.
 
 **Credit**
 - Click a card payment (from checking or on the card) to see what it paid for: the statement it went toward, every charge on it, what was paid toward it and whether it was paid in full. Payments are lined up by each card's statement closing day, which you can set (with the due day and a name like "Freedom Flex") on the Accounts page; until you do, it's worked out from past payments or the due date
@@ -114,7 +115,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 
 **Notifications**
 - Push notifications (via ntfy) fire on new transactions synced through a webhook, so a card swipe shows up on a phone before the receipt does; a debit of $250 or more is labeled as a large charge
-- Alerts for a category over (or 80% of) its budget, a subscription renewing within three days, a subscription charging more than usual, a checking/savings balance under $100, an unusual charge (well above what that merchant usually costs), and a bank that needs signing in again. Each fires once per situation, is kept in a recent-alerts list on the overview, and is checked after every sync and once a day
+- Alerts for a category over (or 80% of) its budget, a subscription renewing within three days, a subscription charging more than usual, a checking/savings balance under $100, an unusual charge (well above what that merchant usually costs), a bank that needs signing in again, and an Apple Card or Apple Savings statement due for importing (daily until it is). Each fires once per situation, is kept in a recent-alerts list on the overview, and is checked after every sync and once a day
 - A monthly summary push in the first days of each month: what came in and went out, the net worth change, and how the budgets did
 - Every kind of push can be switched off on the Settings page
 

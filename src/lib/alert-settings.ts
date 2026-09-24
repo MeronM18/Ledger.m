@@ -11,6 +11,7 @@ export const ALERT_SETTINGS = [
   { kind: "price-increase", label: "Price increases", description: "A subscription charging more than it used to." },
   { kind: "low-balance", label: "Low balance", description: "A checking or savings account under $100, at most weekly." },
   { kind: "bank-signin", label: "Bank needs signing in", description: "A connected bank stopped syncing until you sign in again." },
+  { kind: "import-reminder", label: "Apple statement reminders", description: "Daily once an Apple Card or Apple Savings import is 2 weeks old, until you import again." },
   { kind: "monthly-summary", label: "Monthly summary", description: "On the 1st: what came in, what went out, net worth and budgets." },
 ] as const;
 

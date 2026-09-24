@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveAccountSettings, type AccountSettings } from "@/lib/account-settings";
 import { resolveAlertSettings, type AlertSettings } from "@/lib/alert-settings";
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
+import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -44,4 +45,13 @@ export const loadAccountSettings = cache(async function loadAccountSettings(admi
   const { data, error } = await admin.from("ui_preferences").select("value").eq("key", ACCOUNT_SETTINGS_KEY).maybeSingle();
   if (error) console.error("Failed to load account settings", error);
   return resolveAccountSettings(data?.value);
+});
+
+export const IMPORT_LOG_KEY = "manual_imports";
+
+/** When each Apple account's statements were imported, newest first. */
+export const loadImportLog = cache(async function loadImportLog(admin: AdminClient): Promise<{ log: ImportLog; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", IMPORT_LOG_KEY).maybeSingle();
+  if (error) console.error("Failed to load the import log", error);
+  return { log: resolveImportLog(data?.value), error: Boolean(error) };
 });
