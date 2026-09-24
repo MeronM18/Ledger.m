@@ -183,6 +183,7 @@ export function SpendingExplorer({
 
       <SpendingTrends
         pace={pace}
+        monthRef={trendRef}
         changes={changes}
         typical={typical}
         monthLabel={monthName(trendRef)}

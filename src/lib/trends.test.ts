@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categoryChanges, dailyCumulative, paceComparison, previousMonth, typicalMonth } from "@/lib/trends";
+import { categoryChanges, dailyAverage, dailyCumulative, paceComparison, previousMonth, typicalMonth } from "@/lib/trends";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 
 const tx = (date: string, amount: number, pfc_primary = "FOOD_AND_DRINK"): SpendingTransaction => ({
@@ -105,5 +105,37 @@ describe("typicalMonth", () => {
     expect(typicalMonth([tx("2026-08-05", 90), tx("2026-09-05", 1)], sep)).toBe(90);
     expect(typicalMonth([tx("2026-09-05", 1)], sep)).toBeNull();
     expect(typicalMonth([], sep)).toBeNull();
+  });
+});
+
+describe("dailyAverage", () => {
+  // August (31 days): $310 spent. September so far, through day 20: $200.
+  const data = [tx("2026-08-10", 310), tx("2026-09-05", 120), tx("2026-09-15", 80)];
+
+  it("is the month's spend per elapsed day, against last month's full-month average", () => {
+    const pace = paceComparison(data, sep, today(20));
+    const d = dailyAverage(pace, sep);
+    expect(d.current).toBeCloseTo(10); // 200 / 20
+    expect(d.previous).toBeCloseTo(10); // 310 / 31
+    expect(d.deltaPct).toBeCloseTo(0);
+  });
+
+  it("projects the month total from the current pace once past the first few days", () => {
+    const pace = paceComparison(data, sep, today(20));
+    expect(dailyAverage(pace, sep).projectedMonthTotal).toBeCloseTo(300); // $10/day x 30 days
+    expect(dailyAverage(paceComparison(data, sep, today(3)), sep).projectedMonthTotal).toBeNull();
+  });
+
+  it("has no projection for a finished month, and averages it over its own length", () => {
+    const pace = paceComparison(data, { year: 2026, month: 7 }, today(20));
+    const d = dailyAverage(pace, { year: 2026, month: 7 });
+    expect(d.projectedMonthTotal).toBeNull();
+    expect(d.current).toBeCloseTo(10); // 310 / 31
+    expect(d.previous).toBeNull(); // nothing before August in this data
+  });
+
+  it("reports the change against last month as a fraction", () => {
+    const pace = paceComparison([tx("2026-08-10", 310), tx("2026-09-05", 300)], sep, today(20));
+    expect(dailyAverage(pace, sep).deltaPct).toBeCloseTo(0.5); // $15/day vs $10/day
   });
 });

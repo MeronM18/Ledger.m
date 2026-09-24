@@ -6,7 +6,7 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/money";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
-import type { CategoryChange, Pace } from "@/lib/trends";
+import { dailyAverage, type CategoryChange, type MonthRef, type Pace } from "@/lib/trends";
 import { cn } from "@/lib/utils";
 
 const tooltipContentStyle: CSSProperties = {
@@ -76,6 +76,7 @@ function PaceHeadline({
 
 export function SpendingTrends({
   pace,
+  monthRef,
   changes,
   typical,
   monthLabel,
@@ -85,6 +86,7 @@ export function SpendingTrends({
   onSelectCategory,
 }: {
   pace: Pace;
+  monthRef: MonthRef;
   changes: CategoryChange[];
   typical: number | null;
   monthLabel: string;
@@ -93,6 +95,7 @@ export function SpendingTrends({
   activeCategory: string;
   onSelectCategory: (category: string) => void;
 }) {
+  const daily = dailyAverage(pace, monthRef);
   const topChanges = changes.slice(0, 6);
   const maxAbs = Math.max(1, ...topChanges.map((c) => Math.abs(c.delta)));
 
@@ -110,6 +113,29 @@ export function SpendingTrends({
             typical={typical}
             currency={currency}
           />
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 rounded-lg border border-border p-3 sm:grid-cols-3">
+            <div className="flex flex-col gap-0.5">
+              <dt className="text-xs text-muted-foreground">Daily average</dt>
+              <dd className="font-mono text-lg font-semibold tabular-nums">{formatCurrency(daily.current, currency)}</dd>
+              <dd className="text-xs text-muted-foreground">{pace.isCurrentMonth ? "so far this month" : "for the month"}</dd>
+            </div>
+            {daily.previous !== null && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">{previousMonthLabel}</dt>
+                <dd className="font-mono text-lg font-semibold tabular-nums">{formatCurrency(daily.previous, currency)}</dd>
+                <dd className={cn("text-xs", daily.deltaPct === null ? "text-muted-foreground" : daily.deltaPct <= 0 ? "text-moss" : "text-oxblood-text")}>
+                  {daily.deltaPct === null ? "a day" : `${daily.deltaPct <= 0 ? "down" : "up"} ${Math.abs(Math.round(daily.deltaPct * 100))}% now`}
+                </dd>
+              </div>
+            )}
+            {daily.projectedMonthTotal !== null && (
+              <div className="flex flex-col gap-0.5">
+                <dt className="text-xs text-muted-foreground">On pace for</dt>
+                <dd className="font-mono text-lg font-semibold tabular-nums">{formatCurrency(daily.projectedMonthTotal, currency)}</dd>
+                <dd className="text-xs text-muted-foreground">by month end</dd>
+              </div>
+            )}
+          </dl>
           {pace.hasPrevious && (
             <div className="min-h-[220px] flex-1">
             <ResponsiveContainer width="100%" height="100%">

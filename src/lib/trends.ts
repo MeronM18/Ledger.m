@@ -164,3 +164,33 @@ export function typicalMonth(transactions: SpendingTransaction[], ref: MonthRef,
 
   return counted === 0 ? null : total / counted;
 }
+
+export type DailyAverage = {
+  // Spend per day this month so far (or over the whole month if it's over).
+  current: number;
+  // Last month's average per day across its full length; null without an earlier month.
+  previous: number | null;
+  deltaPct: number | null; // null when there's no earlier month or it was zero
+  // Where the month lands at this pace; null once the month is over, or in its
+  // first few days when one big purchase would make the projection noise.
+  projectedMonthTotal: number | null;
+};
+
+const MIN_DAY_FOR_PROJECTION = 5;
+
+/** Average spend per day, this month against last, from the same pace data the rest of the page uses. */
+export function dailyAverage(pace: Pace, ref: MonthRef): DailyAverage {
+  const prev = previousMonth(ref);
+  const current = pace.throughDay > 0 ? pace.current / pace.throughDay : 0;
+  const previous = pace.hasPrevious ? pace.previousTotal / daysInMonth(prev.year, prev.month) : null;
+
+  return {
+    current,
+    previous,
+    deltaPct: previous !== null && previous > 0 ? (current - previous) / previous : null,
+    projectedMonthTotal:
+      pace.isCurrentMonth && pace.throughDay >= MIN_DAY_FOR_PROJECTION
+        ? current * daysInMonth(ref.year, ref.month)
+        : null,
+  };
+}
