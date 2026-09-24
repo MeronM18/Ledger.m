@@ -62,7 +62,7 @@ export function ForecastChart({
         <Line
           type="stepAfter"
           dataKey="committed"
-          name="Bills and paychecks only"
+          name="Known bills only"
           stroke="var(--champagne)"
           strokeWidth={2.5}
           dot={false}
