@@ -11,7 +11,9 @@ import { detectPayrollCompany, effectiveCategory, humanizeTransactionName } from
 // data) without needing a full Next.js render.
 
 export type SpendingTransaction = {
-  date: string; // YYYY-MM-DD
+  date: string; // YYYY-MM-DD, the day of the purchase (see transaction-dates.ts)
+  // The day it posted, when that's different; statement periods go by it.
+  posted_date?: string | null;
   amount: number; // Plaid convention: positive = money out, negative = money in
   pfc_primary: string | null;
   pfc_detailed?: string | null;

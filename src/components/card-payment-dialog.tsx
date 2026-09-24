@@ -15,6 +15,7 @@ import {
   type CloseDaySource,
 } from "@/lib/card-statements";
 import { formatCurrency } from "@/lib/format";
+import { postedDate } from "@/lib/transaction-dates";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import { effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 import { cn } from "@/lib/utils";
@@ -55,10 +56,11 @@ export function CardPaymentButton({ payment, transactions, cards }: { payment: C
   const resolved = useMemo(() => {
     if (!open) return null;
     const own = payment.account ? cards.find((c) => c.id === payment.account!.id) : undefined;
-    if (own) return { card: own, date: payment.date };
-    if (picked) return { card: picked, date: payment.date };
+    // Statements go by the day a payment posted.
+    if (own) return { card: own, date: postedDate(payment) };
+    if (picked) return { card: picked, date: postedDate(payment) };
     const match = cardForBankPayment(payment, cards, transactions);
-    return match ? { card: match.card, date: match.credit.date } : null;
+    return match ? { card: match.card, date: postedDate(match.credit) } : null;
   }, [open, payment, cards, transactions, picked]);
 
   const breakdown = useMemo(

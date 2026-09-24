@@ -1,4 +1,5 @@
 import "server-only";
+import { purchaseDate } from "@/lib/transaction-dates";
 import { cache } from "react";
 import type { ManualTransaction } from "@/components/manual-transaction-form";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -91,7 +92,7 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
       admin
         .from("transactions")
         .select(
-          "id, date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, logo_url, account:accounts(id, name, mask)"
+          "id, date, authorized_date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, logo_url, account:accounts(id, name, mask)"
         )
         .order("date", { ascending: false })
         .order("id")
@@ -126,9 +127,13 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     type: a.type as string,
   }));
   const accountById = new Map(namedAccounts.map((a) => [a.id, a]));
-  const plaidRows = ((txRes.data ?? []) as unknown as PlaidRow[]).map((t) => {
+  const plaidRows = ((txRes.data ?? []) as unknown as (PlaidRow & { authorized_date: string | null })[]).map((t) => {
+    const { authorized_date, ...row } = t;
+    // Shown and totaled on the day of the purchase, as the bank's app lists
+    // it, not the day it posted; the posted day is kept for statements.
+    const dated = { ...row, date: purchaseDate({ date: t.date, authorized_date }), posted_date: t.date };
     const named = t.account ? accountById.get(t.account.id) : undefined;
-    return named ? { ...t, account: { id: named.id, name: named.name, mask: named.mask } } : t;
+    return named ? { ...dated, account: { id: named.id, name: named.name, mask: named.mask } } : dated;
   });
   const plaid: LedgerTransaction[] = applyEditsToAll(plaidRows, edits.overrides, edits.rules).map((t) => ({
     ...t,

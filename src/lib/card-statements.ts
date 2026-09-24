@@ -1,4 +1,5 @@
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
+import { postedDate } from "@/lib/transaction-dates";
 import { effectiveCategory } from "@/lib/transaction-display";
 
 // Pure. Which purchases a credit card payment paid for.
@@ -83,7 +84,7 @@ export function closeDayFromDueDay(dueDay: number): number {
 
 function statementTotal(cardTxs: CardTx[], start: string, end: string): number {
   return cardTxs
-    .filter((t) => t.date >= start && t.date <= end && !isCardPaymentCredit(t) && !t.pending)
+    .filter((t) => postedDate(t) >= start && postedDate(t) <= end && !isCardPaymentCredit(t) && !t.pending)
     .reduce((s, t) => s + t.amount, 0);
 }
 
@@ -101,7 +102,7 @@ export function estimateCloseDay(cardTxs: CardTx[], hint: number | null = null):
   for (let day = 1; day <= 31; day++) {
     let score = 0;
     for (const p of payments) {
-      const { start, end } = statementBefore(p.date, day);
+      const { start, end } = statementBefore(postedDate(p), day);
       const total = statementTotal(cardTxs, start, end);
       score += Math.min(Math.abs(total - -p.amount) / -p.amount, 1);
     }
@@ -136,7 +137,7 @@ export function cardForBankPayment(payment: CardTx, cards: Card[], transactions:
   for (const t of transactions) {
     if (!t.account || !cardIds.has(t.account.id) || !isCardPaymentCredit(t)) continue;
     if (cents(-t.amount) !== amount) continue;
-    const gap = Math.abs(toDay(t.date) - toDay(payment.date));
+    const gap = Math.abs(toDay(postedDate(t)) - toDay(postedDate(payment)));
     if (gap > 5) continue;
     if (best === null || gap < best.gap) best = { card: cards.find((c) => c.id === t.account!.id)!, credit: t, gap };
   }
@@ -184,16 +185,16 @@ export function breakdownForPayment(card: Card, paymentDate: string, transaction
   if (!close) return null;
   const { start, end, nextEnd } = statementBefore(paymentDate, close.day);
   const charges = cardTxs
-    .filter((t) => t.date >= start && t.date <= end && !isCardPaymentCredit(t) && !t.pending)
+    .filter((t) => postedDate(t) >= start && postedDate(t) <= end && !isCardPaymentCredit(t) && !t.pending)
     .sort((a, b) => b.date.localeCompare(a.date));
-  const payments = cardTxs.filter((t) => isCardPaymentCredit(t) && t.date > end && t.date <= nextEnd);
+  const payments = cardTxs.filter((t) => isCardPaymentCredit(t) && postedDate(t) > end && postedDate(t) <= nextEnd);
   if (clicked && clicked.account?.id !== card.id) {
     const landed = payments.some(
-      (p) => cents(-p.amount) === cents(clicked.amount) && Math.abs(toDay(p.date) - toDay(clicked.date)) <= 5
+      (p) => cents(-p.amount) === cents(clicked.amount) && Math.abs(toDay(postedDate(p)) - toDay(postedDate(clicked))) <= 5
     );
     if (!landed) payments.push({ ...clicked, amount: -Math.abs(clicked.amount) });
   }
-  payments.sort((a, b) => a.date.localeCompare(b.date));
+  payments.sort((a, b) => postedDate(a).localeCompare(postedDate(b)));
   return {
     card,
     closeDay: close.day,
