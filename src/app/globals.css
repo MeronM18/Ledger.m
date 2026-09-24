@@ -129,27 +129,23 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  /* Validated categorical palette (dataviz skill references/palette.md) —
-     fixed hue order, do not reassign per-chart or cycle. Used only for the
-     spending-by-category donut's category identity; unrelated to the site
-     chrome theme above. */
-  --viz-1: #2a78d6; /* blue */
-  --viz-2: #eb6834; /* orange */
-  --viz-3: #1baf7a; /* aqua */
-  --viz-4: #eda100; /* yellow */
-  --viz-5: #e87ba4; /* magenta */
-  --viz-6: #008300; /* green */
-  --viz-7: #4a3aa7; /* violet */
-  --viz-8: #e34948; /* red */
-  /* Slots 9-13 extend the palette so Rent & Utilities, Travel, Medical, Home
-     Improvement and Government each get their own hue instead of sharing
-     "Other"'s. Chosen to stay apart from slots 1-8 but NOT run through the
-     dataviz validator that covers 1-8. */
-  --viz-9: #17a2b8; /* teal */
-  --viz-10: #8c6239; /* brown */
-  --viz-11: #6b7a8f; /* slate */
-  --viz-12: #9bb52f; /* lime */
-  --viz-13: #b05bd6; /* orchid */
+  /* Category colors in charts (spending donut, trends, budgets, year in
+     review). Slot N is a fixed category (plaid-categories.ts), drawn in
+     the same color as that category's transaction icons (--cat-* below),
+     so a category looks the same everywhere. */
+  --viz-1: var(--cat-food);
+  --viz-2: var(--cat-shopping);
+  --viz-3: var(--cat-transport);
+  --viz-4: var(--cat-entertainment);
+  --viz-5: var(--cat-personal-care);
+  --viz-6: var(--cat-services);
+  --viz-7: var(--cat-fees);
+  --viz-8: var(--cat-other);
+  --viz-9: var(--cat-home);
+  --viz-10: var(--cat-travel);
+  --viz-11: var(--cat-medical);
+  --viz-12: var(--cat-home-improvement);
+  --viz-13: var(--cat-government);
   /* Transaction icons, by category: the hue a category is usually drawn in
      (food warm orange, income green, medical red), muted to sit with
      champagne, moss and oxblood. Drawn as the icon's color over a faint

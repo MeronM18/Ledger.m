@@ -20,12 +20,11 @@ import { chartTooltipProps } from "@/lib/chart-style";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { CategoryTotal, MonthTotal } from "@/lib/spending-aggregation";
 
-// Categorical colors are the fixed, validated 8-slot palette in globals.css
-// (--viz-1..8) — see the dataviz skill's references/palette.md. Slot
-// assignment is fixed per category (src/lib/plaid-categories.ts), never
-// reassigned by rank, so a category is always the same color. Independent
-// of the site's champagne/moss/oxblood chrome theme — this palette encodes
-// category identity, not a money-in/money-out signal.
+// Category colors are --viz-1..13 in globals.css: the same muted colors as
+// each category's transaction icons. Slot assignment is fixed per category
+// (src/lib/plaid-categories.ts), never reassigned by rank, so a category is
+// always the same color. They encode category identity, not a
+// money-in/money-out signal.
 const vizColor = (slot: number) => `var(--viz-${slot})`;
 
 const tooltipContentStyle: CSSProperties = {

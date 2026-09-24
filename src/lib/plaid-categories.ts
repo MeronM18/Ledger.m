@@ -63,8 +63,8 @@ export function humanizeCategory(pfcPrimary: string | null): string {
 // a given month/filter (see dataviz skill: "color follows the entity, never
 // its rank"). Every spending category the app can show has its own slot;
 // only a category outside this map (a brand-new Plaid value) falls back to
-// the shared "Other" slot in spending-aggregation.ts. Slots 1-8 are the
-// validated palette; 9-13 extend it (see globals.css).
+// the shared "Other" slot in spending-aggregation.ts. Each slot's color is
+// that category's icon color (--viz-N = --cat-*, see globals.css).
 const CATEGORY_COLOR_SLOT: Record<string, number> = {
   FOOD_AND_DRINK: 1,
   GENERAL_MERCHANDISE: 2,

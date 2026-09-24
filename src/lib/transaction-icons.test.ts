@@ -58,3 +58,15 @@ describe("transactionIconColor", () => {
     }
   });
 });
+
+describe("chart colors", () => {
+  it("draw each category in its icon's color", async () => {
+    const { categoryColorSlot } = await import("@/lib/plaid-categories");
+    const css = (await import("node:fs")).readFileSync("src/app/globals.css", "utf8");
+    const categories = ["FOOD_AND_DRINK", "GENERAL_MERCHANDISE", "TRANSPORTATION", "ENTERTAINMENT", "PERSONAL_CARE", "GENERAL_SERVICES", "BANK_FEES", "OTHER", "RENT_AND_UTILITIES", "TRAVEL", "MEDICAL", "HOME_IMPROVEMENT", "GOVERNMENT_AND_NON_PROFIT"];
+    for (const c of categories) {
+      const slot = categoryColorSlot(c);
+      expect(css, c).toContain(`--viz-${slot}: ${transactionIconColor(t({ pfc_primary: c }))};`);
+    }
+  });
+});
