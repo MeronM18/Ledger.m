@@ -36,9 +36,9 @@ function Wordmark({ animated }: { animated: boolean }) {
  * The opening on a full page load: a glow warms up, a ledger rule draws
  * across the middle with a glint running along it, the wordmark rises out
  * of it into focus and a sheen crosses it, today's date rolls into place
- * below, then the screen parts along the rule like two doors and the page
- * settles in behind. About 2.8 seconds (globals.css, "Welcome", has the
- * timeline). Clicks don't skip it; a key press does. Client-side
+ * below, then it all dissolves (a touch larger, out of focus, faded) as the
+ * page settles in behind. About 2.7 seconds (globals.css, "Welcome", has
+ * the timeline). Clicks don't skip it; a key press does. Client-side
  * navigation doesn't replay it: this lives in the layout, which stays
  * mounted between pages.
  *
@@ -70,10 +70,9 @@ export function WelcomeOverlay({ month, day, year }: { month: string; day: strin
       data-phase={phase}
       aria-hidden
       onAnimationEnd={(e) => {
-        // The bottom door finishing is the end; with reduced motion, the
-        // whole overlay fading (not one of its parts).
-        const whole = e.target === e.currentTarget;
-        if (e.animationName.startsWith("welcome-part-down") || (whole && e.animationName === "welcome-fade-out")) setPhase("gone");
+        // The whole overlay finishing its fade is the end (not one of its
+        // parts finishing its own).
+        if (e.target === e.currentTarget && e.animationName.startsWith("welcome-dissolve")) setPhase("gone");
       }}
     >
       <div className="welcome-half welcome-top">

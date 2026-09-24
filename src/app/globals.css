@@ -302,23 +302,27 @@
      0.3s  "Ledger.m" rises out of the rule letter by letter, coming into focus
      0.5s  the date rolls into place like a mechanical counter
      1.2s  one sheen of light crosses the wordmark
-     1.85s the screen parts along the rule like two doors, the wordmark and
-           date lifting away a little faster than their doors, and the page
-           behind settles into place.
+     1.85s it all dissolves the way Apple's interfaces close: the wordmark,
+           rule and date drift slightly larger, soften out of focus and fade
+           while the dark screen fades away, and the page behind settles
+           into place.
    Transform and opacity nearly throughout (a brief blur on the letters and
    a background sweep for the sheen, both on small elements), so it stays
    smooth on a phone. Clicks can't skip it; a key press can (data-phase
    "leaving" below). */
 .welcome {
   --welcome-settle: cubic-bezier(0.16, 1, 0.3, 1);
-  --welcome-part: cubic-bezier(0.83, 0, 0.17, 1);
+  /* Apple's easing for things leaving: quick to start, long soft finish. */
+  --welcome-exit: cubic-bezier(0.32, 0.72, 0, 1);
   --welcome-glint: #fff6e0;
-  --welcome-part-at: 1850ms;
-  --welcome-part-for: 900ms;
+  --welcome-exit-at: 1850ms;
   position: fixed;
   inset: 0;
   z-index: 100;
-  pointer-events: none;
+  background: var(--background);
+  /* Clicks land here, not on the page underneath, and don't skip anything. */
+  pointer-events: auto;
+  animation: welcome-dissolve 800ms cubic-bezier(0.4, 0, 0.2, 1) calc(var(--welcome-exit-at) + 80ms) forwards;
 }
 
 @keyframes welcome-glow-in {
@@ -425,57 +429,40 @@
   }
 }
 
-@keyframes welcome-part-up {
-  to {
-    transform: translateY(-100%);
-  }
-}
-
-@keyframes welcome-part-down {
-  to {
-    transform: translateY(100%);
-  }
-}
-
-/* The wordmark and date travel a little further than their doors and fade,
-   so the parting has depth instead of sliding as flat panels. */
-@keyframes welcome-lift-up {
-  to {
-    opacity: 0;
-    transform: translateY(-40px);
-  }
-}
-
-@keyframes welcome-lift-down {
-  to {
-    opacity: 0;
-    transform: translateY(28px);
-  }
-}
-
-@keyframes welcome-seam-in {
-  to {
-    opacity: 1;
-  }
-}
-
-/* Same motions, separate names: a skip restarts them right away instead
-   of the running animation jumping to its end. */
-@keyframes welcome-part-up-now {
-  to {
-    transform: translateY(-100%);
-  }
-}
-
-@keyframes welcome-part-down-now {
-  to {
-    transform: translateY(100%);
-  }
-}
-
 @keyframes welcome-fade-out {
   to {
     opacity: 0;
+  }
+}
+
+/* The dark screen itself fading away. */
+@keyframes welcome-dissolve {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Same motion, separate name: a key press restarts it right away instead
+   of the running animation jumping to its end. */
+@keyframes welcome-dissolve-now {
+  to {
+    opacity: 0;
+  }
+}
+
+/* The wordmark, rule and date leaving: a touch larger, out of focus, gone. */
+@keyframes welcome-recede {
+  to {
+    opacity: 0;
+    filter: blur(10px);
+    transform: scale(1.08);
+  }
+}
+
+@keyframes welcome-rule-recede {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scaleX(1.35);
   }
 }
 
@@ -521,7 +508,7 @@
   transform: translate(-50%, -50%) scale(0.55);
   animation:
     welcome-glow-in 1400ms var(--welcome-settle) both,
-    welcome-glow-out 520ms ease-in calc(var(--welcome-part-at) - 150ms) forwards;
+    welcome-glow-out 700ms var(--welcome-exit) calc(var(--welcome-exit-at) - 50ms) forwards;
 }
 
 .welcome-half {
@@ -530,70 +517,21 @@
   right: 0;
   display: flex;
   justify-content: center;
-  background: var(--background);
-  /* Clicks land here, not on the page underneath, and don't skip anything. */
-  pointer-events: auto;
-  will-change: transform;
-}
-
-/* A hairline of champagne along each door's edge, lit as they part. */
-.welcome-half::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--champagne) 45%, transparent), transparent);
-  opacity: 0;
-  animation: welcome-seam-in 240ms ease-out calc(var(--welcome-part-at) - 60ms) forwards;
 }
 
 .welcome-top {
   top: 0;
-  /* A pixel of overlap so no seam of the page shows between the halves. */
-  height: calc(50% + 1px);
+  height: 50%;
   align-items: flex-end;
   padding-bottom: 0.7rem;
-  animation: welcome-part-up var(--welcome-part-for) var(--welcome-part) var(--welcome-part-at) both;
 }
 
-.welcome-top::after {
-  bottom: 0;
-}
-
-/* Each door casts a soft shadow onto the page as it opens; hidden until
-   then, so nothing darkens the seam while the wordmark is on screen. */
-.welcome-half::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  height: 72px;
-  opacity: 0;
-  pointer-events: none;
-  animation: welcome-seam-in 260ms ease-out var(--welcome-part-at) forwards;
-}
-
-.welcome-top::before {
-  top: 100%;
-  background: linear-gradient(rgb(0 0 0 / 0.55), transparent);
-}
-
-.welcome-bottom::before {
-  bottom: 100%;
-  background: linear-gradient(to top, rgb(0 0 0 / 0.55), transparent);
-}
 
 .welcome-bottom {
   bottom: 0;
   height: 50%;
   align-items: flex-start;
   padding-top: 1.05rem;
-  animation: welcome-part-down var(--welcome-part-for) var(--welcome-part) var(--welcome-part-at) both;
-}
-
-.welcome-bottom::after {
-  top: 0;
 }
 
 .welcome-rule {
@@ -607,7 +545,7 @@
   transform: translate(-50%, -50%) scaleX(0);
   animation:
     welcome-rule-draw 820ms var(--welcome-settle) 80ms both,
-    welcome-rule-out 620ms cubic-bezier(0.7, 0, 0.84, 0) calc(var(--welcome-part-at) - 80ms) forwards;
+    welcome-rule-recede 700ms var(--welcome-exit) var(--welcome-exit-at) forwards;
 }
 
 /* A point of light running along the rule as it draws. */
@@ -628,7 +566,9 @@
   line-height: 1;
   letter-spacing: -0.015em;
   color: var(--bone);
-  animation: welcome-lift-up 600ms cubic-bezier(0.4, 0, 0.9, 0.6) var(--welcome-part-at) forwards;
+  /* Grows from the rule, so the whole composition opens from the center. */
+  transform-origin: 50% 100%;
+  animation: welcome-recede 700ms var(--welcome-exit) var(--welcome-exit-at) forwards;
 }
 
 /* Each letter rises out of its own clipped box, so it appears to come up
@@ -669,9 +609,10 @@
   line-height: 1;
   letter-spacing: 0.06em;
   color: var(--ash-grey);
+  transform-origin: 50% 0;
   animation:
     welcome-date-in 700ms var(--welcome-settle) 520ms both,
-    welcome-lift-down 520ms cubic-bezier(0.4, 0, 0.9, 0.6) var(--welcome-part-at) forwards;
+    welcome-recede 700ms var(--welcome-exit) calc(var(--welcome-exit-at) + 40ms) forwards;
 }
 
 .welcome-date-word {
@@ -687,7 +628,7 @@
 .welcome-digit-strip {
   display: flex;
   flex-direction: column;
-  /* The last digit lands (~1.6s) before the doors part (1.85s). */
+  /* The last digit lands (~1.6s) before everything dissolves (1.85s). */
   animation: welcome-roll 950ms var(--welcome-settle) calc(420ms + var(--i) * 55ms) both;
 }
 
@@ -697,19 +638,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The page, uncovered as the doors part. Keyed to the overlay being there,
+/* The page, appearing as the screen dissolves. Keyed to the overlay being there,
    so client-side navigation (which keeps the layout) never replays it. */
 .welcome-stage:has(> .welcome) > main {
-  animation: welcome-page-reveal 1100ms var(--welcome-settle) calc(var(--welcome-part-at) + 60ms) both;
+  animation: welcome-page-reveal 1000ms var(--welcome-exit) calc(var(--welcome-exit-at) + 80ms) both;
 }
 
 /* A key press: everything leaves now. */
-.welcome[data-phase="leaving"] .welcome-top {
-  animation: welcome-part-up-now 520ms var(--welcome-part) both;
-}
-
-.welcome[data-phase="leaving"] .welcome-bottom {
-  animation: welcome-part-down-now 520ms var(--welcome-part) both;
+.welcome[data-phase="leaving"] {
+  animation: welcome-dissolve-now 420ms var(--welcome-exit) both;
 }
 
 .welcome[data-phase="leaving"] .welcome-rule,
@@ -741,9 +678,7 @@
   }
   .welcome-letter,
   .welcome-wordmark,
-  .welcome-date,
-  .welcome-half::before,
-  .welcome-half::after {
+  .welcome-date {
     animation: none;
   }
   .welcome-digit-strip {
@@ -754,17 +689,10 @@
   .welcome-stage:has(> .welcome[data-phase="leaving"]) > main {
     animation: none;
   }
-  .welcome,
-  .welcome[data-phase="leaving"] {
-    animation: welcome-fade-out 320ms ease-out 650ms both;
-  }
-  .welcome-top,
-  .welcome-bottom,
-  .welcome[data-phase="leaving"] .welcome-top,
-  .welcome[data-phase="leaving"] .welcome-bottom {
-    animation: none;
+  .welcome {
+    animation: welcome-dissolve 320ms ease-out 650ms both;
   }
   .welcome[data-phase="leaving"] {
-    animation-delay: 0ms;
+    animation: welcome-dissolve-now 320ms ease-out both;
   }
 }
