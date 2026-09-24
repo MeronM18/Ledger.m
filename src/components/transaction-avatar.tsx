@@ -120,13 +120,12 @@ export function TransactionAvatar({ transaction, className }: { transaction: Ico
 
   if (logo) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- external Plaid-hosted logo, small avatar, not worth next/image config for a single-user app
-      <img
-        src={logo}
-        alt=""
-        onError={() => setBroken(logo)}
-        className={cn("size-6 shrink-0 rounded-full object-cover", className)}
-      />
+      // A logo of any shape sits inside the same round badge as the icons,
+      // so a wide wordmark doesn't look out of place in the list.
+      <span className={cn("flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white", className)}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- external Plaid-hosted logo, small avatar, not worth next/image config for a single-user app */}
+        <img src={logo} alt="" onError={() => setBroken(logo)} className="size-full object-contain p-[12%]" />
+      </span>
     );
   }
   const name = transactionIconName(transaction);

@@ -151,7 +151,7 @@ function Row({
         type="button"
         onClick={() => onOpen(t.id)}
         data-transaction={t.id}
-        className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_auto_auto]"
+        className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_7.5rem_1rem]"
       >
         <span className="flex min-w-0 items-center gap-3">
           <TransactionAvatar transaction={t} className="size-7" />
@@ -176,7 +176,7 @@ function Row({
         <span className="hidden min-w-0 text-sm text-muted-foreground md:block">
           <AccountLabel t={t} institutions={institutions} />
         </span>
-        <Amount t={t} className="text-sm font-medium" />
+        <Amount t={t} className="justify-self-end text-right text-sm font-medium" />
         <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
       </button>
     </li>
@@ -489,7 +489,7 @@ export function TransactionsExplorer({
           ) : days ? (
             days.map((d) => (
               <section key={d.date} aria-label={longDay(d.date)} className="border-t border-border first:border-t-0">
-                <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 px-4 py-2 text-xs">
+                <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 py-2 pr-11 pl-4 text-xs">
                   <h2 className="font-medium text-muted-foreground">{longDay(d.date)}</h2>
                   <span className={cn("font-mono tabular-nums", d.net > 0 ? "text-moss" : "text-muted-foreground")}>
                     {d.net > 0 ? "+" : d.net < 0 ? "−" : ""}
