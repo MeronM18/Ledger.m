@@ -3,24 +3,25 @@ import { afterWelcome, expect, test } from "./test";
 test("a card shows its product name and takes a closing day, and a payment shows what it paid for", async ({ page }) => {
   await page.goto("/accounts");
   await afterWelcome(page);
-  const chase = page.locator("[data-slot=card]").filter({ hasText: "Last synced" }).filter({ hasText: "Chase" });
-  await expect(chase.getByText("Chase Freedom Flex ••7788")).toBeVisible();
+  const chase = page.locator("li").filter({ has: page.getByText("••7788", { exact: true }) });
+  await expect(chase.getByRole("link", { name: "Chase Freedom Flex" })).toBeVisible();
 
   await chase.getByRole("button", { name: "Edit Chase Freedom Flex" }).click();
   await page.getByLabel("Name").fill("Freedom Flex");
   await page.getByLabel("Statement closing day").fill("3");
   await page.getByLabel("Payment due day").fill("28");
   await page.getByRole("button", { name: "Save" }).click();
-  await expect(chase.getByText("Freedom Flex ••7788")).toBeVisible();
+  await expect(chase.getByRole("link", { name: "Freedom Flex", exact: true })).toBeVisible();
   await expect(chase.getByText(/closes the 3rd · due the 28th/)).toBeVisible();
 
   // The same payment, from checking: it finds the card by the amount landing on it.
   await page.goto("/transactions");
   await page.getByPlaceholder(/search/i).fill("chase");
-  const payment = page.getByRole("row").filter({ hasText: "Total Checking" }).first();
-  await payment.getByRole("button", { name: "See what this payment paid for" }).click();
+  // A transaction opens in the panel at the right.
+  await page.locator("[data-transaction]").filter({ hasText: "Total Checking" }).first().click();
+  await page.getByRole("button", { name: "See what this payment paid for" }).click();
 
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: /payment to/ });
   await expect(dialog.getByRole("heading", { name: /payment to Freedom Flex ••7788/ })).toBeVisible();
   await expect(dialog.getByText(/toward the statement from .* to .*/)).toBeVisible();
   await expect(dialog.getByText(/\d+ charges on this statement/)).toBeVisible();

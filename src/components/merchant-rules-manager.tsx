@@ -1,17 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import { ListChecks, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { humanizeCategory } from "@/lib/plaid-categories";
 import type { MerchantRule } from "@/lib/transaction-edits";
 
-export function MerchantRulesManager({ rules }: { rules: MerchantRule[] }) {
+/** The Rules button on Transactions: every rename and recategorize rule, in a panel, each removable. */
+export function MerchantRulesButton({ rules }: { rules: MerchantRule[] }) {
   const router = useRouter();
-
-  if (rules.length === 0) return null;
 
   async function handleDelete(id: string) {
     try {
@@ -28,28 +27,44 @@ export function MerchantRulesManager({ rules }: { rules: MerchantRule[] }) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Rules</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col">
-        {rules.map((r) => (
-          <div
-            key={r.id}
-            className="flex items-center justify-between border-t border-border py-2 first:border-t-0 first:pt-0"
-          >
-            <p className="text-sm">
-              <span className="text-muted-foreground">Contains </span>
-              <span className="font-medium">&ldquo;{r.match_text}&rdquo;</span>
-              <span className="text-muted-foreground"> → </span>
-              {[r.rename_to, r.category ? humanizeCategory(r.category) : null].filter(Boolean).join(" · ")}
-            </p>
-            <Button size="icon" variant="ghost" aria-label={`Delete rule ${r.match_text}`} onClick={() => handleDelete(r.id)}>
-              <Trash2 className="size-3.5" />
-            </Button>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button size="sm" variant="outline">
+          <ListChecks className="size-3.5" />
+          Rules
+          {rules.length > 0 && <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{rules.length}</span>}
+        </Button>
+      </SheetTrigger>
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Rules</SheetTitle>
+          <SheetDescription>
+            A rule renames or recategorizes every transaction whose merchant contains its text, past and future. Make one
+            from a transaction: open it and tick &ldquo;Apply the name/category to every matching transaction&rdquo;.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody>
+          {rules.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">No rules yet.</p>
+          ) : (
+            <ul className="flex flex-col">
+              {rules.map((r) => (
+                <li key={r.id} className="flex items-center justify-between gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
+                  <p className="text-sm">
+                    <span className="text-muted-foreground">Contains </span>
+                    <span className="font-medium">&ldquo;{r.match_text}&rdquo;</span>
+                    <span className="text-muted-foreground"> → </span>
+                    {[r.rename_to, r.category ? humanizeCategory(r.category) : null].filter(Boolean).join(" · ")}
+                  </p>
+                  <Button size="icon" variant="ghost" aria-label={`Delete rule ${r.match_text}`} onClick={() => handleDelete(r.id)}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }

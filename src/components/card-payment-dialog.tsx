@@ -49,7 +49,18 @@ export function isCardPaymentRow(t: CardTx, cards: Card[]): boolean {
  * one the same amount landed on within a few days; if none did (or it's
  * ambiguous), you pick the card.
  */
-export function CardPaymentButton({ payment, transactions, cards }: { payment: CardTx; transactions: CardTx[]; cards: Card[] }) {
+export function CardPaymentButton({
+  payment,
+  transactions,
+  cards,
+  labeled = false,
+}: {
+  payment: CardTx;
+  transactions: CardTx[];
+  cards: Card[];
+  // A full-width button with its words, rather than an icon.
+  labeled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<Card | null>(null);
 
@@ -79,9 +90,16 @@ export function CardPaymentButton({ payment, transactions, cards }: { payment: C
       }}
     >
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" aria-label="See what this payment paid for" title="See what this paid for">
-          <ReceiptText className="size-3.5" />
-        </Button>
+        {labeled ? (
+          <Button variant="outline" className="w-full justify-start">
+            <ReceiptText className="size-3.5" />
+            See what this payment paid for
+          </Button>
+        ) : (
+          <Button size="icon" variant="ghost" aria-label="See what this payment paid for" title="See what this paid for">
+            <ReceiptText className="size-3.5" />
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>

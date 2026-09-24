@@ -4,7 +4,8 @@ import {
   applyListOptions,
   DEFAULT_LIST_OPTIONS,
   isMoneyMovement,
-  listTotals,
+  groupByDay,
+  listSummary,
   type ListOptions,
   type ListTransaction,
 } from "@/lib/transaction-list";
@@ -75,14 +76,36 @@ describe("isMoneyMovement", () => {
   });
 });
 
-describe("activeFilterCount and listTotals", () => {
+describe("activeFilterCount, listSummary and groupByDay", () => {
   it("counts filters that are on, not the sort", () => {
     expect(activeFilterCount(DEFAULT_LIST_OPTIONS)).toBe(0);
     expect(activeFilterCount({ ...DEFAULT_LIST_OPTIONS, sort: "oldest" })).toBe(0);
     expect(activeFilterCount({ ...DEFAULT_LIST_OPTIONS, direction: "out", minAmount: 5, maxAmount: 10, hideTransfers: true })).toBe(3);
   });
 
-  it("totals money out and in", () => {
-    expect(listTotals([{ amount: 10 }, { amount: 5.5 }, { amount: -100 }])).toEqual({ count: 3, out: 15.5, in: 100 });
+  it("sums up the list: money out and in, the largest each way, the typical charge and what's pending", () => {
+    const s = listSummary(rows);
+    expect(s.count).toBe(rows.length);
+    expect(s.largestExpense).toEqual({ amount: 1850, id: "Rent" });
+    expect(s.largestDeposit).toEqual({ amount: 3853.47, id: "Paycheck" });
+    expect(s.pending).toEqual({ count: 1, amount: 6.45 });
+    expect(s.first).toBe("2026-09-01");
+    expect(s.last).toBe("2026-09-24");
+    const out = rows.filter((t) => t.amount > 0);
+    expect(s.moneyOut).toBe(Math.round(out.reduce((a, t) => a + t.amount, 0) * 100) / 100);
+    expect(s.averageExpense).toBe(Math.round((s.moneyOut / out.length) * 100) / 100);
+    expect(listSummary([])).toMatchObject({ count: 0, largestExpense: null, averageExpense: null, first: null });
+  });
+
+  it("groups a sorted list by day with each day's net", () => {
+    const days = groupByDay([
+      { date: "2026-09-24", amount: 10 },
+      { date: "2026-09-24", amount: -50 },
+      { date: "2026-09-23", amount: 5.5 },
+    ]);
+    expect(days.map((d) => [d.date, d.rows.length, d.net])).toEqual([
+      ["2026-09-24", 2, 40],
+      ["2026-09-23", 1, -5.5],
+    ]);
   });
 });

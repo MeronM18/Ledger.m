@@ -58,11 +58,53 @@ const parseAmount = (s: string) => {
   return s.trim() === "" || !Number.isFinite(n) || n < 0 ? null : n;
 };
 
-/** Sorting and extra filters for the transactions list, behind one button. */
-export function TransactionFiltersMenu({ options, onChange }: { options: ListOptions; onChange: (options: ListOptions) => void }) {
+type Picker = { options: { value: string; label: string }[]; value: string; onChange: (value: string) => void };
+
+/** One of the Account or Category pickers at the top of the menu; "all" is the no-filter choice. */
+function PickerField({ id, label, allLabel, pick }: { id: string; label: string; allLabel: string; pick: Picker }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-xs font-normal text-muted-foreground">
+        {label}
+      </Label>
+      <Select value={pick.value} onValueChange={pick.onChange}>
+        <SelectTrigger id={id} className="w-full">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent position="popper">
+          <SelectItem value="all">{allLabel}</SelectItem>
+          {pick.options.map((o) => (
+            <SelectItem key={o.value} value={o.value}>
+              {o.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/** Sorting and every filter for the transactions list but search and date, behind one button. */
+export function TransactionFiltersMenu({
+  options,
+  onChange,
+  account,
+  category,
+}: {
+  options: ListOptions;
+  onChange: (options: ListOptions) => void;
+  account?: Picker;
+  category?: Picker;
+}) {
   const set = <K extends keyof ListOptions>(key: K, value: ListOptions[K]) => onChange({ ...options, [key]: value });
-  const count = activeFilterCount(options);
+  const count = activeFilterCount(options) + Number(Boolean(account && account.value !== "all")) + Number(Boolean(category && category.value !== "all"));
   const changed = count > 0 || options.sort !== DEFAULT_LIST_OPTIONS.sort;
+
+  function reset() {
+    onChange(DEFAULT_LIST_OPTIONS);
+    account?.onChange("all");
+    category?.onChange("all");
+  }
 
   return (
     <Popover>
@@ -75,7 +117,9 @@ export function TransactionFiltersMenu({ options, onChange }: { options: ListOpt
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="flex flex-col gap-4">
+      <PopoverContent align="end" className="flex max-h-[min(40rem,calc(100dvh-8rem))] flex-col gap-4 overflow-y-auto">
+        {account && <PickerField id="list-account" label="Account" allLabel="All accounts" pick={account} />}
+        {category && <PickerField id="list-category" label="Category" allLabel="All categories" pick={category} />}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="list-sort" className="text-xs font-normal text-muted-foreground">
             Sort by
@@ -159,7 +203,7 @@ export function TransactionFiltersMenu({ options, onChange }: { options: ListOpt
           </label>
         </div>
 
-        <Button size="sm" variant="ghost" className="self-end" disabled={!changed} onClick={() => onChange(DEFAULT_LIST_OPTIONS)}>
+        <Button size="sm" variant="ghost" className="self-end" disabled={!changed} onClick={reset}>
           Reset
         </Button>
       </PopoverContent>

@@ -15,11 +15,12 @@ test("a charge paid back in cash counts only your share, and never touches Asset
   await page.goto("/transactions");
   await afterWelcome(page);
   await page.getByPlaceholder(/search/i).fill("kroger");
-  const row = page.getByRole("row").filter({ hasText: "Kroger" }).first();
-  const cells = row.locator("td");
-  const charge = Number((await cells.nth(4).innerText()).replace(/[^\d.]/g, ""));
-  const chargeDate = new Date(await cells.nth(0).innerText());
-  await row.getByRole("button", { name: /Edit/ }).click();
+  const row = page.locator("[data-transaction]").filter({ hasText: "Kroger" }).first();
+  const amounts = (await row.innerText()).match(/\$[\d,]+\.\d{2}/g)!;
+  const charge = Number(amounts.at(-1)!.replace(/[^\d.]/g, ""));
+  // The day's heading above it.
+  const chargeDate = new Date((await row.locator("xpath=ancestor::section[1]").getAttribute("aria-label"))!);
+  await row.click();
 
   await page.getByLabel("Someone paid me back in cash for this").check();
   await page.getByLabel("Amount paid back").fill("40");
@@ -46,8 +47,8 @@ test("an Apple Card purchase can be paid back too, in full", async ({ page }) =>
   await page.goto("/transactions");
   await afterWelcome(page);
   await page.getByPlaceholder(/search/i).fill("whole foods");
-  const row = page.getByRole("row").filter({ hasText: "Whole Foods" }).first();
-  await row.getByRole("button").first().click();
+  const row = page.locator("[data-transaction]").filter({ hasText: "Whole Foods" }).first();
+  await row.click();
 
   await page.getByLabel("Someone paid me back in cash for this").check();
   await page.getByRole("button", { name: "All of it" }).click();

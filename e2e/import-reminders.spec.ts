@@ -9,9 +9,8 @@ test("an Apple account two weeks past its last import is flagged until it's impo
   await expect(page.getByText("Import your Apple Card statement")).toHaveCount(0);
 
   await page.goto("/accounts");
-  const card = page.locator("[data-slot=card]").filter({ hasText: "Imported from statements" });
-  const appleCard = card.filter({ has: page.getByText("Apple Card", { exact: true }) });
-  const savings = card.filter({ has: page.getByText("Apple Savings", { exact: true }) });
+  const appleCard = page.locator("[data-connection='Apple Card']");
+  const savings = page.locator("[data-connection='Apple Savings']");
   await expect(appleCard.getByText(/Last imported .* \(3 days ago\)\. Next reminder/)).toBeVisible();
   await expect(savings.getByText(/Time to import: last imported .* \(20 days ago\)/)).toBeVisible();
 

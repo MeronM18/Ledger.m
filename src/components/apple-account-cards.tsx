@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, FileUp, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -17,9 +16,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Money } from "@/components/money";
-import { DragHandle } from "@/components/sortable-card-list";
-import { formatCurrency } from "@/lib/format";
 import { daysAgo, easternDateOf, longDate, type ImportRecord, type ImportStatus } from "@/lib/import-reminders";
 
 export type AppleCard = {
@@ -182,7 +178,7 @@ function ImportDialog({ hasSavings, trigger }: { hasSavings: boolean; trigger: R
   );
 }
 
-function EditDialog({ card }: { card: AppleCard }) {
+export function AppleEditButton({ card }: { card: AppleCard }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -278,7 +274,7 @@ function EditDialog({ card }: { card: AppleCard }) {
   );
 }
 
-function DeleteButton({ card }: { card: AppleCard }) {
+export function AppleDeleteButton({ card }: { card: AppleCard }) {
   const router = useRouter();
 
   async function handleDelete() {
@@ -313,36 +309,15 @@ export function AppleImportButton({ hasSavings }: { hasSavings: boolean }) {
   );
 }
 
-/** Shown in place of the Apple accounts until a statement has been imported. */
-export function AppleEmptyCard() {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <DragHandle />
-          <CardTitle>Apple Card and Apple Savings</CardTitle>
-        </div>
-        <AppleImportButton hasSavings={false} />
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm text-muted-foreground">
-          Apple&apos;s accounts can&apos;t connect automatically. Import the CSV export from Wallet and they show up
-          everywhere: spending, categories, subscriptions, credit utilization and net worth.
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 const shortDate = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** When statements were last imported, when the next reminder starts, and every import so far. */
-function ImportTracking({ card, hasSavings }: { card: AppleCard; hasSavings: boolean }) {
+export function ImportTracking({ card, hasSavings }: { card: AppleCard; hasSavings: boolean }) {
   const status = card.importStatus;
   if (!status) return null;
   return (
-    <div className="flex flex-col gap-2 border-t border-border pt-3 text-sm">
+    <div className="flex flex-col gap-2 text-xs">
       {status.overdue ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="flex items-center gap-2 text-champagne">
@@ -384,77 +359,5 @@ function ImportTracking({ card, hasSavings }: { card: AppleCard; hasSavings: boo
         </details>
       )}
     </div>
-  );
-}
-
-export function AppleAccountCard({ card, hasSavings }: { card: AppleCard; hasSavings: boolean }) {
-  const isCard = card.type === "credit";
-  const usedPct = isCard && card.creditLimit ? Math.round((Math.max(0, card.balance) / card.creditLimit) * 100) : null;
-  return (
-    <Card>
-      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <DragHandle />
-          <div className="flex min-w-0 flex-col gap-1">
-            <CardTitle>{card.name}</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              Imported from statements · {card.transactionCount} transactions
-              {card.lastTransactionDate
-                ? ` · latest ${new Date(`${card.lastTransactionDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                : ""}
-            </p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <EditDialog card={card} />
-          <DeleteButton card={card} />
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-wrap items-end justify-between gap-4">
-        {isCard ? (
-          <>
-            <div className="flex flex-col gap-1">
-              <p className="text-xs text-muted-foreground">Balance owed{card.hasBalanceOverride ? " (entered by you)" : ""}</p>
-              <Money amount={Math.max(0, card.balance)} currency="USD" tone="negative" className="text-2xl font-semibold" />
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {card.creditLimit
-                ? `${usedPct}% of ${formatCurrency(card.creditLimit, "USD")} limit`
-                : "No credit limit set. Add one with the pencil to see utilization."}
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-col gap-1">
-              <p className="text-xs text-muted-foreground">Balance (entered by you)</p>
-              {card.balanceKnown ? (
-                <Money amount={card.balance} currency="USD" tone="positive" className="text-2xl font-semibold" />
-              ) : (
-                <p className="text-sm text-muted-foreground">Not entered yet. Add it with the pencil so it counts in net worth.</p>
-              )}
-            </div>
-            <div className="flex flex-col gap-1 sm:items-end">
-              {card.apy !== null && (
-                <p className="text-sm">
-                  <span className="font-mono tabular-nums text-moss">{card.apy}% APY</span>
-                  {card.balanceKnown && card.balance > 0 && (
-                    <span className="text-muted-foreground">
-                      {" "}
-                      · about {formatCurrency((card.balance * card.apy) / 100 / 12, "USD")} a month in interest
-                    </span>
-                  )}
-                </p>
-              )}
-              <p className="text-sm text-muted-foreground">
-                {formatCurrency(card.earned, "USD")} earned in imported interest and Daily Cash
-              </p>
-            </div>
-          </>
-        )}
-        <div className="basis-full">
-          <ImportTracking card={card} hasSavings={hasSavings} />
-        </div>
-      </CardContent>
-    </Card>
   );
 }

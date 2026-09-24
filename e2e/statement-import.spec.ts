@@ -31,7 +31,7 @@ test("statements import into the account's history once, and show up in it", asy
   await expect(page.getByText("Chickpea Kitchen")).toBeVisible();
 
   await page.goto("/accounts");
-  await expect(page.locator("[data-slot=card]").filter({ hasText: "Fifth Third Bank" }).getByText("History from September 2024")).toBeVisible();
+  await expect(page.locator("[data-connection='Fifth Third Bank']").getByText(/History from September 2024/)).toBeVisible();
 });
 
 test("a statement that doesn't add up is refused", async ({ page }) => {

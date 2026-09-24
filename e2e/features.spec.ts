@@ -20,17 +20,20 @@ test("year in review switches years", async ({ page }) => {
 
 test("accounts: a bank that signed out offers Reconnect instead of Sync now", async ({ page }) => {
   await page.goto("/accounts");
-  const card = page.locator("[data-slot=card]").filter({ hasText: "Fifth Third Bank" });
+  const card = page.locator("[data-connection='Fifth Third Bank']");
   await expect(card.getByText("Sign-in needed")).toBeVisible();
   await expect(card.getByRole("button", { name: "Reconnect" })).toBeVisible();
   await expect(card.getByRole("button", { name: /Sync now/ })).toHaveCount(0);
 });
 
-test("accounts: cards reorder from the keyboard and the order is kept", async ({ page }) => {
+test("accounts: groups reorder from the keyboard and the order is kept", async ({ page }) => {
   await page.goto("/accounts");
   await afterWelcome(page);
-  const titles = () => page.locator("[data-slot=card-title]").allTextContents();
-  const before = (await titles()).filter((t) => t !== "Credit utilization");
+  // Each group's grip is labeled "Move <group>".
+  const titles = () =>
+    page.getByRole("button", { name: /^Move / }).evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")!.slice("Move ".length)));
+  await expect(page.getByRole("button", { name: /^Move / }).first()).toBeVisible();
+  const before = await titles();
 
   const grip = page.getByRole("button", { name: `Move ${before[1]}`, exact: true });
   // Pick up, move one place up, drop, with a beat between like a person
@@ -43,8 +46,30 @@ test("accounts: cards reorder from the keyboard and the order is kept", async ({
 
   await expect.poll(async () => (await mockWrites(page)).some((w) => w.table === "ui_preferences")).toBe(true);
   await page.reload();
-  const after = (await titles()).filter((t) => t !== "Credit utilization");
-  expect(after.slice(0, 2)).toEqual([before[1], before[0]]);
+  await expect.poll(async () => (await titles()).slice(0, 2)).toEqual([before[1], before[0]]);
+});
+
+test("accounts: grouped by what they are, with net worth over a chosen period and a summary", async ({ page }) => {
+  await page.goto("/accounts");
+  await afterWelcome(page);
+  for (const group of ["Cash", "Credit cards"]) {
+    await expect(page.getByRole("button", { name: `Move ${group}`, exact: true })).toBeVisible();
+  }
+  await expect(page.getByText("1 month change").first()).toBeVisible();
+  await page.getByRole("combobox", { name: "Period" }).click();
+  await page.getByRole("option", { name: "1 year" }).click();
+  await expect(page.getByText("1 year change").first()).toBeVisible();
+
+  // A group folds shut.
+  await page.getByRole("button", { name: "Collapse Credit cards" }).click();
+  await expect(page.getByRole("link", { name: "Chase Freedom Flex" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand Credit cards" }).click();
+
+  // An account opens its transactions.
+  await page.getByRole("link", { name: "Chase Freedom Flex" }).click();
+  await expect(page).toHaveURL(/\/transactions\?account=/);
+  await expect(page.getByRole("button", { name: "Filters (1 on)" })).toBeVisible();
+  await expect(page.locator("[data-transaction]").first()).toContainText("Chase Freedom Flex");
 });
 
 test("settings: switching an alert off sticks and stops that alert", async ({ page }) => {

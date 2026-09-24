@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { usePlaidLink, type PlaidLinkOnSuccess } from "react-plaid-link";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function PlaidLinkButton() {
@@ -84,9 +85,10 @@ export function PlaidLinkButton() {
   const isBusy = isFetchingToken || isExchanging;
 
   return (
-    <div className="flex flex-col gap-2">
-      <Button onClick={handleClick} disabled={isBusy}>
-        {isExchanging ? "Connecting..." : isFetchingToken ? "Loading..." : "Connect account"}
+    <div className="flex flex-col items-end gap-2">
+      <Button size="sm" onClick={handleClick} disabled={isBusy}>
+        <Plus className="size-3.5" />
+        {isExchanging ? "Connecting..." : isFetchingToken ? "Loading..." : "Add account"}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </div>

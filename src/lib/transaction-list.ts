@@ -96,13 +96,84 @@ export function applyListOptions<T extends ListTransaction>(rows: T[], o: ListOp
   return kept.sort(compare[o.sort]);
 }
 
-/** Totals for the list as shown. */
-export function listTotals(rows: { amount: number }[]): { count: number; out: number; in: number } {
-  let out = 0;
-  let inflow = 0;
+const cents = (n: number) => Math.round(n * 100) / 100;
+
+export type ListSummary = {
+  count: number;
+  moneyOut: number;
+  moneyIn: number;
+  largestExpense: { amount: number; id: string } | null;
+  largestDeposit: { amount: number; id: string } | null;
+  // The typical charge: money out divided by the number of charges.
+  averageExpense: number | null;
+  // Charges not yet posted, which spending totals leave out until they do.
+  pending: { count: number; amount: number };
+  first: string | null;
+  last: string | null;
+};
+
+/** The Summary beside the list: what the list as shown adds up to. */
+export function listSummary(rows: { id: string; date: string; amount: number; pending: boolean }[]): ListSummary {
+  let moneyOut = 0;
+  let moneyIn = 0;
+  let charges = 0;
+  let largestExpense: ListSummary["largestExpense"] = null;
+  let largestDeposit: ListSummary["largestDeposit"] = null;
+  const pending = { count: 0, amount: 0 };
+  let first: string | null = null;
+  let last: string | null = null;
   for (const t of rows) {
-    if (t.amount > 0) out += t.amount;
-    else inflow -= t.amount;
+    // Plaid's sign: positive is money out.
+    if (t.amount > 0) {
+      moneyOut += t.amount;
+      charges++;
+      if (!largestExpense || t.amount > largestExpense.amount) largestExpense = { amount: t.amount, id: t.id };
+    } else if (t.amount < 0) {
+      moneyIn -= t.amount;
+      if (!largestDeposit || -t.amount > largestDeposit.amount) largestDeposit = { amount: -t.amount, id: t.id };
+    }
+    if (t.pending) {
+      pending.count++;
+      pending.amount += t.amount;
+    }
+    if (first === null || t.date < first) first = t.date;
+    if (last === null || t.date > last) last = t.date;
   }
-  return { count: rows.length, out: Math.round(out * 100) / 100, in: Math.round(inflow * 100) / 100 };
+  return {
+    count: rows.length,
+    moneyOut: cents(moneyOut),
+    moneyIn: cents(moneyIn),
+    largestExpense,
+    largestDeposit,
+    averageExpense: charges > 0 ? cents(moneyOut / charges) : null,
+    pending: { count: pending.count, amount: cents(pending.amount) },
+    first,
+    last,
+  };
+}
+
+export type DayGroup<T> = {
+  date: string;
+  rows: T[];
+  // Net for the day: money in less money out.
+  net: number;
+};
+
+/**
+ * The list by day, for the date headers: rows that share a date, in the
+ * order they're already sorted, with each day's net (money in positive).
+ */
+export function groupByDay<T extends { date: string; amount: number }>(rows: T[]): DayGroup<T>[] {
+  const groups: DayGroup<T>[] = [];
+  for (const t of rows) {
+    const current = groups.at(-1);
+    if (current && current.date === t.date) {
+      current.rows.push(t);
+      current.net -= t.amount;
+    } else {
+      groups.push({ date: t.date, rows: [t], net: -t.amount });
+    }
+  }
+  for (const g of groups) g.net = cents(g.net);
+  return groups;
 }

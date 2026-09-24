@@ -1,32 +1,35 @@
+import Link from "next/link";
+import { Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LastSyncedLabel } from "@/components/last-synced-label";
-import { Money } from "@/components/money";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { QueryErrorState } from "@/components/query-error";
 import { SyncAllButton } from "@/components/sync-all-button";
 import { SyncNowButton } from "@/components/sync-now-button";
 import { ReconnectButton } from "@/components/reconnect-button";
 import { StatementImportDialog } from "@/components/statement-import-dialog";
+import { InstitutionAvatar } from "@/components/institution-avatar";
+import { AccountsBoard, AccountsSummary, Ago } from "@/components/accounts-board";
 import { isDisconnected, needsReconnect, statusLabel } from "@/lib/item-status";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
-import { formatCurrency } from "@/lib/format";
 import { AccountApyButton } from "@/components/account-apy-button";
-import { AppleAccountCard, AppleEmptyCard, AppleImportButton, type AppleCard } from "@/components/apple-account-cards";
-import { DragHandle, SortableCardList, type SortableCard } from "@/components/sortable-card-list";
-import { applyCardOrder } from "@/lib/card-order";
+import { AppleDeleteButton, AppleEditButton, AppleImportButton, ImportTracking, type AppleCard } from "@/components/apple-account-cards";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { importStatus } from "@/lib/import-reminders";
 import { calendarNow } from "@/lib/time";
 import { loadAccountSettings, loadCardOrder } from "@/lib/ui-preferences";
-import { accountName, type AccountSettings } from "@/lib/account-settings";
+import { accountName } from "@/lib/account-settings";
 import { AccountSettingsButton } from "@/components/account-settings-button";
 import { closeDayFor } from "@/lib/card-statements";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prettyName } from "@/lib/transaction-display";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { buildBoard, historyStartFor, type BoardRow, type ManualAssetInput } from "@/lib/accounts-board";
+import { MAX_HISTORY_DAYS, type HistoryTx } from "@/lib/account-history";
+import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 
 type AccountRow = {
   id: string;
@@ -39,6 +42,7 @@ type AccountRow = {
   available_balance: number | null;
   credit_limit: number | null;
   apy: number | null;
+  is_hidden: boolean | null;
   iso_currency_code: string | null;
 };
 
@@ -51,7 +55,7 @@ type ItemRow = {
   accounts: AccountRow[];
 };
 
-const LIABILITY_TYPES = new Set(["credit", "loan"]);
+type CloseDayGuess = { day: number; from: "payments" | "due-date" } | null;
 
 function statusBadgeVariant(item: ItemRow): "default" | "destructive" | "secondary" {
   if (item.status === "active") return "default";
@@ -63,20 +67,9 @@ function formatHistoryStart(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-type CloseDayGuess = { day: number; from: "payments" | "due-date" } | null;
-
-function InstitutionCard({
-  item,
-  earliestDate,
-  settings,
-  guesses,
-}: {
-  item: ItemRow;
-  earliestDate: string | null;
-  settings: AccountSettings;
-  // For each card with no closing day set, the day used in its place.
-  guesses: Record<string, CloseDayGuess>;
-}) {
+/** One bank's connection: whether it's syncing, since when, and the buttons to sync or sign in again. */
+function Connection({ item, earliestDate, settings }: { item: ItemRow; earliestDate: string | null; settings: Awaited<ReturnType<typeof loadAccountSettings>> }) {
+  const name = item.institution_name ?? "Unknown institution";
   // Where past statements can go: checking first, then savings.
   const depository = item.accounts
     .filter((a) => a.type === "depository")
@@ -84,117 +77,56 @@ function InstitutionCard({
     .map((a) => ({ id: a.id, name: accountName(a, settings[a.id]), mask: a.mask }));
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2">
-          <DragHandle />
-          <div className="flex min-w-0 flex-col gap-1">
-            <CardTitle>{item.institution_name ?? "Unknown institution"}</CardTitle>
-            <p className="text-xs text-muted-foreground">
-              <LastSyncedLabel timestamp={item.last_synced_at} />
-              {" · "}
-              {earliestDate ? `History from ${formatHistoryStart(earliestDate)}` : "No transaction history yet"}
-              {item.error_code && !needsReconnect(item) ? ` · ${item.error_code}` : ""}
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={statusBadgeVariant(item)}>{statusLabel(item)}</Badge>
-          {needsReconnect(item) ? (
-            <ReconnectButton itemId={item.id} institutionName={item.institution_name ?? "this bank"} />
-          ) : (
-            <SyncNowButton itemId={item.id} />
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {needsReconnect(item) && (
-          <p className="rounded-md border border-oxblood/40 bg-oxblood/10 px-3 py-2 text-sm text-bone">
-            {isDisconnected(item)
-              ? `${item.institution_name ?? "This bank"} signed you out, so it has stopped syncing. Reconnect to sign in again; your accounts and history stay as they are.`
-              : `${item.institution_name ?? "This bank"} will stop syncing soon unless you sign in again. Reconnect now to keep it going.`}
+    <li data-connection={name} className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 first:pt-0 last:pb-0">
+      <div className="flex items-center gap-3">
+        <InstitutionAvatar institution={name} />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-medium">
+            {name}
+            <Badge variant={statusBadgeVariant(item)}>{statusLabel(item)}</Badge>
           </p>
-        )}
-        {item.accounts.map((account) => (
-          <div
-            key={account.id}
-            className="flex items-center justify-between border-t border-border pt-3 first:border-t-0 first:pt-0"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium">
-                {accountName(account, settings[account.id])}
-                {account.mask ? ` ••${account.mask}` : ""}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {account.type}
-                {account.subtype ? ` · ${account.subtype}` : ""}
-                {account.apy !== null ? ` · ${account.apy}% APY` : ""}
-                {account.type === "credit" && account.credit_limit && account.current_balance !== null
-                  ? ` · ${Math.round((Math.max(0, Number(account.current_balance)) / Number(account.credit_limit)) * 100)}% of ${formatCurrency(Number(account.credit_limit), account.iso_currency_code)} limit`
-                  : ""}
-                {account.type === "credit" && statementDays(settings[account.id], guesses[account.id])}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              <AccountSettingsButton
-                accountId={account.id}
-                name={accountName(account, settings[account.id])}
-                bankName={prettyName(account.official_name ?? account.name)}
-                nickname={settings[account.id]?.nickname ?? null}
-                isCard={account.type === "credit"}
-                closeDay={settings[account.id]?.statementCloseDay ?? null}
-                dueDay={settings[account.id]?.paymentDueDay ?? null}
-                suggestedCloseDay={guesses[account.id] ?? null}
-              />
-              {account.type === "depository" && account.subtype !== "checking" && (
-                <AccountApyButton accountId={account.id} name={accountName(account, settings[account.id])} apy={account.apy === null ? null : Number(account.apy)} />
-              )}
-              {account.current_balance === null ? (
-                <span className="font-mono text-sm text-muted-foreground">—</span>
-              ) : (
-                <Money
-                  amount={account.current_balance}
-                  currency={account.iso_currency_code}
-                  tone={LIABILITY_TYPES.has(account.type) ? "negative" : "positive"}
-                  className="text-sm font-medium"
-                />
-              )}
-            </div>
-          </div>
-        ))}
-        {depository.length > 0 && (
-          <StatementImportDialog accounts={depository} institutionName={item.institution_name ?? "this bank"} />
-        )}
-      </CardContent>
-    </Card>
+          <p className="text-xs text-muted-foreground">
+            {item.last_synced_at ? <Ago prefix="Synced" at={item.last_synced_at} /> : "Never synced"}
+            {" · "}
+            {earliestDate ? `History from ${formatHistoryStart(earliestDate)}` : "No transaction history yet"}
+            {item.error_code && !needsReconnect(item) ? ` · ${item.error_code}` : ""}
+          </p>
+        </div>
+      </div>
+      {needsReconnect(item) && (
+        <p className="rounded-md border border-oxblood/40 bg-oxblood/10 px-3 py-2 text-xs text-bone">
+          {isDisconnected(item)
+            ? `${name} signed you out, so it has stopped syncing. Reconnect to sign in again; your accounts and history stay as they are.`
+            : `${name} will stop syncing soon unless you sign in again. Reconnect now to keep it going.`}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {needsReconnect(item) ? <ReconnectButton itemId={item.id} institutionName={name} /> : <SyncNowButton itemId={item.id} />}
+        {depository.length > 0 && <StatementImportDialog accounts={depository} institutionName={name} />}
+      </div>
+    </li>
   );
-}
-
-function ordinal(n: number): string {
-  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
-  return `${n}${s}`;
-}
-
-/** " · closes the 3rd · due the 28th" for a card, "about" when the closing day is a guess. */
-function statementDays(setting: AccountSettings[string] | undefined, guess: CloseDayGuess): string {
-  const close = setting?.statementCloseDay
-    ? ` · closes the ${ordinal(setting.statementCloseDay)}`
-    : guess
-      ? ` · closes about the ${ordinal(guess.day)}`
-      : "";
-  const due = setting?.paymentDueDay ? ` · due the ${ordinal(setting.paymentDueDay)}` : "";
-  return close + due;
 }
 
 export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
   const admin = createAdminClient();
-  const [{ data: items, error }, { data: txDates, error: txDatesError }, { accounts: manualCards }, savedOrder, settings, ledger] = await Promise.all([
+  const [
+    { data: items, error },
+    { data: txDates, error: txDatesError },
+    { accounts: manualCards },
+    savedOrder,
+    settings,
+    ledger,
+    { data: assetRows, error: assetsError },
+    { data: holdingsData },
+    { data: pricesData },
+  ] = await Promise.all([
     admin
       .from("items")
       .select(
-        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, apy, iso_currency_code)"
+        "id, institution_name, status, error_code, last_synced_at, accounts(id, name, official_name, mask, type, subtype, current_balance, available_balance, credit_limit, apy, is_hidden, iso_currency_code)"
       )
       .order("created_at", { ascending: false }),
     // Earliest transaction per item — surfaces how much history Plaid
@@ -212,23 +144,15 @@ export default async function AccountsPage() {
     loadCardOrder(admin, "accounts"),
     loadAccountSettings(admin),
     loadLedger(admin),
+    admin.from("manual_assets").select("id, name, category, value, is_liability, updated_at").order("created_at"),
+    admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
+    admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
   ]);
 
-  // The closing day each card uses when you haven't set one.
-  const guesses: Record<string, CloseDayGuess> = {};
-  for (const card of ledger.cards) {
-    if (card.closesAtMonthEnd || card.closeDay) continue;
-    const close = closeDayFor(card, ledger.transactions.filter((t) => t.account?.id === card.id));
-    if (close && (close.source === "payments" || close.source === "due-date")) guesses[card.id] = { day: close.day, from: close.source };
-  }
-
-  if (error) {
-    console.error("Failed to load accounts", error);
-  }
+  if (error) console.error("Failed to load accounts", error);
+  if (assetsError) console.error("Failed to load manual assets", assetsError);
   if (txDatesError) {
-    // Non-fatal: the page still works without the history-start line, so
-    // this degrades quietly rather than blocking the whole page on a
-    // supplementary query.
+    // Non-fatal: the page still works without the history-start line.
     console.error("Failed to load transaction dates for history coverage", txDatesError);
   }
 
@@ -238,23 +162,23 @@ export default async function AccountsPage() {
   for (const t of (txDates ?? []) as unknown as { date: string; account: { item_id: string } | null }[]) {
     const itemId = t.account?.item_id;
     if (!itemId) continue;
-    // Rows are already ordered by date ascending, so the first one seen
-    // per item is its earliest.
+    // Rows are already ordered by date ascending, so the first one seen per item is its earliest.
     if (!earliestDateByItem.has(itemId)) earliestDateByItem.set(itemId, t.date);
+  }
+
+  // The closing day each card uses when you haven't set one.
+  const guesses: Record<string, CloseDayGuess> = {};
+  for (const card of ledger.cards) {
+    if (card.closesAtMonthEnd || card.closeDay) continue;
+    const close = closeDayFor(card, ledger.transactions.filter((t) => t.account?.id === card.id));
+    if (close && (close.source === "payments" || close.source === "due-date")) guesses[card.id] = { day: close.day, from: close.source };
   }
 
   const utilization = summarizeUtilization([
     // Apple Card, imported from statements, counts like any connected card.
     ...manualCards
       .filter((c) => c.type === "credit")
-      .map((c) => ({
-        id: `manual:${c.id}`,
-        name: c.name,
-        mask: c.mask,
-        institution: c.institution_name,
-        balance: c.balance,
-        limit: c.credit_limit,
-      })),
+      .map((c) => ({ id: `manual:${c.id}`, name: c.name, mask: c.mask, institution: c.institution_name, balance: c.balance, limit: c.credit_limit })),
     ...rows.flatMap((item) =>
       item.accounts
         .filter((a) => a.type === "credit")
@@ -270,6 +194,41 @@ export default async function AccountsPage() {
   ]);
 
   const today = calendarNow().isoDate;
+
+  // Every posted transaction, by account, to work balances back in time.
+  const transactionsByAccount = new Map<string, HistoryTx[]>();
+  for (const t of ledger.transactions) {
+    if (!t.account) continue;
+    const list = transactionsByAccount.get(t.account.id) ?? [];
+    list.push({ date: t.posted_date ?? t.date, amount: t.amount, pending: t.pending });
+    transactionsByAccount.set(t.account.id, list);
+  }
+  const historyStart = historyStartFor(transactionsByAccount, today, MAX_HISTORY_DAYS);
+
+  const holdings = holdingsData ?? [];
+  const prices = pricesData ?? [];
+  const pricedAt = prices.map((p) => p.fetched_at as string | null).filter(Boolean).sort().at(-1) ?? null;
+
+  const board: BoardRow[] = buildBoard({
+    plaid: rows.flatMap((item) =>
+      item.accounts.map((a) => ({
+        ...a,
+        current_balance: a.current_balance === null ? null : Number(a.current_balance),
+        credit_limit: a.credit_limit === null ? null : Number(a.credit_limit),
+        apy: a.apy === null ? null : Number(a.apy),
+        institution: item.institution_name,
+        last_synced_at: item.last_synced_at,
+      }))
+    ),
+    manualAccounts: manualCards,
+    assets: ((assetRows ?? []) as ManualAssetInput[]).map((a) => ({ ...a, value: Number(a.value) })),
+    metals: { value: totalPreciousMetalsValue(holdings, prices), count: holdings.length, pricedAt },
+    settings,
+    transactions: transactionsByAccount,
+    todayIso: today,
+    historyStart,
+  });
+
   const appleCards: AppleCard[] = manualCards.map((c) => ({
     id: c.id,
     type: c.type,
@@ -286,24 +245,49 @@ export default async function AccountsPage() {
     importStatus: importStatus(c.lastImportedAt, today),
     imports: c.imports,
   }));
+  const hasSavings = appleCards.some((c) => c.type === "depository");
+  const plaidAccounts = new Map(rows.flatMap((item) => item.accounts.map((a) => [a.id, a] as const)));
 
-  // Every card below credit utilization, in the order the user dragged them into.
-  const cards: SortableCard[] = applyCardOrder(
-    [
-      ...(appleCards.length === 0
-        ? [{ id: "apple:empty", label: "Apple Card and Apple Savings", node: <AppleEmptyCard /> }]
-        : appleCards.map((card) => ({ id: `apple:${card.id}`, label: card.name, node: <AppleAccountCard card={card} hasSavings={appleCards.some((c) => c.type === "depository")} /> }))),
-      ...rows.map((item) => ({
-        id: `item:${item.id}`,
-        label: item.institution_name ?? "Unknown institution",
-        node: (
-          <InstitutionCard item={item} earliestDate={earliestDateByItem.get(item.id) ?? null} settings={settings} guesses={guesses} />
-        ),
-      })),
-    ],
-    (c) => c.id,
-    savedOrder
-  );
+  // Each row's buttons: rename a bank account (and its statement days), its
+  // interest rate, an Apple account's balance and limit, or a link to Assets.
+  const actions: Record<string, React.ReactNode> = {};
+  for (const row of board) {
+    const ref = row.ref;
+    if (ref.type === "plaid") {
+      const a = plaidAccounts.get(ref.accountId)!;
+      actions[row.id] = (
+        <>
+          <AccountSettingsButton
+            accountId={a.id}
+            name={row.name}
+            bankName={prettyName(a.official_name ?? a.name)}
+            nickname={settings[a.id]?.nickname ?? null}
+            isCard={ref.isCard}
+            closeDay={settings[a.id]?.statementCloseDay ?? null}
+            dueDay={settings[a.id]?.paymentDueDay ?? null}
+            suggestedCloseDay={guesses[a.id] ?? null}
+          />
+          {a.type === "depository" && a.subtype !== "checking" && <AccountApyButton accountId={a.id} name={row.name} apy={ref.apy} />}
+        </>
+      );
+    } else if (ref.type === "apple") {
+      const card = appleCards.find((c) => c.id === ref.manualId)!;
+      actions[row.id] = (
+        <>
+          <AppleEditButton card={card} />
+          <AppleDeleteButton card={card} />
+        </>
+      );
+    } else {
+      actions[row.id] = (
+        <Button asChild size="icon" variant="ghost" aria-label={`Edit ${row.name} in Assets`}>
+          <Link href="/assets">
+            <Pencil className="size-3.5" />
+          </Link>
+        </Button>
+      );
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -315,7 +299,7 @@ export default async function AccountsPage() {
             items={rows.map((item) => ({ id: item.id, institution_name: item.institution_name }))}
             activeCount={rows.filter((item) => item.status === "active").length}
           />
-          {appleCards.length > 0 && <AppleImportButton hasSavings={appleCards.some((c) => c.type === "depository")} />}
+          <AppleImportButton hasSavings={hasSavings} />
           <PlaidLinkButton />
         </div>
       </div>
@@ -323,17 +307,54 @@ export default async function AccountsPage() {
       {error ? (
         <QueryErrorState message="Couldn't load your accounts. Try refreshing the page." />
       ) : (
-        <>
-          {rows.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No accounts connected yet. Use the button above to connect one via Plaid.
-            </p>
-          )}
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <AccountsBoard rows={board} actions={actions} historyStart={historyStart} savedOrder={savedOrder} />
 
-          <CreditUtilizationCard summary={utilization} currency="USD" />
+          <aside className="flex min-w-0 flex-col gap-4">
+            <AccountsSummary rows={board} />
+            <CreditUtilizationCard summary={utilization} currency="USD" />
 
-          <SortableCardList page="accounts" cards={cards} />
-        </>
+            <Card>
+              <CardHeader>
+                <CardTitle>Connections</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Banks sync on their own through the day. Sync now asks for anything new right away.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <ul className="flex flex-col">
+                  {rows.map((item) => (
+                    <Connection key={item.id} item={item} earliestDate={earliestDateByItem.get(item.id) ?? null} settings={settings} />
+                  ))}
+                  {appleCards.map((card) => (
+                    <li key={card.id} data-connection={card.name} className="flex flex-col gap-2 border-t border-border py-3 first:border-t-0 first:pt-0 last:pb-0">
+                      <div className="flex items-center gap-3">
+                        <InstitutionAvatar institution="Apple" />
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <p className="text-sm font-medium">{card.name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Imported from statements · {card.transactionCount} transactions
+                          </p>
+                        </div>
+                      </div>
+                      <ImportTracking card={card} hasSavings={hasSavings} />
+                    </li>
+                  ))}
+                  {appleCards.length === 0 && (
+                    <li className="flex flex-col gap-2 border-t border-border py-3 text-xs text-muted-foreground first:border-t-0 first:pt-0 last:pb-0">
+                      <p className="text-sm font-medium text-foreground">Apple Card and Apple Savings</p>
+                      Apple&apos;s accounts can&apos;t connect automatically. Import the CSV export from Wallet with Import
+                      statement above and they count everywhere.
+                    </li>
+                  )}
+                </ul>
+                {rows.length === 0 && (
+                  <p className="mt-3 text-xs text-muted-foreground">No banks connected yet. Use Add account to connect one through Plaid.</p>
+                )}
+              </CardContent>
+            </Card>
+          </aside>
+        </div>
       )}
     </div>
   );

@@ -3,8 +3,8 @@ import { afterWelcome, expect, test } from "./test";
 test("the Filters menu sorts and narrows the transactions list", async ({ page }) => {
   await page.goto("/transactions");
   await afterWelcome(page);
-  const rows = page.locator("tbody tr");
-  const summary = page.getByText(/^\d+ transactions? · /);
+  const rows = page.locator("[data-transaction]");
+  const summary = page.getByTestId("summary-count");
   const before = await summary.textContent();
 
   await page.getByRole("button", { name: "Filters" }).click();
