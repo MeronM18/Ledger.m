@@ -198,6 +198,14 @@
       font-size: 16px;
     }
   }
+  /* A chart's own surface takes focus when clicked and would draw a box
+     around the whole thing. The data stays reachable; the box isn't needed. */
+  .recharts-wrapper:focus,
+  .recharts-wrapper:focus-visible,
+  .recharts-surface:focus,
+  .recharts-surface:focus-visible {
+    outline: none;
+  }
   /* Keyboard focus is always visible, including on plain links. */
   :where(a, button, [role="button"], summary):focus-visible {
     outline: 2px solid var(--ring);

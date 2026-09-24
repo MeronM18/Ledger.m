@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { ForecastPoint } from "@/lib/forecast";
+import { chartTooltipProps } from "@/lib/chart-style";
 
 const tooltipContentStyle: CSSProperties = {
   background: "var(--popover)",
@@ -50,6 +51,7 @@ export function ForecastChart({
           width={60}
         />
         <Tooltip
+        {...chartTooltipProps}
           formatter={(value) => formatCurrency(Number(value), currency)}
           labelFormatter={(date) => shortDate(String(date))}
           contentStyle={tooltipContentStyle}

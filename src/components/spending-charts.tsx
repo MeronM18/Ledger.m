@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import {
   Bar,
   BarChart,
@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/money";
+import { chartTooltipProps } from "@/lib/chart-style";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { CategoryTotal, MonthTotal } from "@/lib/spending-aggregation";
 
@@ -50,6 +51,11 @@ export function SpendingCharts({
   monthLabel: string;
 }) {
   const monthTotal = categoryTotals.reduce((sum, c) => sum + c.amount, 0);
+  // The slice under the pointer (or tapped, on a phone). It is read out in the
+  // middle of the donut, where the total normally is, so there is no floating
+  // tooltip to land on top of anything.
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const active = activeIndex !== null ? (categoryTotals[activeIndex] ?? null) : null;
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -74,17 +80,18 @@ export function SpendingCharts({
                     outerRadius={110}
                     strokeWidth={2}
                     stroke="var(--card)"
+                    onMouseEnter={(_: unknown, index: number) => setActiveIndex(index)}
+                    onMouseLeave={() => setActiveIndex(null)}
+                    onClick={(_: unknown, index: number) => setActiveIndex(index)}
                   >
-                    {categoryTotals.map((c) => (
-                      <Cell key={c.category} fill={vizColor(c.colorSlot)} />
+                    {categoryTotals.map((c, i) => (
+                      <Cell
+                        key={c.category}
+                        fill={vizColor(c.colorSlot)}
+                        fillOpacity={activeIndex === null || activeIndex === i ? 1 : 0.4}
+                      />
                     ))}
                   </Pie>
-                  <Tooltip
-                    formatter={(value) => formatCurrency(Number(value), currency)}
-                    contentStyle={tooltipContentStyle}
-                    labelStyle={tooltipLabelStyle}
-                    itemStyle={tooltipItemStyle}
-                  />
                   <Legend
                     verticalAlign="bottom"
                     height={48}
@@ -97,8 +104,20 @@ export function SpendingCharts({
                 className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-center justify-center text-center"
                 style={{ height: 300 - 48 }}
               >
-                <span className="text-xs text-muted-foreground">Total</span>
-                <Money amount={monthTotal} currency={currency} tone="negative" className="text-xl font-semibold" />
+                {active ? (
+                  <>
+                    <span className="max-w-[9rem] truncate text-xs text-muted-foreground">{active.label}</span>
+                    <Money amount={active.amount} currency={currency} tone="negative" className="text-xl font-semibold" />
+                    <span className="text-xs text-muted-foreground">
+                      {monthTotal > 0 ? `${Math.round((active.amount / monthTotal) * 100)}% of the month` : ""}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs text-muted-foreground">Total</span>
+                    <Money amount={monthTotal} currency={currency} tone="negative" className="text-xl font-semibold" />
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -132,6 +151,7 @@ export function SpendingCharts({
                   width={56}
                 />
                 <Tooltip
+        {...chartTooltipProps}
                   formatter={(value) => formatCurrency(Number(value), currency)}
                   cursor={{ fill: "var(--muted)" }}
                   contentStyle={tooltipContentStyle}

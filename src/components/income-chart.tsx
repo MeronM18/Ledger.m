@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { IncomeMonth } from "@/lib/income";
+import { chartTooltipProps } from "@/lib/chart-style";
 
 const tooltipContentStyle: CSSProperties = {
   background: "var(--popover)",
@@ -50,6 +51,7 @@ export function IncomeChart({
             width={60}
           />
           <Tooltip
+        {...chartTooltipProps}
             cursor={{ fill: "var(--muted)", opacity: 0.4 }}
             contentStyle={tooltipContentStyle}
             labelStyle={{ color: "var(--bone)" }}
