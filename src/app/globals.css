@@ -709,3 +709,197 @@
     margin: 0;
   }
 }
+
+/* Login (app/(auth)/login/page.tsx): the first moment of the welcome
+   animation's world. Ledger-ruled paper that fades toward the edges and
+   lights up in champagne around the pointer; a glow; "Ledger.m" rising
+   out of a champagne rule, letter by letter, into focus; then the panel.
+   About a second and a half, transform and opacity nearly throughout. */
+.login {
+  --login-settle: cubic-bezier(0.16, 1, 0.3, 1);
+  --lx: 50%;
+  --ly: 40%;
+  background: var(--background);
+}
+
+.login-ruled {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    color-mix(in oklab, var(--bone) 5%, transparent) 31px,
+    color-mix(in oklab, var(--bone) 5%, transparent) 32px
+  );
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 42%, black 20%, transparent 75%);
+  animation: welcome-fade-in 1600ms ease-out both;
+}
+
+/* The same lines in champagne, seen only around the pointer. */
+.login-ruled-lit {
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 31px,
+    color-mix(in oklab, var(--champagne) 38%, transparent) 31px,
+    color-mix(in oklab, var(--champagne) 38%, transparent) 32px
+  );
+  mask-image: radial-gradient(220px circle at var(--lx) var(--ly), black, transparent 70%);
+  opacity: 0;
+  transition: opacity 500ms ease-out;
+  animation: none;
+}
+
+.login[data-lit] .login-ruled-lit {
+  opacity: 1;
+}
+
+.login-glow {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  width: min(52rem, 140vw);
+  aspect-ratio: 1.5;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in oklab, var(--champagne) 13%, transparent),
+    color-mix(in oklab, var(--champagne) 4%, transparent) 55%,
+    transparent
+  );
+  transform: translate(-50%, -50%);
+  animation: login-glow-in 1800ms var(--login-settle) both;
+}
+
+@keyframes login-glow-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+.login-wordmark {
+  font-size: clamp(3rem, 12vw, 4.5rem);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.015em;
+  color: var(--bone);
+}
+
+/* Each letter rises out of its own clipped box, out of the rule below it. */
+.login-letter-clip {
+  display: inline-block;
+  overflow: hidden;
+  padding-bottom: 0.2em;
+  margin-bottom: -0.2em;
+  vertical-align: bottom;
+}
+
+.login-letter {
+  display: inline-block;
+  animation: welcome-rise 950ms var(--login-settle) calc(260ms + var(--i) * 50ms) both;
+}
+
+.login-rule {
+  position: relative;
+  width: min(18rem, 70vw);
+  height: 1px;
+  margin-top: 0.9rem;
+  background: linear-gradient(90deg, transparent, var(--champagne) 18%, var(--champagne) 82%, transparent);
+  transform: scaleX(0);
+  animation: login-rule-draw 900ms var(--login-settle) 120ms both;
+}
+
+@keyframes login-rule-draw {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.login-glint {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 30%;
+  background: linear-gradient(90deg, transparent, #fff6e0, transparent);
+  box-shadow: 0 0 10px 1px color-mix(in oklab, #fff6e0 55%, transparent);
+  opacity: 0;
+  animation: welcome-glint 1200ms cubic-bezier(0.45, 0, 0.25, 1) 420ms both;
+}
+
+.login-tagline {
+  margin-top: 1rem;
+  animation: login-rise-in 800ms var(--login-settle) 780ms both;
+}
+
+.login-panel {
+  animation: login-rise-in 900ms var(--login-settle) 920ms both;
+}
+
+.login-footer {
+  animation: welcome-fade-in 800ms ease-out 1200ms both;
+}
+
+@keyframes login-rise-in {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+/* "Check your inbox": the ring draws, then the check. */
+.login-check-ring {
+  stroke-dasharray: 132;
+  stroke-dashoffset: 132;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  animation: login-draw 700ms var(--login-settle) 80ms forwards;
+}
+
+.login-check-mark {
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+  animation: login-draw 450ms var(--login-settle) 520ms forwards;
+}
+
+@keyframes login-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-ruled,
+  .login-glow,
+  .login-letter,
+  .login-tagline,
+  .login-panel,
+  .login-footer {
+    animation: none;
+  }
+  .login-rule {
+    animation: none;
+    transform: none;
+  }
+  .login-glint,
+  .login-ruled-lit {
+    display: none;
+  }
+  .login-check-ring,
+  .login-check-mark {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
