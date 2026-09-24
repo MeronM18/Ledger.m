@@ -4,7 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { Check, PiggyBank, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { Area, ComposedChart, CartesianGrid, Line, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, ComposedChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +23,7 @@ import { addDays, daysBetween } from "@/lib/account-history";
 import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 import { dateTicks, formatTickMoney, valueTicks } from "@/lib/day-chart";
 import { formatCurrency } from "@/lib/format";
-import { dollars, fullDate, paceWindow, roughDate, roughGap, shortDate, VERDICT } from "@/lib/goal-copy";
+import { dollars, fullDate, roughDate, roughGap, shortDate, VERDICT } from "@/lib/goal-copy";
 import type { GoalInsight, PaySummary } from "@/lib/goal-insights";
 import { monthsUntil, type GoalProgress } from "@/lib/goals";
 import { cn } from "@/lib/utils";
@@ -50,8 +50,6 @@ async function send(url: string, method: string, body?: unknown) {
 }
 
 const percent = (share: number) => `${Math.round(share * 100)}%`;
-const monthName = (month: string) =>
-  new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
 
 // ---- Adding and editing ----------------------------------------------------
 
@@ -305,9 +303,9 @@ const tooltipStyle: CSSProperties = {
 };
 
 /**
- * The amount saved day by day, then two roads from today: where the pace of
- * the last few months leads (dotted), and the straight path that reaches
- * the target on its date (dashed). The gap between them is the story.
+ * The amount saved day by day, then the straight path from today that
+ * reaches the target on its date (dashed). A goal with no date shows where
+ * the pace of the last few months leads instead (dotted).
  */
 function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
   const { insight } = goal;
@@ -327,11 +325,12 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
     if (end && goal.status !== "complete") {
       const now = points[points.length - 1];
       const days = daysBetween(today, end);
-      if (insight.pace) now.pace = now.saved;
+      const showPace = !dated && insight.pace !== null;
+      if (showPace) now.pace = now.saved;
       if (dated) now.need = now.saved;
       points.push({
         t: tOf(end),
-        pace: insight.pace ? (now.saved ?? 0) + (insight.pace.perMonth * days) / (365.25 / 12) : undefined,
+        pace: showPace ? (now.saved ?? 0) + (insight.pace!.perMonth * days) / (365.25 / 12) : undefined,
         need: dated ? goal.target : undefined,
       });
     }
@@ -339,17 +338,17 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
     const highest = Math.max(goal.target, ...points.flatMap((p) => [p.saved ?? 0, p.pace ?? 0]));
     const yTicks = valueTicks(0, highest, 4);
     const x = dateTicks(points[0].t, points[points.length - 1].t, 6);
-    const last = points[points.length - 1];
-    return { points, yTicks, xTicks: x.ticks, xLabel: x.label, future: end !== null && goal.status !== "complete", paceEnd: last.pace !== undefined ? last : null };
+    const hasPace = points.some((p) => p.pace !== undefined);
+    return { points, yTicks, xTicks: x.ticks, xLabel: x.label, future: end !== null && goal.status !== "complete", hasPace };
   }, [insight, goal.targetDate, goal.status, goal.target, today]);
 
   const yStep = model.yTicks.length > 1 ? model.yTicks[1] - model.yTicks[0] : 1;
-  const label = `${goal.name}: saved over time${model.future ? ", your pace ahead, and the path that reaches the target on time" : ""}.`;
+  const label = `${goal.name}: saved over time${model.future ? (model.hasPace ? ", and where your pace leads" : ", and the path that reaches the target on time") : ""}.`;
 
   return (
     <figure className="flex min-w-0 flex-col gap-2">
       <div role="group" aria-label={label}>
-        <ResponsiveContainer {...CHART_RESIZE} width="100%" height={220}>
+        <ResponsiveContainer {...CHART_RESIZE} width="100%" height={200}>
           <ComposedChart data={model.points} margin={{ top: 10, right: 6, bottom: 0, left: 0 }}>
             <defs>
               <linearGradient id={`goalFill-${goal.id}`} x1="0" y1="0" x2="0" y2="1">
@@ -398,7 +397,7 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
                 const rows: [string, number | undefined][] = [
                   ["Saved", p.saved],
                   ["At your pace", p.t > tOf(today) ? p.pace : undefined],
-                  ["Needed", p.t > tOf(today) ? p.need : undefined],
+                  ["On track", p.t > tOf(today) ? p.need : undefined],
                 ];
                 return (
                   <div style={tooltipStyle}>
@@ -447,18 +446,6 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
               connectNulls
               isAnimationActive={false}
             />
-            {/* Where the pace leaves it: the number the dotted line lands on. */}
-            {model.paceEnd && (
-              <ReferenceDot
-                x={model.paceEnd.t}
-                y={model.paceEnd.pace}
-                r={3}
-                fill="var(--champagne)"
-                stroke="var(--card)"
-                strokeWidth={1.5}
-                label={{ value: formatTickMoney(model.paceEnd.pace!, 100), position: "left", fill: "var(--champagne)", fontSize: 11, offset: 8 }}
-              />
-            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -470,7 +457,7 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
             </svg>
             Saved
           </span>
-          {insight.pace && (
+          {model.hasPace && (
             <span className="inline-flex items-center gap-1.5">
               <svg width="16" height="6" aria-hidden>
                 <line x1="1" y1="3" x2="16" y2="3" stroke="var(--champagne)" strokeWidth="2" strokeDasharray="1 4" strokeLinecap="round" />
@@ -483,7 +470,7 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
               <svg width="16" height="6" aria-hidden>
                 <line x1="0" y1="3" x2="16" y2="3" stroke="var(--muted-foreground)" strokeWidth="1.5" strokeDasharray="6 4" />
               </svg>
-              Needed to finish on time
+              On track to finish on time
             </span>
           )}
         </figcaption>
@@ -494,230 +481,148 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
 
 // ---- One goal -------------------------------------------------------------
 
-/**
- * Progress as a bar marked in quarters, each quarter dated: when it was
- * reached, or when the pace gets there.
- */
-function MilestoneRail({ goal, today }: { goal: GoalRow; today: string }) {
-  const fill = goal.status === "complete" ? "bg-moss" : goal.status === "behind" ? "bg-oxblood" : "bg-champagne";
-  return (
-    <div className="flex flex-col gap-2">
-      <div
-        role="progressbar"
-        aria-label={`${goal.name} progress`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(goal.percent * 100)}
-        className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted"
-      >
-        <div className={cn("h-full rounded-full", fill)} style={{ width: `${goal.percent * 100}%` }} />
-        {[25, 50, 75].map((p) => (
-          <span key={p} className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-card" style={{ left: `${p}%` }} aria-hidden />
-        ))}
-      </div>
-      <ol className="grid grid-cols-4 text-[11px] leading-snug" aria-label="Milestones">
-        {goal.insight.milestones.map((m) => {
-          const when = m.reached ? (m.date ? shortDate(m.date, today) : "Reached") : m.date ? `around ${roughDate(m.date, today)}` : null;
-          return (
-            <li key={m.share} className="flex flex-col items-end text-right">
-              <span className={cn("inline-flex items-center gap-1 font-medium", m.reached ? "text-moss" : "text-muted-foreground")}>
-                {m.reached && <Check className="size-3" aria-hidden />}
-                {Math.round(m.share * 100)}%
-                <span className="sr-only">{m.reached ? " reached" : ""}</span>
-              </span>
-              <span className="text-muted-foreground">{when ?? " "}</span>
-            </li>
-          );
-        })}
-      </ol>
-    </div>
-  );
+const TONE_TEXT = { good: "text-moss", bad: "text-oxblood-text", quiet: "text-muted-foreground" } as const;
+const TONE_PILL = {
+  good: "bg-moss/12 text-moss ring-moss/25",
+  bad: "bg-oxblood/12 text-oxblood-text ring-oxblood/30",
+  quiet: "bg-bone/6 text-muted-foreground ring-bone/10",
+} as const;
+
+const strong = (text: string) => <span className="font-mono text-bone tabular-nums">{text}</span>;
+
+/** "3 months", "2 years": how far off a date is, at the precision a forecast deserves. */
+function farOff(fromIso: string, toIso: string): string {
+  const months = Math.round(Math.abs(daysBetween(fromIso, toIso)) / 30.44);
+  if (months >= 24) return `${Math.round(months / 12)} years`;
+  return roughGap(fromIso, toIso);
 }
 
-const TONE_TEXT = { good: "text-moss", bad: "text-oxblood-text", quiet: "text-muted-foreground" } as const;
-const TONE_DOT = { good: "bg-moss", bad: "bg-oxblood", quiet: "bg-muted-foreground" } as const;
-
-const strong = (text: string) => <span className="font-mono text-foreground tabular-nums">{text}</span>;
-const when = (text: string) => <span className="text-foreground">{text}</span>;
-
-/** What the pace says, in a sentence or two. */
-function Reading({ goal, today }: { goal: GoalRow; today: string }) {
+/** Where the goal stands, in one plain sentence; null when the tiles say it all. */
+function summaryOf(goal: GoalRow, today: string): React.ReactNode {
   const { insight } = goal;
-  const window = insight.pace ? paceWindow(insight.pace.since, today) : "";
-  const rate = insight.pace ? `${insight.pace.perMonth >= 0 ? "+" : "-"}${dollars(Math.abs(insight.pace.perMonth))}` : "";
-  const due = goal.targetDate ? fullDate(goal.targetDate) : "";
+  const due = goal.targetDate ? shortDate(goal.targetDate, today) : "";
   switch (insight.verdict) {
     case "reached":
-      return <>Done{insight.milestones[3].date ? <> on {shortDate(insight.milestones[3].date, today)}</> : null}. Anything past {dollars(goal.target)} is a head start on the next one.</>;
+      return <>Done{insight.milestones[3].date ? <> on {shortDate(insight.milestones[3].date, today)}</> : null}. Anything past the target is a head start on the next goal.</>;
     case "ahead":
-    case "on-pace":
       return (
         <>
-          Growing {strong(rate)} a month over {window}, it reaches {dollars(goal.target)} around {when(roughDate(insight.reachDate!, today))}
-          {insight.verdict === "ahead" ? <>, {roughGap(insight.reachDate!, goal.targetDate!)} before {due}.</> : <>, just in time for {due}.</>}
+          You&apos;re ahead: at this pace it&apos;s done around {roughDate(insight.reachDate!, today)}, {roughGap(insight.reachDate!, goal.targetDate!)} early.
         </>
       );
+    case "on-pace":
+      return <>You&apos;re on track to finish around {roughDate(insight.reachDate!, today)}.</>;
     case "behind":
       return (
         <>
-          Growing {strong(rate)} a month over {window}, it would be at {strong(dollars(insight.atTargetDate!))} on {due},{" "}
-          {strong(dollars(goal.target - insight.atTargetDate!))} short. At that pace it gets there around {when(roughDate(insight.reachDate!, today))}.
+          At this pace you&apos;d have {strong(dollars(insight.atTargetDate!))} by {due}, {strong(dollars(goal.target - insight.atTargetDate!))} short.
         </>
       );
     case "stalled":
       return insight.pace!.perMonth <= 0 ? (
-        <>
-          Down {strong(dollars(Math.abs(insight.pace!.perMonth)))} a month over {window}. At this rate it doesn&apos;t get there.
-        </>
+        <>It&apos;s gone down {strong(dollars(Math.abs(insight.pace!.perMonth)))} a month lately, so it isn&apos;t getting closer.</>
       ) : (
-        <>Growing only {strong(rate)} a month over {window}, too slowly to get there.</>
+        <>It&apos;s barely growing lately, too slowly to get there.</>
       );
     case "overdue":
       return <>{due} passed with {strong(dollars(goal.remaining))} to go. Pick a new date to get a new plan.</>;
     case "open":
-      return (
-        <>
-          Growing {strong(rate)} a month over {window}, it reaches {dollars(goal.target)} around {when(roughDate(insight.reachDate!, today))}. Add a date
-          to get a plan.
-        </>
-      );
+      return <>At this pace it&apos;s done around {roughDate(insight.reachDate!, today)}. Add a date to get a monthly amount.</>;
     case "unknown":
+      // By hand there's no pace; the tiles below say what to do, or a date is what's missing.
       return goal.tracksAccount ? (
-        <>There isn&apos;t three weeks of history in these accounts yet, so there&apos;s no pace to read.</>
-      ) : (
-        <>
-          Tracked by hand, so there&apos;s no history to read a pace from. Follow the accounts the money sits in to see one
-          {goal.targetDate ? "." : ", and add a date to see what it takes each month."}
-        </>
+        <>These accounts need about three weeks of history before there&apos;s a pace to read.</>
+      ) : goal.targetDate ? null : (
+        <>Add a date to see what to save each month, and use Add money as you set money aside.</>
       );
   }
 }
 
-function Plan({ goal, pay, today }: { goal: GoalRow; pay: PaySummary | null; today: string }) {
-  const { plan, interestPerMonth, apy } = goal.insight;
-  if (!plan || !goal.targetDate) return null;
-  const interest = interestPerMonth !== null && interestPerMonth >= 0.5 ? interestPerMonth : null;
+function Tile({ label, value, note, tone }: { label: string; value: React.ReactNode; note?: React.ReactNode; tone?: "good" | "bad" }) {
   return (
-    <section aria-label="The plan" className="flex flex-col gap-2.5">
-      <h3 className="text-sm font-medium">To finish by {shortDate(goal.targetDate, today)}</h3>
-      {plan.perMonth === 0 ? (
-        <p className="text-sm text-muted-foreground">Interest alone gets it there. Anything you add is extra.</p>
-      ) : (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2 text-sm">
-          <dt className="text-muted-foreground">Each month</dt>
-          <dd>
-            {strong(dollars(plan.perMonth))}{" "}
-            <span className="text-muted-foreground">
-              for {plan.months} month{plan.months === 1 ? "" : "s"}
-              {interest ? ", on top of interest" : ""}
-            </span>
-          </dd>
-          {plan.shareOfPay !== null && (
-            <>
-              <dt className="text-muted-foreground">Of your pay</dt>
-              <dd>
-                {strong(percent(plan.shareOfPay))}{" "}
-                <span className="text-muted-foreground">
-                  {plan.shareOfPay > 1
-                    ? "of a typical month, more than one brings in"
-                    : plan.leanMonth
-                      ? `of every check; ${dollars(plan.leanMonth.amount)} in a lean month like ${monthName(plan.leanMonth.month)}`
-                      : "of every check"}
-                </span>
-              </dd>
-            </>
-          )}
-          {interest && (
-            <>
-              <dt className="text-muted-foreground">Interest</dt>
-              <dd>
-                {strong(`+${dollars(interest)}`)} <span className="text-muted-foreground">a month at {apy!.toFixed(2)}% APY</span>
-              </dd>
-            </>
-          )}
-        </dl>
-      )}
-      {plan.fits !== null && pay?.savingsRate != null && plan.perMonth > 0 && (
-        <p className={cn("text-xs", plan.fits ? "text-muted-foreground" : "text-oxblood-text")}>
-          {plan.fits
-            ? `That fits: over the past year you've kept ${percent(pay.savingsRate)} of what came in.`
-            : pay.savingsRate > 0
-              ? `That's more than the ${percent(pay.savingsRate)} of what came in that you've kept over the past year.`
-              : "Over the past year spending has matched what came in, so this needs room made for it."}
-        </p>
-      )}
-    </section>
-  );
-}
-
-/** The latest paycheck, its share for this goal, and whether that's been moved over. */
-function NextMove({ goal, today }: { goal: GoalRow; today: string }) {
-  const move = goal.insight.nextMove;
-  if (!move) return null;
-  const done = move.moved !== null && move.moved >= move.suggested - 0.5;
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-lg bg-muted/50 px-4 py-3">
-      <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-        <p>
-          Paid {shortDate(move.paycheck.date, today)}: {strong(dollars(move.paycheck.amount))}
-        </p>
-        <p className="text-muted-foreground">
-          Its share for this goal is {strong(dollars(move.suggested))}.
-        </p>
-      </div>
-      {move.moved === null && <p className="text-sm text-muted-foreground">Log it with Add money once it&apos;s moved.</p>}
-      {move.moved !== null && (
-        <p className={cn("inline-flex items-center gap-1.5 text-sm", done ? "text-moss" : "text-muted-foreground")}>
-          {done ? (
-            <>
-              <Check className="size-4" aria-hidden />
-              {dollars(move.moved)} moved since
-            </>
-          ) : move.moved > 0 ? (
-            <>
-              {dollars(move.moved)} moved, {dollars(move.suggested - move.moved)} to go
-            </>
-          ) : (
-            "Not moved yet"
-          )}
-        </p>
-      )}
+    <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-muted/20 px-4 py-3">
+      <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{label}</span>
+      <span className={cn("font-mono text-xl font-semibold tabular-nums", tone ? TONE_TEXT[tone] : "text-bone")}>{value}</span>
+      {note && <span className="text-xs text-muted-foreground">{note}</span>}
     </div>
   );
 }
 
-/** Where the pace came from: money moved in, interest, money taken out. */
-function Flows({ goal, today }: { goal: GoalRow; today: string }) {
-  const f = goal.insight.flows;
-  if (!f || (f.added === 0 && f.interest === 0 && f.out === 0)) return null;
-  return (
-    <section aria-label="Where it came from" className="flex flex-col gap-1.5">
-      <h3 className="text-xs text-muted-foreground">Over {paceWindow(f.since, today)}</h3>
-      <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-        <div className="flex items-baseline gap-1.5">
-          <dt className="sr-only">Moved in</dt>
-          <dd className="font-mono text-moss tabular-nums">+{dollars(f.added)}</dd>
-          <span className="text-muted-foreground">
-            moved in{f.deposits > 0 ? ` over ${f.deposits} deposit${f.deposits === 1 ? "" : "s"}` : ""}
-          </span>
-        </div>
-        {f.interest > 0 && (
-          <div className="flex items-baseline gap-1.5">
-            <dt className="sr-only">Interest</dt>
-            <dd className="font-mono text-moss tabular-nums">+{dollars(f.interest)}</dd>
-            <span className="text-muted-foreground">interest</span>
-          </div>
-        )}
-        {f.out > 0 && (
-          <div className="flex items-baseline gap-1.5">
-            <dt className="sr-only">Taken out</dt>
-            <dd className="font-mono text-oxblood-text tabular-nums">-{dollars(f.out)}</dd>
-            <span className="text-muted-foreground">taken out</span>
-          </div>
-        )}
-      </dl>
-    </section>
-  );
+/** The three things to know: what to save a month, this paycheck's share, and where the pace lands. */
+function Tiles({ goal, today }: { goal: GoalRow; today: string }) {
+  const { plan, nextMove: move, pace, reachDate, interestPerMonth } = goal.insight;
+  if (goal.status === "complete") return null;
+  const tiles: React.ReactNode[] = [];
+
+  if (plan && goal.targetDate) {
+    const interest = interestPerMonth !== null && interestPerMonth >= 0.5 ? interestPerMonth : null;
+    tiles.push(
+      <Tile
+        key="plan"
+        label="Save each month"
+        value={dollars(plan.perMonth)}
+        note={
+          plan.perMonth === 0
+            ? "Interest alone gets it there"
+            : [
+                `to finish by ${shortDate(goal.targetDate, today)}`,
+                plan.shareOfPay !== null && plan.shareOfPay <= 1 ? `about ${percent(plan.shareOfPay)} of your pay` : null,
+                interest ? `plus ~${dollars(interest)} interest` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+        }
+        tone={plan.fits === false ? "bad" : undefined}
+      />
+    );
+  }
+
+  if (move) {
+    const done = move.moved !== null && move.moved >= move.suggested - 0.5;
+    tiles.push(
+      <Tile
+        key="check"
+        label={`From your ${shortDate(move.paycheck.date, today)} check`}
+        value={dollars(move.suggested)}
+        tone={done ? "good" : undefined}
+        note={
+          move.moved === null ? (
+            "Log it with Add money once it's moved"
+          ) : done ? (
+            <span className="inline-flex items-center gap-1 text-moss">
+              <Check className="size-3" aria-hidden />
+              Moved
+            </span>
+          ) : move.moved > 0 ? (
+            `${dollars(move.moved)} moved, ${dollars(move.suggested - move.moved)} to go`
+          ) : (
+            "Not moved yet"
+          )
+        }
+      />
+    );
+  }
+
+  if (pace) {
+    const late = reachDate && goal.targetDate && reachDate > goal.targetDate ? farOff(goal.targetDate, reachDate) : null;
+    tiles.push(
+      <Tile
+        key="pace"
+        label="At your current pace"
+        value={reachDate ? roughDate(reachDate, today) : "Not getting there"}
+        tone={late || !reachDate ? "bad" : "good"}
+        note={
+          <>
+            {pace.perMonth >= 0 ? "Adding" : "Losing"} {dollars(Math.abs(pace.perMonth))} a month
+            {late ? ` · ${late} late` : ""}
+          </>
+        }
+      />
+    );
+  }
+
+  if (tiles.length === 0) return null;
+  return <div className={cn("grid gap-3", tiles.length > 1 && "sm:grid-cols-2", tiles.length > 2 && "lg:grid-cols-3")}>{tiles}</div>;
 }
 
 function GoalPanel({
@@ -732,8 +637,11 @@ function GoalPanel({
   today: string;
 }) {
   const router = useRouter();
-  const verdict =
-    goal.insight.verdict === "unknown" && !goal.tracksAccount ? { label: "Tracked by hand", tone: "quiet" as const } : VERDICT[goal.insight.verdict];
+  // A goal tracked by hand has no pace to judge, so no status pill.
+  const verdict = goal.insight.verdict === "unknown" && !goal.tracksAccount ? null : VERDICT[goal.insight.verdict];
+  const fill = goal.status === "complete" ? "bg-moss" : "bg-champagne";
+  const summary = summaryOf(goal, today);
+  const monthsLeft = goal.targetDate && goal.targetDate > today ? monthsUntil(today, goal.targetDate) : null;
 
   async function handleDelete() {
     try {
@@ -750,7 +658,7 @@ function GoalPanel({
       <CardContent className="flex flex-col gap-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <h2 className="text-base font-medium">{goal.name}</h2>
+            <h2 className="text-base font-medium text-bone">{goal.name}</h2>
             <p className="text-xs text-muted-foreground">
               {goal.tracksAccount ? goal.accountNames.join(" + ") : "Tracked by hand"}
               {goal.targetDate ? ` · by ${fullDate(goal.targetDate)}` : ""}
@@ -775,30 +683,46 @@ function GoalPanel({
           </div>
         </div>
 
-        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
-          <p className="flex flex-wrap items-baseline gap-x-2">
-            <Money amount={goal.saved} currency="USD" tone="neutral" className="text-3xl font-semibold" />
-            <span className="text-sm text-muted-foreground">of {formatCurrency(goal.target, "USD")}</span>
-          </p>
-          <p className={cn("inline-flex items-center gap-2 text-sm font-medium", TONE_TEXT[verdict.tone])}>
-            <span className={cn("size-2 rounded-full", TONE_DOT[verdict.tone])} aria-hidden />
-            {verdict.label}
-          </p>
-        </div>
-
-        <MilestoneRail goal={goal} today={today} />
-
-        <div className={cn("grid gap-x-8 gap-y-6", goal.insight.history && "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]")}>
-          <div className="flex min-w-0 flex-col gap-5">
-            <p className="max-w-prose text-sm leading-relaxed text-muted-foreground">
-              <Reading goal={goal} today={today} />
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+            <p className="flex flex-wrap items-baseline gap-x-2">
+              <Money amount={goal.saved} currency="USD" tone="neutral" className="text-3xl font-semibold" />
+              <span className="text-sm text-muted-foreground">of {formatCurrency(goal.target, "USD")}</span>
             </p>
-            <Plan goal={goal} pay={pay} today={today} />
-            <NextMove goal={goal} today={today} />
-            <Flows goal={goal} today={today} />
+            {verdict && (
+              <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset", TONE_PILL[verdict.tone])}>
+                {verdict.label}
+              </span>
+            )}
           </div>
-          {goal.insight.history && <GoalChart goal={goal} today={today} />}
+          <div
+            role="progressbar"
+            aria-label={`${goal.name} progress`}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(goal.percent * 100)}
+            className="h-2 w-full overflow-hidden rounded-full bg-bone/8"
+          >
+            <div className={cn("h-full rounded-full", fill)} style={{ width: `${Math.min(1, goal.percent) * 100}%` }} />
+          </div>
+          <div className="flex flex-wrap justify-between gap-x-4 text-xs text-muted-foreground">
+            <span>
+              <span className="text-bone">{percent(Math.min(1, goal.percent))}</span> saved
+            </span>
+            {goal.status !== "complete" && (
+              <span>
+                {strong(dollars(goal.remaining))} to go
+                {monthsLeft ? ` · ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} left` : ""}
+              </span>
+            )}
+          </div>
         </div>
+
+        {summary && <p className="text-sm leading-relaxed text-muted-foreground">{summary}</p>}
+
+        <Tiles goal={goal} today={today} />
+
+        {goal.insight.history && <GoalChart goal={goal} today={today} />}
       </CardContent>
     </Card>
   );
