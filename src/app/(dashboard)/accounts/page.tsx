@@ -7,6 +7,7 @@ import { QueryErrorState } from "@/components/query-error";
 import { SyncAllButton } from "@/components/sync-all-button";
 import { SyncNowButton } from "@/components/sync-now-button";
 import { ReconnectButton } from "@/components/reconnect-button";
+import { StatementImportDialog } from "@/components/statement-import-dialog";
 import { isDisconnected, needsReconnect, statusLabel } from "@/lib/item-status";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
@@ -57,6 +58,12 @@ function formatHistoryStart(date: string): string {
 }
 
 function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: string | null }) {
+  // Where past statements can go: checking first, then savings.
+  const depository = item.accounts
+    .filter((a) => a.type === "depository")
+    .sort((a, b) => Number(b.subtype === "checking") - Number(a.subtype === "checking"))
+    .map((a) => ({ id: a.id, name: prettyName(a.name), mask: a.mask }));
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
@@ -125,6 +132,9 @@ function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: 
             </div>
           </div>
         ))}
+        {depository.length > 0 && (
+          <StatementImportDialog accounts={depository} institutionName={item.institution_name ?? "this bank"} />
+        )}
       </CardContent>
     </Card>
   );

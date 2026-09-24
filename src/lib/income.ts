@@ -92,7 +92,7 @@ export function incomeDeposits(transactions: SpendingTransaction[]): IncomeDepos
         date: t.date,
         amount: -t.amount,
         source: humanizeTransactionName(t),
-        kind: payroll ? ("paycheck" as const) : interest ? ("interest" as const) : ("other" as const),
+        kind: payroll || t.pfc_detailed === "INCOME_WAGES" ? ("paycheck" as const) : interest ? ("interest" as const) : ("other" as const),
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));

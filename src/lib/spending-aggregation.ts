@@ -303,7 +303,7 @@ export function incomeBySourceForMonth(
     if (effectiveCategory(t) !== "INCOME") continue;
     if (!isInCalendarMonth(t.date, year, month)) continue;
 
-    const source = detectPayrollCompany(t.name ?? "") ? "Paycheck" : "Other income";
+    const source = detectPayrollCompany(t.name ?? "") || t.pfc_detailed === "INCOME_WAGES" ? "Paycheck" : "Other income";
     totals.set(source, (totals.get(source) ?? 0) - t.amount);
   }
 
