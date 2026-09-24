@@ -311,7 +311,10 @@ export default async function AccountsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
         <h1 className="font-serif text-2xl font-semibold text-bone">Accounts</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <SyncAllButton items={rows.map((item) => ({ id: item.id, institution_name: item.institution_name }))} />
+          <SyncAllButton
+            items={rows.map((item) => ({ id: item.id, institution_name: item.institution_name }))}
+            activeCount={rows.filter((item) => item.status === "active").length}
+          />
           {appleCards.length > 0 && <AppleImportButton hasSavings={appleCards.some((c) => c.type === "depository")} />}
           <PlaidLinkButton />
         </div>

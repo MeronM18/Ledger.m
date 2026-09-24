@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PLAID_REFRESH_COST } from "@/lib/config";
+import { formatCurrency } from "@/lib/format";
 
 export function SyncNowButton({ itemId }: { itemId: string }) {
   const router = useRouter();
@@ -46,9 +48,18 @@ export function SyncNowButton({ itemId }: { itemId: string }) {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={handleClick} disabled={isSyncing}>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleClick}
+      disabled={isSyncing}
+      title={`Asks the bank for new transactions right away. Plaid charges ${formatCurrency(PLAID_REFRESH_COST, "USD")} each time; automatic syncing is free.`}
+    >
       <RefreshCw className={`size-3.5 ${isSyncing ? "animate-spin" : ""}`} />
       {isSyncing ? "Syncing..." : "Sync now"}
+      {!isSyncing && (
+        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{formatCurrency(PLAID_REFRESH_COST, "USD")}</span>
+      )}
     </Button>
   );
 }

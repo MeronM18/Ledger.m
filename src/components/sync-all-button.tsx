@@ -5,12 +5,18 @@ import { useRouter } from "next/navigation";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { PLAID_REFRESH_COST } from "@/lib/config";
+import { formatCurrency } from "@/lib/format";
 
 type SyncResult =
   | { itemId: string; ok: true; added: number; modified: number; removed: number; notified: number }
   | { itemId: string; ok: false; error: string };
 
-export function SyncAllButton({ items }: { items: { id: string; institution_name: string | null }[] }) {
+/**
+ * `activeCount`: the banks Sync all actually refreshes (ones signed out are
+ * skipped), so the price shown is what Plaid will charge.
+ */
+export function SyncAllButton({ items, activeCount }: { items: { id: string; institution_name: string | null }[]; activeCount: number }) {
   const router = useRouter();
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -70,10 +76,21 @@ export function SyncAllButton({ items }: { items: { id: string; institution_name
     }
   }
 
+  const cost = Math.round(PLAID_REFRESH_COST * activeCount * 100) / 100;
+
   return (
-    <Button variant="outline" size="sm" onClick={handleClick} disabled={isSyncing}>
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleClick}
+      disabled={isSyncing}
+      title={`Asks each connected bank for new transactions right away. Plaid charges ${formatCurrency(PLAID_REFRESH_COST, "USD")} per bank (${formatCurrency(cost, "USD")} for ${activeCount}); automatic syncing is free.`}
+    >
       <RefreshCw className={`size-3.5 ${isSyncing ? "animate-spin" : ""}`} />
       {isSyncing ? "Syncing all..." : "Sync all"}
+      {!isSyncing && cost > 0 && (
+        <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{formatCurrency(cost, "USD")}</span>
+      )}
     </Button>
   );
 }
