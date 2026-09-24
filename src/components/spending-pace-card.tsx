@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DragHandle } from "@/components/sortable-card-list";
 import { formatCurrency } from "@/lib/format";
 import { dailyAverage, type MonthRef, type Pace } from "@/lib/trends";
 import { cn } from "@/lib/utils";
@@ -43,7 +44,10 @@ export function SpendingPaceCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-medium text-muted-foreground">Spending pace</CardTitle>
+        <div className="flex min-w-0 items-center gap-2">
+          <DragHandle />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Spending pace</CardTitle>
+        </div>
         <Link
           href="/spending"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"

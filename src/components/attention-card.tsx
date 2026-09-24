@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DragHandle } from "@/components/sortable-card-list";
 import type { AttentionItem } from "@/lib/attention";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +17,8 @@ export function AttentionCard({ items }: { items: AttentionItem[] }) {
 
   return (
     <Card className="border-champagne/40">
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center gap-2">
+        <DragHandle />
         <CardTitle>Needs your attention</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col">

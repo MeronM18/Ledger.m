@@ -5,6 +5,7 @@ import { TransactionAvatar } from "@/components/transaction-avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AttentionCard } from "@/components/attention-card";
+import { DragHandle } from "@/components/sortable-card-list";
 import { SortableCardGrid, type GridCard } from "@/components/sortable-card-grid";
 import { applyCardOrder } from "@/lib/card-order";
 import { loadCardOrder } from "@/lib/ui-preferences";
@@ -244,7 +245,10 @@ export default async function OverviewPage() {
       node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Budgets</CardTitle>
+            <div className="flex min-w-0 items-center gap-2">
+              <DragHandle />
+              <CardTitle>Budgets</CardTitle>
+            </div>
             <SectionLink href="/budgets" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -292,7 +296,10 @@ export default async function OverviewPage() {
       node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{monthLabel} spending</CardTitle>
+            <div className="flex min-w-0 items-center gap-2">
+              <DragHandle />
+              <CardTitle>{monthLabel} spending</CardTitle>
+            </div>
             <SectionLink href="/spending" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -329,7 +336,10 @@ export default async function OverviewPage() {
       node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Subscriptions</CardTitle>
+            <div className="flex min-w-0 items-center gap-2">
+              <DragHandle />
+              <CardTitle>Subscriptions</CardTitle>
+            </div>
             <SectionLink href="/subscriptions" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -357,7 +367,10 @@ export default async function OverviewPage() {
       node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Upcoming</CardTitle>
+            <div className="flex min-w-0 items-center gap-2">
+              <DragHandle />
+              <CardTitle>Upcoming</CardTitle>
+            </div>
             <SectionLink href="/subscriptions" />
           </CardHeader>
           <CardContent>
@@ -402,7 +415,8 @@ export default async function OverviewPage() {
       span: "half",
       node: (
         <Card>
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center gap-2">
+            <DragHandle />
             <CardTitle>Recent alerts</CardTitle>
           </CardHeader>
           <CardContent>
@@ -439,7 +453,10 @@ export default async function OverviewPage() {
       node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>{monthLabel} income</CardTitle>
+            <div className="flex min-w-0 items-center gap-2">
+              <DragHandle />
+              <CardTitle>{monthLabel} income</CardTitle>
+            </div>
             <SectionLink href="/transactions" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -485,7 +502,10 @@ export default async function OverviewPage() {
       node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent transactions</CardTitle>
+            <div className="flex min-w-0 items-center gap-2">
+              <DragHandle />
+              <CardTitle>Recent transactions</CardTitle>
+            </div>
             <SectionLink href="/transactions" />
           </CardHeader>
           <CardContent>

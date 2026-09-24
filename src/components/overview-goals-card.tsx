@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { QueryErrorState } from "@/components/query-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DragHandle } from "@/components/sortable-card-list";
 import { formatCurrency } from "@/lib/format";
 import { loadGoals } from "@/lib/goals-data";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -22,7 +23,10 @@ export async function OverviewGoalsCard() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Goals</CardTitle>
+        <div className="flex min-w-0 items-center gap-2">
+          <DragHandle />
+          <CardTitle>Goals</CardTitle>
+        </div>
         <Link
           href="/goals"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"

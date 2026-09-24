@@ -79,6 +79,29 @@ export function DragHandle({ className }: { className?: string }) {
   );
 }
 
+/**
+ * Hands the DragHandle inside a card its drag wiring. SortableCardList and
+ * SortableCardGrid both use it, so a card's grip looks and works the same
+ * on every page.
+ */
+export function GripProvider({
+  value,
+  activatorRef,
+  children,
+}: {
+  value: HandleContextValue | null;
+  activatorRef: Sortable["setActivatorNodeRef"] | null;
+  children: React.ReactNode;
+}) {
+  return (
+    <HandleRefContext.Provider value={activatorRef}>
+      <HandleContext.Provider value={value}>{children}</HandleContext.Provider>
+    </HandleRefContext.Provider>
+  );
+}
+
+export type GripWiring = HandleContextValue;
+
 function SortableItem({ card, enabled }: { card: SortableCard; enabled: boolean }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -99,13 +122,12 @@ function SortableItem({ card, enabled }: { card: SortableCard; enabled: boolean 
         isDragging && "z-10 scale-[1.012] shadow-[0_22px_45px_-18px_rgb(0_0_0/0.75)] ring-1 ring-champagne/35"
       )}
     >
-      <HandleRefContext.Provider value={setActivatorNodeRef}>
-        <HandleContext.Provider
-          value={enabled ? { attributes, listeners, label: card.label, isDragging } : null}
-        >
-          {card.node}
-        </HandleContext.Provider>
-      </HandleRefContext.Provider>
+      <GripProvider
+        value={enabled ? { attributes, listeners, label: card.label, isDragging } : null}
+        activatorRef={setActivatorNodeRef}
+      >
+        {card.node}
+      </GripProvider>
     </div>
   );
 }

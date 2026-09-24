@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
 import { QueryErrorState } from "@/components/query-error";
+import { DragHandle } from "@/components/sortable-card-list";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { sparklinePath, type NetWorthTrend } from "@/lib/net-worth-trend";
@@ -36,8 +37,9 @@ export function NetWorthHero({
         ) : (
           <>
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-muted-foreground">Net worth</span>
+              <div className="flex items-center gap-2">
+                <DragHandle />
+                <span className="mr-1 text-sm font-medium text-muted-foreground">Net worth</span>
                 <Link
                   href="/assets"
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"

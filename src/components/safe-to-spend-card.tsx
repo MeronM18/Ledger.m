@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DragHandle } from "@/components/sortable-card-list";
 import { ALERT_THRESHOLDS } from "@/lib/config";
 import { loadForecast } from "@/lib/forecast-data";
 import { formatCurrency } from "@/lib/format";
@@ -26,7 +27,10 @@ export async function SafeToSpendCard() {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-medium text-muted-foreground">Safe to spend</CardTitle>
+        <div className="flex min-w-0 items-center gap-2">
+          <DragHandle />
+          <CardTitle className="text-sm font-medium text-muted-foreground">Safe to spend</CardTitle>
+        </div>
         <Link
           href="/cash-flow"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"

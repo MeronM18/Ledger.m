@@ -7,12 +7,11 @@ import {
   KeyboardSensor,
   MeasuringStrategy,
   PointerSensor,
-  closestCenter,
   defaultDropAnimationSideEffects,
-  pointerWithin,
   useSensor,
   useSensors,
   type Announcements,
+  type Collision,
   type CollisionDetection,
   type DragOverEvent,
   type DragStartEvent,
@@ -21,9 +20,8 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripHorizontal } from "lucide-react";
 import { cn } from "cn";
-import { useCardOrder } from "@/components/sortable-card-list";
+import { GripProvider, useCardOrder, type GripWiring } from "@/components/sortable-card-list";
 import { applyCardOrder, type CardOrderPage } from "@/lib/card-order";
 
 export type GridCard = {
@@ -44,11 +42,32 @@ const SETTLE = "cubic-bezier(0.16, 1, 0.3, 1)";
 // new layout puts it.
 const noDisplacement = () => null;
 
-// The pointer decides where a card goes (steady in a grid of mixed sizes);
-// when it's between cards, the nearest one does.
-const collisionDetection: CollisionDetection = (args) => {
-  const hits = pointerWithin(args);
-  return hits.length > 0 ? hits : closestCenter(args);
+// Where a card goes is decided by the card, not the pointer (which is on
+// the grip at its corner): it takes the place of the card its center is
+// over. In a gap between cards, it takes the place of one it mostly covers
+// (which is also how a keyboard move, landing it squarely on the next
+// card, is read). Over its own place it stays put, and that's reported as
+// such: the keyboard's arrow keys skip the current match to find the next
+// card, and the lifted card (a touch larger) would otherwise find itself.
+// Judged against where cards settle, not mid-animation.
+const collisionDetection: CollisionDetection = ({ active, collisionRect, droppableRects, droppableContainers }) => {
+  const cx = collisionRect.left + collisionRect.width / 2;
+  const cy = collisionRect.top + collisionRect.height / 2;
+  let best: { container: (typeof droppableContainers)[number]; cover: number } | null = null;
+  for (const container of droppableContainers) {
+    const r = droppableRects.get(container.id);
+    if (!r) continue;
+    if (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) {
+      return [{ id: container.id, data: { droppableContainer: container, value: 1 } }] satisfies Collision[];
+    }
+    if (container.id === active.id) continue;
+    const w = Math.min(collisionRect.right, r.right) - Math.max(collisionRect.left, r.left);
+    const h = Math.min(collisionRect.bottom, r.bottom) - Math.max(collisionRect.top, r.top);
+    if (w <= 0 || h <= 0) continue;
+    const cover = (w * h) / Math.min(r.width * r.height, collisionRect.width * collisionRect.height);
+    if (cover >= 0.5 && (!best || cover > best.cover)) best = { container, cover };
+  }
+  return best ? [{ id: best.container.id, data: { droppableContainer: best.container, value: best.cover } }] : [];
 };
 
 // How far the pointer has to travel after one trade of places before the next.
@@ -60,29 +79,23 @@ const dropAnimation: DropAnimation = {
   sideEffects: defaultDropAnimationSideEffects({ styles: { active: { opacity: "0" } } }),
 };
 
-/** The grip: a short bar centered on the card's top edge, inside its top padding. */
-function Grip({ label, props, lifted = false }: { label: string; props?: React.HTMLAttributes<HTMLButtonElement> & { ref?: React.Ref<HTMLButtonElement> }; lifted?: boolean }) {
-  return (
-    <button
-      type="button"
-      aria-label={`Move ${label}`}
-      {...props}
-      className={cn(
-        "absolute top-0 left-1/2 z-10 flex h-4 w-12 -translate-x-1/2 touch-none items-center justify-center rounded-b-md text-muted-foreground/40 transition-colors",
-        "cursor-grab group-hover/tile:text-muted-foreground hover:!text-champagne focus-visible:!text-champagne focus-visible:outline-none active:cursor-grabbing",
-        lifted && "cursor-grabbing !text-champagne"
-      )}
-    >
-      <GripHorizontal className="size-4" aria-hidden />
-    </button>
-  );
-}
+// The grip on the card being carried: shown lifted, but not something to
+// focus or press (the real one is on the card in the grid).
+const CARRIED_GRIP_ATTRIBUTES: GripWiring["attributes"] = {
+  role: "button",
+  tabIndex: -1,
+  "aria-disabled": true,
+  "aria-pressed": undefined,
+  "aria-roledescription": "sortable",
+  "aria-describedby": "",
+};
+const noRef = () => {};
 
 function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     disabled: !enabled,
-    transition: { duration: 320, easing: SETTLE },
+    transition: { duration: 380, easing: SETTLE },
     // Animate every move, including the live reorders while dragging.
     animateLayoutChanges: () => true,
   });
@@ -91,16 +104,20 @@ function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("group/tile relative min-w-0", card.span === "full" && "md:col-span-2")}
+      className={cn("relative min-w-0", card.span === "full" && "md:col-span-2")}
     >
-      {/* While it's being dragged, its place in the grid shows as an outline.
-          Cards fill their tile, so two side by side stay the same height. */}
-      <div className={cn("h-full transition-opacity duration-150 [&>*]:h-full", isDragging && "opacity-0")}>{card.node}</div>
+      {/* While it's being carried, its place in the grid shows as an outline
+          of where it will land. Cards fill their tile, so two side by side
+          stay the same height. The grip (DragHandle) is in each card's
+          header, beside its title, as on Accounts. */}
+      <GripProvider
+        value={enabled ? { attributes, listeners, label: card.label, isDragging } : null}
+        activatorRef={setActivatorNodeRef}
+      >
+        <div className={cn("h-full transition-opacity duration-200 [&>*]:h-full", isDragging && "opacity-0")}>{card.node}</div>
+      </GripProvider>
       {isDragging && (
-        <div aria-hidden className="absolute inset-0 rounded-xl border border-dashed border-champagne/40 bg-champagne/[0.03]" />
-      )}
-      {enabled && !isDragging && (
-        <Grip label={card.label} props={{ ...attributes, ...listeners, ref: setActivatorNodeRef }} />
+        <div aria-hidden className="absolute inset-0 rounded-xl border border-dashed border-champagne/45 bg-champagne/[0.04]" />
       )}
     </div>
   );
@@ -108,7 +125,7 @@ function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
 
 /**
  * A two-column grid of cards (one column on phones) the user can rearrange
- * by the grip on each card's top edge, with the mouse, a finger, or the
+ * by the grip beside each card's title, with the mouse, a finger, or the
  * keyboard (focus the grip, Space to lift, arrows to move, Space to drop).
  * The card being moved lifts and follows the pointer while the rest make
  * room for it, so what you see mid-drag is the layout you'll get. The order
@@ -203,9 +220,13 @@ export function SortableCardGrid({ page, cards }: { page: CardOrderPage; cards: 
       </SortableContext>
       <DragOverlay dropAnimation={dropAnimation}>
         {active ? (
-          <div className="group/tile relative h-full scale-[1.012] cursor-grabbing rounded-xl shadow-[0_22px_45px_-18px_rgb(0_0_0/0.75)] ring-1 ring-champagne/35">
-            <div className="h-full [&>*]:h-full">{active.node}</div>
-            <Grip label={active.label} props={{ tabIndex: -1, "aria-hidden": true }} lifted />
+          <div className="h-full scale-[1.012] cursor-grabbing rounded-xl shadow-[0_22px_45px_-18px_rgb(0_0_0/0.75)] ring-1 ring-champagne/35 [&>*]:h-full">
+            <GripProvider
+              value={{ attributes: CARRIED_GRIP_ATTRIBUTES, listeners: undefined, label: active.label, isDragging: true }}
+              activatorRef={noRef}
+            >
+              {active.node}
+            </GripProvider>
           </div>
         ) : null}
       </DragOverlay>
