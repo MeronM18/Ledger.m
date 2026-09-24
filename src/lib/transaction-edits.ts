@@ -10,6 +10,9 @@ export type TransactionOverride = {
   category: string | null;
   merchant_name: string | null;
   notes: string | null;
+  // Paid back in cash by someone else (see spending-aggregation's
+  // paidBackShare). Missing before migration 0015.
+  reimbursed_amount?: number | null;
 };
 
 export type MerchantRule = {
@@ -33,6 +36,8 @@ export type EditMeta = {
   // The merchant/raw name before any rename, kept so the edit dialog can
   // show what Plaid sent and so a rule can be seeded from it.
   original_merchant_name: string | null;
+  // How much of this charge someone paid back in cash, or null.
+  paid_back: number | null;
 };
 
 /**
@@ -73,8 +78,10 @@ export function applyTransactionEdits<T extends Editable>(
     merchant_name: renamed ?? tx.merchant_name,
     category_override: category,
     notes: override?.notes?.trim() || null,
-    edited: Boolean(override || rule),
+    // Paid back alone isn't an edit to the transaction; it's shown on its own.
+    edited: Boolean(rule || override?.category || override?.merchant_name?.trim() || override?.notes?.trim()),
     original_merchant_name: tx.merchant_name,
+    paid_back: override?.reimbursed_amount ? Number(override.reimbursed_amount) : null,
   };
 }
 

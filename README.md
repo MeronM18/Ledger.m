@@ -103,6 +103,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Precious metals by weight and purity, valued against live gold/silver spot prices, refreshed daily
 
 **Editing**
+- Mark a charge as paid back in cash (all of it or an amount) when you covered it for someone: only your share counts as spending everywhere, the transaction still shows the full charge, and the Cash asset isn't touched
 - Rename a transaction, recategorize it, or add a note without touching the stored bank data. "Apply to every matching transaction" saves a merchant rule that also covers past and future charges; a per-transaction edit always beats a rule
 
 **Manual entry**

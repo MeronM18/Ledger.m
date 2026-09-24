@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Download, StickyNote, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
+import { formatCurrency } from "@/lib/format";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   accountLabel,
@@ -42,6 +43,8 @@ export type TransactionRow = {
   pending: boolean;
   account: { id: string; name: string; mask: string | null } | null;
   isManual?: boolean;
+  // Paid back in cash by someone else: only the rest counts as spending.
+  paid_back?: number | null;
   // Only present when isManual is true — carries payment_method/notes for
   // the edit dialog, which TransactionRow's own shape doesn't have room for.
   manualSource?: ManualTransaction;
@@ -138,7 +141,7 @@ export function TransactionsExplorer({
   // active filter (search/account/category/month) and the current sort, so
   // this never silently exports the full unfiltered history.
   function exportCsv() {
-    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Pending", "Source", "Notes"];
+    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Paid back in cash", "Pending", "Source", "Notes"];
     const rows = sorted.map((t) => {
       const { displayName, displayCategoryLabel } = humanizeTransaction(t);
       return [
@@ -147,6 +150,7 @@ export function TransactionsExplorer({
         displayCategoryLabel,
         t.account ? accountLabel(t.account) : t.isManual ? "Cash / Manual" : accountLabel(t.account),
         t.amount.toFixed(2),
+        t.paid_back ? t.paid_back.toFixed(2) : "",
         t.pending ? "Yes" : "No",
         t.isManual ? "Manual" : "Plaid",
         t.notes ?? t.manualSource?.notes ?? "",
@@ -253,6 +257,15 @@ export function TransactionsExplorer({
                             Edited
                           </Badge>
                         )}
+                        {t.paid_back ? (
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] text-moss"
+                            title={`Only ${formatCurrency(Math.max(0, t.amount - t.paid_back), t.iso_currency_code)} counts as your spending`}
+                          >
+                            {t.paid_back >= t.amount - 0.005 ? "Paid back in cash" : `Paid back ${formatCurrency(t.paid_back, t.iso_currency_code)} cash`}
+                          </Badge>
+                        ) : null}
                         {t.notes && (
                           <span title={t.notes} className="text-muted-foreground">
                             <StickyNote className="size-3.5" aria-label={`Note: ${t.notes}`} />
@@ -284,7 +297,7 @@ export function TransactionsExplorer({
                   </TableCell>
                   <TableCell>
                     {t.isManual && t.manualSource && (
-                      <ManualTransactionRowActions transaction={t.manualSource} />
+                      <ManualTransactionRowActions transaction={t.manualSource} paidBack={t.paid_back ?? null} />
                     )}
                     {!t.isManual && (
                       <EditTransactionButton
@@ -301,6 +314,8 @@ export function TransactionsExplorer({
                           categoryOverride: t.category_override ?? null,
                           notes: t.notes ?? null,
                           edited: Boolean(t.edited),
+                          amount: t.amount,
+                          paidBack: t.paid_back ?? null,
                         }}
                       />
                     )}

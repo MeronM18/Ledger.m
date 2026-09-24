@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/money";
+import { formatCurrency } from "@/lib/format";
 import { SpendingCharts } from "@/components/spending-charts";
 import { SpendingTrends } from "@/components/spending-trends";
 import { Button } from "@/components/ui/button";
@@ -220,6 +221,7 @@ export function SpendingExplorer({
                         <p className="text-sm font-medium">{humanizeTransactionName(t)}</p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(`${t.date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          {t.paid_back ? ` · your share, after ${formatCurrency(t.paid_back, currency)} paid back in cash` : ""}
                         </p>
                       </div>
                       <Money

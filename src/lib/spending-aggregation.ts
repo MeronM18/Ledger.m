@@ -19,6 +19,8 @@ export type SpendingTransaction = {
   merchant_name: string | null;
   name: string | null;
   pending: boolean;
+  // Paid back in cash by someone this was paid for. Only the rest is spending.
+  paid_back?: number | null;
 };
 
 export type CategoryTotal = { category: string; label: string; amount: number; colorSlot: number };
@@ -121,6 +123,29 @@ export function displayCategoryKey(t: SpendingTransaction): string {
 }
 
 /**
+ * How much of a charge someone paid back, capped at the charge. Zero for
+ * money in, and for anything not marked.
+ */
+export function paidBackShare(t: SpendingTransaction): number {
+  if (!t.paid_back || t.amount <= 0) return 0;
+  return Math.min(t.paid_back, t.amount);
+}
+
+/**
+ * Charges as your share of them: a $100 dinner with $60 paid back is $40
+ * of spending, and one paid back in full isn't spending at all. The
+ * transaction itself still shows the full charge; only totals use this.
+ */
+export function applyPaidBack<T extends SpendingTransaction>(transactions: T[]): T[] {
+  return transactions.flatMap((t) => {
+    const share = paidBackShare(t);
+    if (share === 0) return [t];
+    const rest = Math.round((t.amount - share) * 100) / 100;
+    return rest > 0 ? [{ ...t, amount: rest }] : [];
+  });
+}
+
+/**
  * Excludes pending transactions and non-spending categories (transfers,
  * income, loan payments) — using each transaction's *effective* category
  * (transaction-display.ts's override layer, e.g. a PayPal transfer Plaid
@@ -144,11 +169,13 @@ export function filterSpendingTransactions(
   transactions: SpendingTransaction[],
   connectedCardIssuers: string[] = []
 ): SpendingTransaction[] {
-  return transactions.filter((t) => {
-    if (isPaymentToUnconnectedCard(t, connectedCardIssuers)) return true;
-    if (t.pending) return false;
-    return isSpendingCategory(effectiveCategory(t));
-  });
+  return applyPaidBack(
+    transactions.filter((t) => {
+      if (isPaymentToUnconnectedCard(t, connectedCardIssuers)) return true;
+      if (t.pending) return false;
+      return isSpendingCategory(effectiveCategory(t));
+    })
+  );
 }
 
 /**
@@ -333,7 +360,7 @@ export function monthlyIncomeVsSpending(
     // Checked before the pending skip, exactly as filterSpendingTransactions
     // does: this payment is the only record that card's spending exists.
     if (connectedCardIssuers && isPaymentToUnconnectedCard(t, connectedCardIssuers)) {
-      spending += t.amount;
+      spending += t.amount - paidBackShare(t);
       continue;
     }
     if (t.pending) continue;
@@ -342,7 +369,7 @@ export function monthlyIncomeVsSpending(
     if (category === "INCOME") {
       income += -t.amount;
     } else if (isSpendingCategory(category)) {
-      spending += t.amount;
+      spending += t.amount - paidBackShare(t);
     }
   }
 

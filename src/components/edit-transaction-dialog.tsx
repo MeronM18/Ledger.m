@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PaidBackField, initialPaidBack, paidBackToSave, savePaidBack } from "@/components/paid-back-field";
 import { ALL_PFC_CATEGORIES, humanizeCategory } from "@/lib/plaid-categories";
 
 const PLAID_DEFAULT = "__plaid_default__";
@@ -33,6 +34,9 @@ export type EditableTransaction = {
   categoryOverride: string | null;
   notes: string | null;
   edited: boolean;
+  // The charge (money out positive) and how much of it was paid back.
+  amount: number;
+  paidBack: number | null;
 };
 
 async function send(url: string, method: string, body?: unknown) {
@@ -56,6 +60,7 @@ export function EditTransactionButton({ transaction }: { transaction: EditableTr
   const [notes, setNotes] = useState("");
   const [applyToAll, setApplyToAll] = useState(false);
   const [matchText, setMatchText] = useState("");
+  const [paidBack, setPaidBack] = useState(() => initialPaidBack(transaction.paidBack));
 
   function handleOpenChange(next: boolean) {
     if (next) {
@@ -66,6 +71,7 @@ export function EditTransactionButton({ transaction }: { transaction: EditableTr
       setNotes(transaction.notes ?? "");
       setApplyToAll(false);
       setMatchText(transaction.ruleSeed);
+      setPaidBack(initialPaidBack(transaction.paidBack));
     }
     setOpen(next);
   }
@@ -83,6 +89,11 @@ export function EditTransactionButton({ transaction }: { transaction: EditableTr
       toast.error("Set a new name or category for the rule to apply");
       return;
     }
+    const paid = paidBackToSave(paidBack, transaction.amount);
+    if ("error" in paid) {
+      toast.error(paid.error);
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -95,6 +106,7 @@ export function EditTransactionButton({ transaction }: { transaction: EditableTr
         notes: notes.trim() || null,
       });
       if (rule) await send("/api/merchant-rules", "POST", rule);
+      if (paid.amount !== (transaction.paidBack ?? null)) await savePaidBack(transaction.id, false, paid.amount);
 
       toast.success(rule ? "Saved and applied to matching transactions" : "Transaction updated");
       setOpen(false);
@@ -167,6 +179,10 @@ export function EditTransactionButton({ transaction }: { transaction: EditableTr
             <Label htmlFor="edit-tx-notes">Notes (optional)</Label>
             <Input id="edit-tx-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
           </div>
+
+          {transaction.amount > 0 && (
+            <PaidBackField id={`paid-back-${transaction.id}`} charge={transaction.amount} value={paidBack} onChange={setPaidBack} />
+          )}
 
           <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
             <label className="flex items-center gap-2 text-sm">

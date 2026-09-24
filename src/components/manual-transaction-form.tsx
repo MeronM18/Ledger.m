@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PaidBackField, initialPaidBack, paidBackToSave, savePaidBack } from "@/components/paid-back-field";
 import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -69,9 +70,12 @@ const EMPTY_FORM: FormState = {
 
 function ManualTransactionDialog({
   transaction,
+  paidBack: savedPaidBack = null,
   trigger,
 }: {
   transaction?: ManualTransaction;
+  // How much of this charge someone paid back, when editing one.
+  paidBack?: number | null;
   trigger: React.ReactNode;
 }) {
   const router = useRouter();
@@ -90,11 +94,18 @@ function ManualTransactionDialog({
         }
       : EMPTY_FORM
   );
+  const [paidBack, setPaidBack] = useState(() => initialPaidBack(savedPaidBack));
 
   async function handleSave() {
     const magnitude = Number(form.amount);
     if (!form.name.trim() || !Number.isFinite(magnitude) || magnitude <= 0) {
       toast.error("Enter a name and an amount greater than 0");
+      return;
+    }
+    // Paid back only applies to money out; switching to money in clears it.
+    const paid = form.direction === "out" ? paidBackToSave(paidBack, magnitude) : { amount: null };
+    if ("error" in paid) {
+      toast.error(paid.error);
       return;
     }
 
@@ -125,6 +136,7 @@ function ManualTransactionDialog({
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error ?? "Failed to save transaction");
       }
+      if (transaction && paid.amount !== (savedPaidBack ?? null)) await savePaidBack(transaction.id, true, paid.amount);
 
       toast.success(transaction ? "Transaction updated" : "Transaction added");
       setOpen(false);
@@ -255,6 +267,10 @@ function ManualTransactionDialog({
               onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             />
           </div>
+
+          {transaction && form.direction === "out" && Number(form.amount) > 0 && (
+            <PaidBackField id={`paid-back-${transaction.id}`} charge={Number(form.amount)} value={paidBack} onChange={setPaidBack} />
+          )}
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={isSaving}>
@@ -279,7 +295,7 @@ export function AddManualTransactionButton() {
   );
 }
 
-export function ManualTransactionRowActions({ transaction }: { transaction: ManualTransaction }) {
+export function ManualTransactionRowActions({ transaction, paidBack = null }: { transaction: ManualTransaction; paidBack?: number | null }) {
   const router = useRouter();
 
   async function handleDelete() {
@@ -300,6 +316,7 @@ export function ManualTransactionRowActions({ transaction }: { transaction: Manu
     <div className="flex items-center gap-1">
       <ManualTransactionDialog
         transaction={transaction}
+        paidBack={paidBack}
         trigger={
           <Button size="icon" variant="ghost">
             <Pencil className="size-3.5" />

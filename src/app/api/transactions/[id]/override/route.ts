@@ -14,6 +14,28 @@ const bodySchema = z.object({
 
 const FOREIGN_KEY_VIOLATION = "23503";
 
+/**
+ * Clears the name, category and note. A paid-back amount on the same row
+ * is its own thing and stays; the row goes only once nothing is left on it.
+ */
+async function clearEdits(admin: ReturnType<typeof createAdminClient>, id: string) {
+  const { error } = await admin
+    .from("transaction_overrides")
+    .update({ category: null, merchant_name: null, notes: null })
+    .eq("transaction_id", id);
+  if (error) return error;
+  const { error: deleteError } = await admin
+    .from("transaction_overrides")
+    .delete()
+    .eq("transaction_id", id)
+    .is("reimbursed_amount", null);
+  // Before migration 0015 there's no reimbursed_amount column: every row can go.
+  if (deleteError?.code === "42703") {
+    return (await admin.from("transaction_overrides").delete().eq("transaction_id", id)).error;
+  }
+  return deleteError;
+}
+
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireApiUser();
   if ("error" in auth) return auth.error;
@@ -32,7 +54,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const admin = createAdminClient();
 
   if (!category && !merchantName && !notes) {
-    const { error } = await admin.from("transaction_overrides").delete().eq("transaction_id", id);
+    const error = await clearEdits(admin, id);
     if (error) {
       console.error("Failed to clear transaction override", error);
       return NextResponse.json({ error: "Failed to save changes" }, { status: 500 });
@@ -61,8 +83,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   const { id } = await params;
 
-  const admin = createAdminClient();
-  const { error } = await admin.from("transaction_overrides").delete().eq("transaction_id", id);
+  const error = await clearEdits(createAdminClient(), id);
 
   if (error) {
     console.error("Failed to reset transaction override", error);

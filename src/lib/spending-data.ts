@@ -10,7 +10,7 @@ import {
 } from "@/lib/spending-aggregation";
 import { applyEditsToAll, type EditMeta, type MerchantRule } from "@/lib/transaction-edits";
 import { loadConnectedCardIssuers, loadManualAccounts, type ManualAccount } from "@/lib/manual-accounts";
-import { loadTransactionEdits } from "@/lib/transaction-edits-server";
+import { loadTransactionEdits, UNDEFINED_COLUMN } from "@/lib/transaction-edits-server";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -50,7 +50,25 @@ type PlaidRow = SpendingTransaction & {
   account: LedgerAccountRef | null;
 };
 
-type ManualRow = ManualTransaction & { manual_account_id: string | null };
+type ManualRow = ManualTransaction & { manual_account_id: string | null; reimbursed_amount?: number | null };
+
+function readManualTransactions(admin: AdminClient, withPaidBack: boolean) {
+  return fetchAllRows<ManualRow>((from, to) =>
+    withPaidBack
+      ? admin
+          .from("manual_transactions")
+          .select("id, date, name, amount, pfc_primary, payment_method, notes, manual_account_id, reimbursed_amount")
+          .order("date", { ascending: false })
+          .order("id")
+          .range(from, to)
+      : admin
+          .from("manual_transactions")
+          .select("id, date, name, amount, pfc_primary, payment_method, notes, manual_account_id")
+          .order("date", { ascending: false })
+          .order("id")
+          .range(from, to)
+  );
+}
 
 /**
  * The one loader for "every transaction": Plaid (paged) and manual, with
@@ -62,7 +80,7 @@ type ManualRow = ManualTransaction & { manual_account_id: string | null };
  * per component. Outside a render (a cron or webhook) it simply runs.
  */
 export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
-  const [txRes, manualRes, accountsRes, issuersRes, manualAccountsRes, edits] = await Promise.all([
+  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits] = await Promise.all([
     fetchAllRows((from, to) =>
       admin
         .from("transactions")
@@ -73,19 +91,15 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
         .order("id")
         .range(from, to)
     ),
-    fetchAllRows<ManualRow>((from, to) =>
-      admin
-        .from("manual_transactions")
-        .select("id, date, name, amount, pfc_primary, payment_method, notes, manual_account_id")
-        .order("date", { ascending: false })
-        .order("id")
-        .range(from, to)
-    ),
+    readManualTransactions(admin, true),
     admin.from("accounts").select("id, name, mask").order("name"),
     loadConnectedCardIssuers(admin),
     loadManualAccounts(admin),
     loadTransactionEdits(admin),
   ]);
+
+  // Before migration 0015 there's no paid-back column: read without it.
+  const manualRes = manualFirstTry.error?.code === UNDEFINED_COLUMN ? await readManualTransactions(admin, false) : manualFirstTry;
 
   if (txRes.error) console.error("Failed to load transactions", txRes.error);
   if (manualRes.error) console.error("Failed to load manual transactions", manualRes.error);
@@ -104,9 +118,10 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     isManual: false,
   }));
   const manual: LedgerTransaction[] = (manualRes.data ?? []).map((m) => {
-    const { manual_account_id, ...source } = m;
+    const { manual_account_id, reimbursed_amount, ...source } = m;
     return {
       ...manualTransactionToSpendingTransaction(m),
+      paid_back: reimbursed_amount ? Number(reimbursed_amount) : null,
       id: m.id,
       logo_url: null,
       iso_currency_code: null,
