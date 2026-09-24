@@ -1,4 +1,5 @@
 import "server-only";
+import { planEditCarryOver, type OverrideRow } from "@/lib/pending-edits";
 import type { Transaction as PlaidTransaction, TransactionStream } from "plaid";
 import { decrypt } from "@/lib/crypto";
 import { sendNotification } from "@/lib/notify";
@@ -198,6 +199,36 @@ async function applyPlaidSyncError(
   return errorMessage(err);
 }
 
+/**
+ * Copies each settled pending charge's edit (name, category, notes, paid
+ * back) to the posted transaction that replaced it, unless the posted one
+ * already has its own. Failing here never fails the sync: the charge still
+ * posts, it just loses the edit, as it always did before.
+ */
+async function carryEditsToPosted(admin: AdminClient, settled: { posted: string; pending: string }[]) {
+  if (settled.length === 0) return;
+  const plaidIds = settled.flatMap((s) => [s.posted, s.pending]);
+  const { data: rows, error } = await admin.from("transactions").select("id, plaid_transaction_id").in("plaid_transaction_id", plaidIds);
+  if (error || !rows) {
+    if (error) console.error("Failed to look up settled pending charges", error);
+    return;
+  }
+  const internalIdOf = new Map(rows.map((r) => [r.plaid_transaction_id as string, r.id as string]));
+  const pendingIds = settled.flatMap((s) => internalIdOf.get(s.pending) ?? []);
+  if (pendingIds.length === 0) return;
+  const { data: overrides, error: overridesError } = await admin.from("transaction_overrides").select("*").in("transaction_id", pendingIds);
+  if (overridesError) {
+    console.error("Failed to read edits on pending charges", overridesError);
+    return;
+  }
+  const copies = planEditCarryOver(settled, internalIdOf, new Map((overrides ?? []).map((o) => [o.transaction_id as string, o as OverrideRow])));
+  if (copies.length === 0) return;
+  const { error: copyError } = await admin
+    .from("transaction_overrides")
+    .upsert(copies, { onConflict: "transaction_id", ignoreDuplicates: true });
+  if (copyError) console.error("Failed to carry edits over to posted charges", copyError);
+}
+
 export async function syncItemTransactions(
   itemDbId: string,
   options: { forceRefresh?: boolean } = {}
@@ -305,6 +336,14 @@ export async function syncItemTransactions(
       };
     }
   }
+
+  // A pending charge that posted is removed below; an edit made on it
+  // (and the cascade would delete that edit with it) moves to the posted
+  // transaction first.
+  await carryEditsToPosted(
+    admin,
+    added.flatMap((t) => (t.pending_transaction_id ? [{ posted: t.transaction_id, pending: t.pending_transaction_id }] : []))
+  );
 
   if (removed.length > 0) {
     await admin

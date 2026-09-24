@@ -17,7 +17,8 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done
 - [x] Migration `0007_transaction_edits.sql` (**must be applied: `supabase db push`**)
 - [x] Edits flow into every page (overview, spending, transactions, CSV)
 - [x] 11 new tests (39 total)
-- [ ] Not done: editing manual transactions' rules (they already have their own edit dialog); a pending charge that posts gets a new Plaid id and loses its per-transaction edit (rules still apply)
+- [ ] Not done: editing manual transactions' rules (they already have their own edit dialog)
+- [x] A pending charge that posts gets a new Plaid id; its per-transaction edit (name, category, notes, paid back) now moves to the posted one during sync
 
 ## Step 3: Budgets  (branch `step3/budgets`)
 - [x] Per-category monthly budgets: progress bars, left/over, month-end pace warning, spending without a budget, suggested amount from the last 3 months
