@@ -1,5 +1,6 @@
 import { Download } from "lucide-react";
 import { AlertSettingsForm } from "@/components/alert-settings-form";
+import { RestoreBackupButton } from "@/components/restore-backup-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -34,14 +35,20 @@ export default async function SettingsPage() {
             entries and accounts, subscriptions, budgets, goals, assets, net worth history and settings. Bank logins
             and access tokens are never included.
           </p>
+          <p className="max-w-[65ch] text-sm text-muted-foreground">
+            Restoring brings back everything you made (budgets, goals, assets, manual and imported transactions, rules,
+            edits, history and settings) as it was in the file, without deleting anything added since. Bank data comes
+            back by reconnecting the bank.
+          </p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-wrap gap-3">
           <Button asChild variant="outline">
             <a href="/api/export" download>
               <Download className="size-4" aria-hidden />
               Download backup (JSON)
             </a>
           </Button>
+          <RestoreBackupButton />
         </CardContent>
       </Card>
     </div>
