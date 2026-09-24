@@ -8,7 +8,7 @@ const goal = (o: Partial<GoalInput> = {}): GoalInput => ({
   target_amount: 1000,
   saved_amount: 250,
   target_date: null,
-  account_id: null,
+  account_refs: [],
   ...o,
 });
 
@@ -58,18 +58,42 @@ describe("goalProgress", () => {
   });
 
   it("follows a linked account's balance instead of the manual amount", () => {
-    const balances = new Map([["acct", 640]]);
-    const p = goalProgress(goal({ account_id: "acct" }), today, balances);
+    const balances = new Map([["plaid:acct", 640]]);
+    const p = goalProgress(goal({ account_refs: ["plaid:acct"] }), today, balances);
     expect(p).toMatchObject({ saved: 640, remaining: 360, tracksAccount: true });
   });
 
   it("falls back to the manual amount when the linked account's balance is unknown", () => {
-    const p = goalProgress(goal({ account_id: "gone" }), today, new Map());
+    const p = goalProgress(goal({ account_refs: ["plaid:gone"] }), today, new Map());
     expect(p).toMatchObject({ saved: 250, tracksAccount: false });
   });
 
   it("never reports negative savings", () => {
-    expect(goalProgress(goal({ account_id: "a" }), today, new Map([["a", -50]])).saved).toBe(0);
+    expect(goalProgress(goal({ account_refs: ["plaid:a"] }), today, new Map([["plaid:a", -50]])).saved).toBe(0);
+  });
+});
+
+describe("goals that follow several accounts", () => {
+  const balances = new Map([
+    ["plaid:amex", 8159.71],
+    ["manual:apple", 410.52],
+  ]);
+
+  it("adds the balances of every followed account, across connected and manual", () => {
+    const p = goalProgress(goal({ target_amount: 15000, account_refs: ["plaid:amex", "manual:apple"] }), today, balances);
+    expect(p.saved).toBeCloseTo(8570.23);
+    expect(p.tracksAccount).toBe(true);
+    expect(p.remaining).toBeCloseTo(6429.77);
+  });
+
+  it("counts only the accounts whose balance is known", () => {
+    const p = goalProgress(goal({ account_refs: ["plaid:amex", "manual:not-entered"] }), today, balances);
+    expect(p.saved).toBeCloseTo(8159.71);
+  });
+
+  it("falls back to the manual amount when none of the followed accounts is known", () => {
+    const p = goalProgress(goal({ account_refs: ["manual:not-entered"] }), today, balances);
+    expect(p).toMatchObject({ saved: 250, tracksAccount: false });
   });
 });
 

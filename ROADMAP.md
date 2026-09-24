@@ -125,3 +125,9 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [x] Apple Savings (same branch): the savings export (Daily Cash deposits, interest, transfers) imports through the same button, which tells the two files apart from the header. Deposits are stored as money in; interest and Daily Cash count as income; other deposits and withdrawals are transfers. Checked on a real August export: 33 rows, +$17.44, $316.94 to $334.38, matching the statement exactly. The savings balance and APY are entered by hand (the export has neither; the statement shows the APY) and the balance counts in net worth; the card shows the APY and about what it earns a month. Migration `0012_manual_account_types.sql` (run after 0011)
 - [ ] Not built: financing/installments as a dedicated view. Apple's export has none right now; if one appears it is imported as a purchase and noted "Apple Card Monthly Installment"
 - [ ] Not built: automatic sync. Apple only releases this data to its own on-device system, so it is a manual export and upload
+
+## Goals across accounts + Amex APY (same branch as Apple Savings)
+- [x] A goal can follow several accounts at once, connected or manual (Apple Savings included); their balances add up. Falls back to the amount saved by hand if none of the followed balances is known
+- [x] APY can be entered for connected savings accounts (the Amex savings), shown on the Accounts page
+- [x] Migration `0013_goal_accounts_and_apy.sql` (idempotent; existing single-account goals carry over)
+- [x] 3 new tests (177 total)
