@@ -16,7 +16,10 @@ test("cash can be added to or taken from instead of retyped", async ({ page }) =
 
   await dialog.getByLabel("Amount").fill("40.25");
   await page.keyboard.press("Enter");
-  await expect(page.getByText("$579.75").first()).toBeVisible();
-  const writes = await mockWrites(page);
-  expect(writes.find((w) => w.table === "manual_assets" && w.method === "PATCH")?.body).toEqual({ value: 579.75 });
+  // Saved: the dialog closes and the entry shows the new balance.
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Took $40.25 from Cash. Now $579.75.")).toBeVisible();
+  await expect
+    .poll(async () => (await mockWrites(page)).find((w) => w.table === "manual_assets" && w.method === "PATCH")?.body)
+    .toEqual({ value: 579.75 });
 });

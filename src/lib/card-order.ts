@@ -1,7 +1,7 @@
 // Pure, shared by the server (to render cards in the saved order) and the
 // client (to keep a drag's result in sync with a refreshed card list).
 
-export const CARD_ORDER_PAGES = ["accounts"] as const;
+export const CARD_ORDER_PAGES = ["accounts", "overview"] as const;
 export type CardOrderPage = (typeof CARD_ORDER_PAGES)[number];
 
 export function cardOrderKey(page: CardOrderPage): string {

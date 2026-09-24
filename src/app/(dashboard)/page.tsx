@@ -5,6 +5,9 @@ import { TransactionAvatar } from "@/components/transaction-avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AttentionCard } from "@/components/attention-card";
+import { SortableCardGrid, type GridCard } from "@/components/sortable-card-grid";
+import { applyCardOrder } from "@/lib/card-order";
+import { loadCardOrder } from "@/lib/ui-preferences";
 import { GreetingHeader } from "@/components/greeting-header";
 import { NetWorthHero } from "@/components/net-worth-hero";
 import { OverviewGoalsCard, OverviewGoalsSkeleton } from "@/components/overview-goals-card";
@@ -64,6 +67,7 @@ export default async function OverviewPage() {
     { data: alertRows, error: alertsError },
     { data: snapshotRows, error: snapshotsError },
     { data: itemRows },
+    savedOrder,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -85,6 +89,7 @@ export default async function OverviewPage() {
     admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(5),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
     admin.from("items").select("id, institution_name, status, error_code"),
+    loadCardOrder(admin, "overview"),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -199,22 +204,44 @@ export default async function OverviewPage() {
   const subscriptionsError = Boolean(streamsError || manualSubsError);
   const recentTransactionsError = ledger.error;
 
-  return (
-    <div className="flex flex-col gap-6">
-      <GreetingHeader />
-
-      <NetWorthHero netWorth={netWorth} trend={trend} error={netWorthError} currency="USD" />
-
-      <AttentionCard items={attention} />
-
-      <div className="grid gap-6 md:grid-cols-2">
+  // Every card can be moved (the grip on its top edge); the order is saved
+  // and applied here, so the page arrives already arranged.
+  const overviewCards: GridCard[] = [
+    {
+      id: "net-worth",
+      label: "Net worth",
+      span: "full",
+      node: (
+        <NetWorthHero netWorth={netWorth} trend={trend} error={netWorthError} currency="USD" />
+      ),
+    },
+    // Only when there's something to act on; an empty one would leave a gap.
+    ...(attention.length > 0
+      ? [{ id: "attention", label: "Needs your attention", span: "full" as const, node: <AttentionCard items={attention} /> }]
+      : []),
+    {
+      id: "safe-to-spend",
+      label: "Safe to spend",
+      span: "half",
+      node: (
         <Suspense fallback={<SafeToSpendSkeleton />}>
           <SafeToSpendCard />
         </Suspense>
+      ),
+    },
+    {
+      id: "spending-pace",
+      label: "Spending pace",
+      span: "half",
+      node: (
         <SpendingPaceCard pace={pace} monthRef={{ year: now.year, month: now.month }} previousMonthName={previousMonthName} currency={currency} error={spendingError} />
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
+      ),
+    },
+    {
+      id: "budgets",
+      label: "Budgets",
+      span: "half",
+      node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Budgets</CardTitle>
@@ -246,12 +273,23 @@ export default async function OverviewPage() {
             )}
           </CardContent>
         </Card>
+      ),
+    },
+    {
+      id: "goals",
+      label: "Goals",
+      span: "half",
+      node: (
         <Suspense fallback={<OverviewGoalsSkeleton />}>
           <OverviewGoalsCard />
         </Suspense>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
+      ),
+    },
+    {
+      id: "month-spending",
+      label: `${monthLabel} spending`,
+      span: "half",
+      node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>{monthLabel} spending</CardTitle>
@@ -282,7 +320,13 @@ export default async function OverviewPage() {
             )}
           </CardContent>
         </Card>
-
+      ),
+    },
+    {
+      id: "subscriptions",
+      label: "Subscriptions",
+      span: "half",
+      node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Subscriptions</CardTitle>
@@ -304,9 +348,13 @@ export default async function OverviewPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-2">
+      ),
+    },
+    {
+      id: "upcoming",
+      label: "Upcoming",
+      span: "half",
+      node: (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle>Upcoming</CardTitle>
@@ -346,7 +394,13 @@ export default async function OverviewPage() {
             )}
           </CardContent>
         </Card>
-
+      ),
+    },
+    {
+      id: "alerts",
+      label: "Recent alerts",
+      span: "half",
+      node: (
         <Card>
           <CardHeader>
             <CardTitle>Recent alerts</CardTitle>
@@ -376,99 +430,118 @@ export default async function OverviewPage() {
             )}
           </CardContent>
         </Card>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>{monthLabel} income</CardTitle>
-          <SectionLink href="/transactions" />
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {spendingError ? (
-            <QueryErrorState message="Couldn't load income." />
-          ) : incomeVsSpending.income === 0 ? (
-            <p className="text-sm text-muted-foreground">No income recorded yet this month.</p>
-          ) : (
-            <>
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <Money amount={incomeVsSpending.income} currency={currency} tone="positive" className="text-2xl font-semibold" />
-                <p className="text-sm text-muted-foreground">
-                  {formatCurrency(incomeVsSpending.income, currency)} in ·{" "}
-                  {formatCurrency(incomeVsSpending.spending, currency)} out · net{" "}
-                  <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood-text"}>
-                    {formatCurrency(incomeVsSpending.net, currency)}
-                  </span>
-                </p>
-              </div>
-              {incomeBySource.length > 0 && (
-                <div className="flex flex-col">
-                  {incomeBySource.map((s) => (
-                    <div
-                      key={s.source}
-                      className="flex items-center justify-between border-t border-border py-2 first:border-t-0 first:pt-0"
-                    >
-                      <span className="text-sm text-muted-foreground">{s.source}</span>
-                      <Money amount={s.amount} currency={currency} tone="positive" className="text-sm font-medium" />
-                    </div>
-                  ))}
+      ),
+    },
+    {
+      id: "month-income",
+      label: `${monthLabel} income`,
+      span: "full",
+      node: (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>{monthLabel} income</CardTitle>
+            <SectionLink href="/transactions" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {spendingError ? (
+              <QueryErrorState message="Couldn't load income." />
+            ) : incomeVsSpending.income === 0 ? (
+              <p className="text-sm text-muted-foreground">No income recorded yet this month.</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <Money amount={incomeVsSpending.income} currency={currency} tone="positive" className="text-2xl font-semibold" />
+                  <p className="text-sm text-muted-foreground">
+                    {formatCurrency(incomeVsSpending.income, currency)} in ·{" "}
+                    {formatCurrency(incomeVsSpending.spending, currency)} out · net{" "}
+                    <span className={incomeVsSpending.net >= 0 ? "text-moss" : "text-oxblood-text"}>
+                      {formatCurrency(incomeVsSpending.net, currency)}
+                    </span>
+                  </p>
                 </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent transactions</CardTitle>
-          <SectionLink href="/transactions" />
-        </CardHeader>
-        <CardContent>
-          {recentTransactionsError ? (
-            <QueryErrorState message="Couldn't load recent transactions." />
-          ) : recent.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No transactions yet.</p>
-          ) : (
-            <div className="flex flex-col">
-              {recent.map((t) => {
-                const isDebit = t.amount >= 0; // Plaid: positive = money out
-                const merchant = humanizeTransactionName(t);
-
-                return (
-                  <div
-                    key={t.id}
-                    className="flex items-center justify-between gap-3 border-t border-border py-3 first:border-t-0 first:pt-0"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <TransactionAvatar transaction={t} />
-                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                        <span className="truncate">{merchant}</span>
-                        {t.isManual && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            Manual
-                          </Badge>
-                        )}
-                        {t.pending && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            Pending
-                          </Badge>
-                        )}
-                      </span>
-                    </div>
-                    <Money
-                      amount={t.amount}
-                      currency={t.iso_currency_code}
-                      tone={isDebit ? "negative" : "positive"}
-                      showSign
-                      className="text-sm font-medium"
-                    />
+                {incomeBySource.length > 0 && (
+                  <div className="flex flex-col">
+                    {incomeBySource.map((s) => (
+                      <div
+                        key={s.source}
+                        className="flex items-center justify-between border-t border-border py-2 first:border-t-0 first:pt-0"
+                      >
+                        <span className="text-sm text-muted-foreground">{s.source}</span>
+                        <Money amount={s.amount} currency={currency} tone="positive" className="text-sm font-medium" />
+                      </div>
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    },
+    {
+      id: "recent-transactions",
+      label: "Recent transactions",
+      span: "full",
+      node: (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Recent transactions</CardTitle>
+            <SectionLink href="/transactions" />
+          </CardHeader>
+          <CardContent>
+            {recentTransactionsError ? (
+              <QueryErrorState message="Couldn't load recent transactions." />
+            ) : recent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No transactions yet.</p>
+            ) : (
+              <div className="flex flex-col">
+                {recent.map((t) => {
+                  const isDebit = t.amount >= 0; // Plaid: positive = money out
+                  const merchant = humanizeTransactionName(t);
+
+                  return (
+                    <div
+                      key={t.id}
+                      className="flex items-center justify-between gap-3 border-t border-border py-3 first:border-t-0 first:pt-0"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <TransactionAvatar transaction={t} />
+                        <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                          <span className="truncate">{merchant}</span>
+                          {t.isManual && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Manual
+                            </Badge>
+                          )}
+                          {t.pending && (
+                            <Badge variant="secondary" className="text-[10px]">
+                              Pending
+                            </Badge>
+                          )}
+                        </span>
+                      </div>
+                      <Money
+                        amount={t.amount}
+                        currency={t.iso_currency_code}
+                        tone={isDebit ? "negative" : "positive"}
+                        showSign
+                        className="text-sm font-medium"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <GreetingHeader />
+      <SortableCardGrid page="overview" cards={applyCardOrder(overviewCards, (c) => c.id, savedOrder)} />
     </div>
   );
 }

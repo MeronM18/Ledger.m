@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Diff, Pencil, Plus, Trash2 } from "lucide-react";
+import { Diff, Minus, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -139,7 +139,7 @@ function AdjustCashButton({ asset }: { asset: ManualAsset }) {
                   direction === d ? "bg-bone/10 text-bone" : "text-muted-foreground hover:text-foreground"
                 )}
               >
-                {d === "add" ? <Plus className="size-3.5" aria-hidden /> : <span aria-hidden className="text-base leading-none">−</span>}
+                {d === "add" ? <Plus className="size-3.5 shrink-0" aria-hidden /> : <Minus className="size-3.5 shrink-0" aria-hidden />}
                 {d === "add" ? "Add" : "Subtract"}
               </button>
             ))}

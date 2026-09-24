@@ -111,26 +111,16 @@ function SortableItem({ card, enabled }: { card: SortableCard; enabled: boolean 
 }
 
 /**
- * A vertical stack of cards the user can reorder by their grip, with the
- * mouse, a finger, or the keyboard (focus the grip, Space to lift, arrows to
- * move, Space to drop). The new order is saved right away and comes back on
- * every device; if saving fails, the cards go back to where they were.
+ * The order the user has arranged a page's cards in, and saving it. The
+ * order is reconciled against `cards` on every render, so a card added or
+ * removed by a refresh still shows up (or disappears) without resetting the
+ * arrangement. `save` stores it for every device; if that fails, the cards
+ * go back to `previous`.
  */
-export function SortableCardList({ page, cards }: { page: CardOrderPage; cards: SortableCard[] }) {
-  // The order the user has arranged. Reconciled against `cards` on every
-  // render, so an account added or removed by a refresh still shows up (or
-  // disappears) without resetting the arrangement.
+export function useCardOrder<T extends { id: string }>(page: CardOrderPage, cards: T[]) {
   const [order, setOrder] = useState(() => cards.map((c) => c.id));
   const saveSeq = useRef(0);
   const ordered = applyCardOrder(cards, (c) => c.id, order);
-  const ids = ordered.map((c) => c.id);
-  const labelOf = (id: string | number) => cards.find((c) => c.id === id)?.label ?? "Card";
-
-  const sensors = useSensors(
-    // A few pixels of travel before a drag starts, so a click on the grip isn't a drag.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
 
   async function save(next: string[], previous: string[]) {
     const seq = ++saveSeq.current;
@@ -148,6 +138,25 @@ export function SortableCardList({ page, cards }: { page: CardOrderPage; cards: 
       toast.error("Couldn't save the new order, so the cards went back to where they were.");
     }
   }
+
+  return { ordered, ids: ordered.map((c) => c.id), setOrder, save };
+}
+
+/**
+ * A vertical stack of cards the user can reorder by their grip, with the
+ * mouse, a finger, or the keyboard (focus the grip, Space to lift, arrows to
+ * move, Space to drop). The new order is saved right away and comes back on
+ * every device; if saving fails, the cards go back to where they were.
+ */
+export function SortableCardList({ page, cards }: { page: CardOrderPage; cards: SortableCard[] }) {
+  const { ordered, ids, setOrder, save } = useCardOrder(page, cards);
+  const labelOf = (id: string | number) => cards.find((c) => c.id === id)?.label ?? "Card";
+
+  const sensors = useSensors(
+    // A few pixels of travel before a drag starts, so a click on the grip isn't a drag.
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   function handleDragEnd({ active, over }: DragEndEvent) {
     if (!over || active.id === over.id) return;
