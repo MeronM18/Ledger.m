@@ -196,3 +196,98 @@ export function parseAppleCardCsv(text: string): ImportResult {
 
   return { transactions, skipped };
 }
+
+// ---- Apple Savings ----------------------------------------------------
+
+export type StatementKind = "card" | "savings";
+
+export type StatementImport = ImportResult & { kind: StatementKind | null };
+
+const SAVINGS_REQUIRED = ["Transaction Date", "Activity Type", "Transaction Type", "Description", "Amount"] as const;
+
+/**
+ * Apple Savings export: deposits (Daily Cash, interest, transfers in) and
+ * withdrawals. In the app's sign convention money in is negative, so a
+ * deposit is stored as a negative amount, exactly like a paycheck. Interest
+ * and Daily Cash count as income; any other deposit or withdrawal is a
+ * transfer, which every spending and income view leaves out.
+ */
+export function parseAppleSavingsCsv(text: string): ImportResult {
+  const rows = parseCsv(text);
+  const header = (rows[0] ?? []).map((h) => h.trim());
+  const col = (name: string) => header.indexOf(name);
+  const missing = SAVINGS_REQUIRED.filter((c) => col(c) === -1);
+  if (missing.length > 0) {
+    return { transactions: [], skipped: [{ line: 1, reason: `This doesn't look like an Apple Savings export. Missing: ${missing.join(", ")}.` }] };
+  }
+
+  const idx = {
+    date: col("Transaction Date"),
+    posted: col("Posted Date"),
+    activity: col("Activity Type"),
+    type: col("Transaction Type"),
+    description: col("Description"),
+    amount: col("Amount"),
+  };
+  const get = (r: string[], i: number) => (i >= 0 ? (r[i] ?? "").trim() : "");
+
+  const transactions: ImportedTransaction[] = [];
+  const skipped: { line: number; reason: string }[] = [];
+  const seen = new Map<string, number>();
+
+  rows.slice(1).forEach((r, i) => {
+    const line = i + 2;
+    const date = parseUsDate(get(r, idx.date));
+    const raw = Number(get(r, idx.amount).replace(/,/g, ""));
+    if (!date) return void skipped.push({ line, reason: "Unreadable transaction date." });
+    if (!Number.isFinite(raw) || get(r, idx.amount) === "") return void skipped.push({ line, reason: "Unreadable amount." });
+
+    const activity = get(r, idx.activity).toLowerCase();
+    const isCredit = get(r, idx.type).toLowerCase() === "credit";
+    const description = get(r, idx.description);
+
+    let pfc: string;
+    let name: string;
+    if (isCredit && activity === "interest") {
+      pfc = "INCOME";
+      name = "Apple Savings interest";
+    } else if (isCredit && (activity === "rewards" || /daily cash/i.test(description))) {
+      pfc = "INCOME";
+      name = "Daily Cash deposit";
+    } else if (isCredit) {
+      pfc = "TRANSFER_IN";
+      name = description || "Deposit";
+    } else {
+      pfc = "TRANSFER_OUT";
+      name = description || "Withdrawal";
+    }
+
+    const base = ["savings", get(r, idx.date), get(r, idx.posted), activity, get(r, idx.type), description, raw.toFixed(2)].join("|");
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+
+    transactions.push({
+      date,
+      name,
+      // Money in is negative, money out positive.
+      amount: isCredit ? -Math.abs(raw) : Math.abs(raw),
+      pfc_primary: pfc,
+      notes: null,
+      external_id: `${base}|${n}`,
+    });
+  });
+
+  return { transactions, skipped };
+}
+
+/** Works out which Apple export this is from its header row, then reads it. */
+export function parseAppleCsv(text: string): StatementImport {
+  const header = (parseCsv(text)[0] ?? []).map((h) => h.trim());
+  if (header.includes("Activity Type")) return { kind: "savings", ...parseAppleSavingsCsv(text) };
+  if (header.includes("Amount (USD)")) return { kind: "card", ...parseAppleCardCsv(text) };
+  return {
+    kind: null,
+    transactions: [],
+    skipped: [{ line: 1, reason: "This doesn't look like an Apple Card or Apple Savings export." }],
+  };
+}

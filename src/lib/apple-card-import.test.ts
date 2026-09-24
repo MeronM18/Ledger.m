@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { categorize, cleanPayee, parseAppleCardCsv, parseCsv, parseUsDate } from "@/lib/apple-card-import";
+import { categorize, cleanPayee, parseAppleCardCsv, parseAppleCsv, parseAppleSavingsCsv, parseCsv, parseUsDate } from "@/lib/apple-card-import";
 
 const HEADER = "Transaction Date,Clearing Date,Description,Merchant,Category,Type,Amount (USD),Purchased By";
 const csv = (...rows: string[]) => [HEADER, ...rows].join("\n");
@@ -96,5 +96,54 @@ describe("parseAppleCardCsv", () => {
   it("notes an installment", () => {
     const { transactions } = parseAppleCardCsv(csv('09/01/2026,09/01/2026,"APPLE CARD MONTHLY INSTALLMENTS","Apple Store","Other","Purchase","83.29","Me"'));
     expect(transactions[0].notes).toBe("Apple Card Monthly Installment");
+  });
+});
+
+const SAVINGS_HEADER = "Transaction Date,Posted Date,Activity Type,Transaction Type,Description,Currency Code,Amount";
+const savings = (...rows: string[]) => [SAVINGS_HEADER, ...rows].join("\n");
+
+describe("parseAppleSavingsCsv", () => {
+  const sample = savings(
+    '08/31/2026,09/01/2026,"Interest","Credit","Interest Paid","USD","0.92"',
+    '08/29/2026,08/29/2026,"Rewards","Credit","Daily Cash Deposit","USD","0.70"',
+    '08/29/2026,08/29/2026,"Rewards","Credit","Daily Cash Deposit","USD","0.70"',
+    '08/10/2026,08/10/2026,"Transfer","Debit","Transfer To Checking","USD","100.00"',
+    '08/05/2026,08/05/2026,"Transfer","Credit","Transfer From Checking","USD","250.00"'
+  );
+
+  it("stores deposits as negative money-in, with interest and Daily Cash as income", () => {
+    const { transactions, skipped } = parseAppleSavingsCsv(sample);
+    expect(skipped).toEqual([]);
+    expect(transactions[0]).toMatchObject({ date: "2026-08-31", name: "Apple Savings interest", amount: -0.92, pfc_primary: "INCOME" });
+    expect(transactions[1]).toMatchObject({ name: "Daily Cash deposit", amount: -0.7, pfc_primary: "INCOME" });
+  });
+
+  it("treats other deposits and withdrawals as transfers, so they are neither income nor spending", () => {
+    const { transactions } = parseAppleSavingsCsv(sample);
+    expect(transactions[3]).toMatchObject({ amount: 100, pfc_primary: "TRANSFER_OUT" });
+    expect(transactions[4]).toMatchObject({ amount: -250, pfc_primary: "TRANSFER_IN" });
+  });
+
+  it("tells two identical same-day deposits apart, and is stable when imported again", () => {
+    const a = parseAppleSavingsCsv(sample).transactions;
+    expect(a[1].external_id).not.toBe(a[2].external_id);
+    expect(parseAppleSavingsCsv(sample).transactions.map((t) => t.external_id)).toEqual(a.map((t) => t.external_id));
+  });
+
+  it("matches your August statement: $16.52 Daily Cash + $0.92 interest moves $316.94 to $334.38", () => {
+    const rows = [0.08, 0.17, 0.02, 1.06, 0.08, 0.52, 0.42, 0.1, 0.38, 2.06, 4.12, 0.78, 0.12, 0.31, 0.86, 0.13, 0.26, 0.39, 0.33, 0.42, 0.39, 0.12, 0.27, 0.17, 0.63, 0.89, 0.09, 0.04, 0.1, 0.11, 0.7, 0.4];
+    const csv = savings(...rows.map((a) => `08/15/2026,08/15/2026,"Rewards","Credit","Daily Cash Deposit","USD","${a.toFixed(2)}"`), '08/31/2026,09/01/2026,"Interest","Credit","Interest Paid","USD","0.92"');
+    const total = parseAppleSavingsCsv(csv).transactions.reduce((s, t) => s - t.amount, 0);
+    expect(316.94 + total).toBeCloseTo(334.38, 2);
+  });
+});
+
+describe("parseAppleCsv", () => {
+  it("picks the right reader from the header", () => {
+    expect(parseAppleCsv(savings('08/31/2026,09/01/2026,"Interest","Credit","Interest Paid","USD","0.92"')).kind).toBe("savings");
+    expect(parseAppleCsv(csv('09/22/2026,09/23/2026,"D","M","Other","Purchase","2.99","Me"')).kind).toBe("card");
+    const unknown = parseAppleCsv("a,b\n1,2");
+    expect(unknown.kind).toBeNull();
+    expect(unknown.transactions).toEqual([]);
   });
 });

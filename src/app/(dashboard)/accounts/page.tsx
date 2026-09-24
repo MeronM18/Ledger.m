@@ -97,14 +97,16 @@ export default async function AccountsPage() {
 
   const utilization = summarizeUtilization([
     // Apple Card, imported from statements, counts like any connected card.
-    ...manualCards.map((c) => ({
-      id: `manual:${c.id}`,
-      name: c.name,
-      mask: c.mask,
-      institution: c.institution_name,
-      balance: c.balance,
-      limit: c.credit_limit,
-    })),
+    ...manualCards
+      .filter((c) => c.type === "credit")
+      .map((c) => ({
+        id: `manual:${c.id}`,
+        name: c.name,
+        mask: c.mask,
+        institution: c.institution_name,
+        balance: c.balance,
+        limit: c.credit_limit,
+      })),
     ...rows.flatMap((item) =>
       item.accounts
         .filter((a) => a.type === "credit")
@@ -144,8 +146,11 @@ export default async function AccountsPage() {
           <AppleCardSection
             cards={manualCards.map((c) => ({
               id: c.id,
+              type: c.type,
               name: c.name,
               balance: c.balance,
+              balanceKnown: c.balanceKnown,
+              earned: c.earned,
               creditLimit: c.credit_limit,
               hasBalanceOverride: c.balance_override !== null,
               balanceOverride: c.balance_override,
