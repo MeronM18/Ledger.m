@@ -53,7 +53,7 @@ export function NetWorthHero({
               >
                 {formatCurrency(netWorth, currency)}
               </span>
-              {trend.change !== null ? (
+              {trend.change !== null && (
                 <p className={cn("flex items-center gap-1.5 text-sm", up ? "text-moss" : "text-oxblood-text")}>
                   {up ? <ArrowUpRight className="size-4" aria-hidden /> : <ArrowDownRight className="size-4" aria-hidden />}
                   <span className="font-mono tabular-nums">
@@ -63,8 +63,6 @@ export function NetWorthHero({
                   </span>
                   <span className="text-muted-foreground">in the last 30 days</span>
                 </p>
-              ) : (
-                <p className="text-sm text-muted-foreground">The 30-day change shows up after a week of history.</p>
               )}
             </div>
 
