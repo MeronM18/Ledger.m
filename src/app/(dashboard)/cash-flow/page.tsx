@@ -107,7 +107,8 @@ export default async function CashFlowPage() {
           )}
           {!f.nextIncome && (
             <p className="text-sm text-muted-foreground">
-              No upcoming paycheck was detected, so this covers the next {f.daysToPayday} days instead.
+              Your income varies, so paychecks aren&apos;t predicted. This covers the next {f.daysToPayday} days, and
+              money counts once it lands.
             </p>
           )}
         </CardContent>
@@ -133,7 +134,7 @@ export default async function CashFlowPage() {
         </CardHeader>
         <CardContent>
           {nothingKnown ? (
-            <p className="text-sm text-muted-foreground">No bills or paychecks are expected in the next 30 days.</p>
+            <p className="text-sm text-muted-foreground">No bills are expected in the next 30 days.</p>
           ) : (
             <div className="flex flex-col">
               {f.events.map((e, i) => (
@@ -165,9 +166,13 @@ export default async function CashFlowPage() {
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm text-muted-foreground">
           <p>
-            Cash is the available balance across your checking accounts (savings is treated as set aside). Bills and paychecks come from what
-            your bank connection has detected as recurring, plus your manual subscriptions. Anything that hasn&apos;t
+            Cash is the available balance across your checking accounts (savings is treated as set aside). Bills come from
+            what your bank connection has detected as recurring, plus your manual subscriptions. Anything that hasn&apos;t
             charged for well past its expected date is left out.
+          </p>
+          <p>
+            Income isn&apos;t forecast. Commission pay changes from check to check, so a deposit only counts once it&apos;s
+            in your balance.
           </p>
           <p>
             &ldquo;Typical spending&rdquo; is your last 30 days of spending minus those recurring bills

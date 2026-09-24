@@ -77,7 +77,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Monthly budget per spending category, with progress against the month, what's left or over, a warning when the month's pace will overshoot, spending that has no budget yet, and a suggested starting amount from your last three months
 
 **Cash flow**
-- "Safe to spend" until the next detected paycheck (checking cash minus the bills due first), a 30-day balance forecast, and a heads-up when the balance is projected to run low. Bills and paychecks come from Plaid's recurring detection plus manual subscriptions; a stream that has stopped charging is left out
+- "Safe to spend" over the next two weeks (checking cash minus the bills due first), a 30-day balance forecast, and a heads-up when the balance is projected to run low. Bills come from Plaid's recurring detection plus manual subscriptions; a stream that has stopped charging is left out. Income is commission-based, so it isn't predicted: a deposit counts once it lands
 
 **Goals**
 - Savings goals with a target and optional date: how much to set aside each month to finish on time, tracked by hand or by following a connected account's balance

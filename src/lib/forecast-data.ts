@@ -10,10 +10,6 @@ import { calendarNow, easternToday } from "@/lib/time";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
-// Inflow streams under this are more likely a small transfer than a
-// paycheck; counting on them would make "next payday" flicker.
-const MIN_PAYCHECK_AMOUNT = 100;
-
 export type ForecastData =
   | { error: true }
   | {
@@ -39,7 +35,8 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
       .from("recurring_streams")
       .select("id, direction, merchant_name, description, average_amount, last_amount, frequency, predicted_next_date, last_date")
       .eq("is_active", true)
-      .eq("user_marked_cancelled", false),
+      .eq("user_marked_cancelled", false)
+      .eq("direction", "outflow"),
     admin.from("manual_subscriptions").select("id, name, amount, frequency, next_billing_date").eq("is_active", true),
     loadManualAccounts(admin),
   ]);
@@ -64,22 +61,14 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     manualCardsRes.accounts.filter((c) => c.type === "credit").reduce((sum, c) => sum + Math.max(0, c.balance), 0);
 
   const streams = streamsRes.data ?? [];
-  const streamName = (
-    s: { merchant_name: string | null; description: string | null },
-    fallback: string,
-    direction: "inflow" | "outflow"
-  ) => streamDisplayName(s, direction, fallback);
-
   const bills: RecurringItem[] = [
-    ...streams
-      .filter((s) => s.direction === "outflow")
-      .map((s) => ({
-        id: s.id as string,
-        name: streamName(s, "Recurring bill", "outflow"),
-        amount: amountOf(s.average_amount, s.last_amount),
-        frequency: s.frequency as string | null,
-        date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
-      })),
+    ...streams.map((s) => ({
+      id: s.id as string,
+      name: streamDisplayName(s, "outflow", "Recurring bill"),
+      amount: amountOf(s.average_amount, s.last_amount),
+      frequency: s.frequency as string | null,
+      date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
+    })),
     ...(manualRes.data ?? []).map((m) => ({
       id: m.id as string,
       name: m.name as string,
@@ -89,23 +78,15 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     })),
   ].filter((b) => b.amount > 0);
 
-  const income: RecurringItem[] = streams
-    .filter((s) => s.direction === "inflow")
-    .map((s) => ({
-      id: s.id as string,
-      name: streamName(s, "Income", "inflow"),
-      // Plaid signs inflows as negative amounts; only the size matters here.
-      amount: amountOf(s.average_amount, s.last_amount),
-      frequency: s.frequency as string | null,
-      date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
-    }))
-    .filter((i) => i.amount >= MIN_PAYCHECK_AMOUNT);
-
   const forecast = buildForecast({
     cash,
     today: easternToday(),
     bills,
-    income,
+    // Income is commission-based, so the amount and date of the next check
+    // can't be predicted from past deposits. Plaid's detected inflow streams
+    // would put a made-up paycheck in the forecast, so none are counted:
+    // money only counts once it has landed in the balance.
+    income: [],
     typicalDailySpend: typicalDailySpend(spending.spending, calendarNow().isoDate, bills),
     lowBalanceThreshold: ALERT_THRESHOLDS.lowBalance,
   });
