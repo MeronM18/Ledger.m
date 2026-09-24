@@ -3,6 +3,7 @@ import { Pencil, Plus } from "lucide-react";
 import { ManualAssetsManager, type ManualAsset } from "@/components/manual-assets-manager";
 import { PreciousMetalsManager, type MetalPriceRow, type PreciousMetalHolding } from "@/components/precious-metals-manager";
 import { Badge } from "@/components/ui/badge";
+import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlaidLinkButton } from "@/components/plaid-link-button";
@@ -236,6 +237,11 @@ export default async function AccountsPage() {
     historyStart,
   });
 
+  // Everything tracked by hand, less anything owed by hand.
+  const trackedTotal = board
+    .filter((r) => r.ref.type === "asset" || r.ref.type === "metals")
+    .reduce((sum, r) => sum + (r.liability ? -r.balance : r.balance), 0);
+
   const appleCards: AppleCard[] = manualCards.map((c) => ({
     id: c.id,
     type: c.type,
@@ -325,20 +331,16 @@ export default async function AccountsPage() {
             <AccountsBoard rows={board} actions={actions} historyStart={historyStart} savedOrder={savedOrder} />
 
             {/* What isn't at a bank: cash, a car, property, debts, gold and silver. */}
-            <Card id="manual-assets" className="scroll-mt-6">
-              <CardHeader>
-                <CardTitle>Assets you track yourself</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  Cash on hand, a car, property, anything you owe outside a bank, and precious metals. They count in
-                  net worth and show in the groups above.
-                </p>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-6">
-                <ManualAssetsManager assets={(assetRows ?? []) as ManualAsset[]} />
-                <div className="border-t border-border pt-6">
-                  <PreciousMetalsManager holdings={holdings as PreciousMetalHolding[]} prices={prices as MetalPriceRow[]} />
+            <Card id="manual-assets" className="scroll-mt-6 gap-0 py-0">
+              <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 px-4 py-3">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <CardTitle>Assets you track yourself</CardTitle>
+                  <p className="text-xs text-muted-foreground">Cash on hand, a car, property, debts outside a bank, and metals. They count in net worth.</p>
                 </div>
-              </CardContent>
+                <Money amount={trackedTotal} currency="USD" tone="neutral" className="shrink-0 text-sm font-semibold" />
+              </CardHeader>
+              <ManualAssetsManager assets={(assetRows ?? []) as ManualAsset[]} />
+              <PreciousMetalsManager holdings={holdings as PreciousMetalHolding[]} prices={prices as MetalPriceRow[]} />
             </Card>
           </div>
 

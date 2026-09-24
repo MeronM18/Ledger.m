@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Money } from "@/components/money";
+import { Ago } from "@/components/accounts-board";
+import { AssetRow, AssetSectionHeader } from "@/components/asset-row";
+import { InstitutionAvatar } from "@/components/institution-avatar";
 import { adjustedCash, type CashDirection } from "@/lib/cash-adjust";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -36,6 +39,7 @@ export type ManualAsset = {
   value: number;
   is_liability: boolean;
   notes: string | null;
+  updated_at?: string | null;
 };
 
 const CATEGORY_LABEL: Record<ManualAsset["category"], string> = {
@@ -113,7 +117,7 @@ function AdjustCashButton({ asset }: { asset: ManualAsset }) {
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost" aria-label={`Add to or take from ${asset.name}`} title="Add or subtract">
+        <Button size="icon-sm" variant="ghost" aria-label={`Add to or take from ${asset.name}`} title="Add or subtract">
           <Diff className="size-3.5" />
         </Button>
       </DialogTrigger>
@@ -269,16 +273,16 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
     }
   }
 
+  // What they add up to: assets less anything owed.
+  const net = assets.reduce((s, a) => s + (a.is_liability ? -a.value : a.value), 0);
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-medium tracking-[0.08em] text-ash-grey uppercase">
-          Manual entries
-        </h3>
+    <div>
+      <AssetSectionHeader title="Cash and property" total={formatCurrency(net, "USD")}>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" variant="outline" onClick={openCreate}>
-              <Plus className="size-3.5" />
+            <Button size="xs" variant="ghost" className="text-champagne hover:text-champagne" onClick={openCreate}>
+              <Plus />
               Add asset
             </Button>
           </DialogTrigger>
@@ -355,43 +359,42 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </AssetSectionHeader>
 
       {assets.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No manual entries yet. Add cash, crypto, vehicles, property, or other assets/liabilities.
+        <p className="px-4 py-6 text-sm text-muted-foreground">
+          Nothing yet. Add cash on hand, a car, property, crypto, or a debt outside a bank.
         </p>
       ) : (
-        <div className="flex flex-col">
+        <ul>
           {assets.map((asset) => (
-            <div
+            <AssetRow
               key={asset.id}
-              className="flex items-center justify-between gap-3 border-t py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium">{asset.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {CATEGORY_LABEL[asset.category]} · {asset.is_liability ? "Liability" : "Asset"}
-                  {asset.notes ? ` · ${asset.notes}` : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
+              mark={<InstitutionAvatar icon={asset.category} />}
+              name={asset.name}
+              detail={[CATEGORY_LABEL[asset.category], asset.is_liability ? "Owed" : null, asset.notes].filter(Boolean).join(" · ")}
+              value={
                 <Money
-                  amount={asset.value}
-                  tone={asset.is_liability ? "negative" : "positive"}
+                  amount={asset.is_liability ? -asset.value : asset.value}
+                  tone={asset.is_liability ? "negative" : "neutral"}
                   className="text-sm font-medium"
                 />
-                {asset.category === "cash" && <AdjustCashButton asset={asset} />}
-                <Button size="icon" variant="ghost" onClick={() => openEdit(asset)}>
-                  <Pencil className="size-3.5" />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => handleDelete(asset.id)}>
-                  <Trash2 className="size-3.5" />
-                </Button>
-              </div>
-            </div>
+              }
+              note={asset.updated_at ? <Ago prefix="Updated" at={asset.updated_at} /> : "Entered by you"}
+              actions={
+                <>
+                  {asset.category === "cash" && !asset.is_liability && <AdjustCashButton asset={asset} />}
+                  <Button size="icon-sm" variant="ghost" aria-label={`Edit ${asset.name}`} onClick={() => openEdit(asset)}>
+                    <Pencil className="size-3.5" />
+                  </Button>
+                  <Button size="icon-sm" variant="ghost" aria-label={`Remove ${asset.name}`} onClick={() => handleDelete(asset.id)}>
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </>
+              }
+            />
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

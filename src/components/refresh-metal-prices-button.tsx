@@ -52,8 +52,8 @@ export function RefreshMetalPricesButton() {
   }
 
   return (
-    <Button variant="outline" size="sm" onClick={handleClick} disabled={isRefreshing}>
-      <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+    <Button variant="ghost" size="xs" onClick={handleClick} disabled={isRefreshing}>
+      <RefreshCw className={isRefreshing ? "animate-spin" : undefined} />
       {isRefreshing ? "Refreshing..." : "Refresh prices"}
     </Button>
   );

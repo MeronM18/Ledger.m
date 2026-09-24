@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
 import { MetalMark } from "@/components/institution-avatar";
+import { AssetRow, AssetSectionHeader } from "@/components/asset-row";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Money } from "@/components/money";
 import { RefreshMetalPricesButton } from "@/components/refresh-metal-prices-button";
+import { formatCurrency } from "@/lib/format";
 import { holdingValue, isPriceStale } from "@/lib/precious-metals";
 
 export type PreciousMetalHolding = {
@@ -328,54 +330,45 @@ function HoldingRow({
     }
   }
 
+  const asOf = price ? new Date(price.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
+  const detail = [
+    `${holding.weight} ${UNIT_LABEL[holding.weight_unit]}`,
+    holding.purity !== 1 ? `${(holding.purity * 100).toFixed(1)}% pure` : "pure",
+    price ? `$${price.price_per_troy_oz_usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}/oz spot` : "no price yet",
+    holding.notes,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
-      <div className="flex min-w-0 items-center gap-3">
-        <MetalMark metal={holding.metal} />
-        <div>
-          <p className="text-sm font-medium">
-            {METAL_LABEL[holding.metal]} · {holding.weight} {UNIT_LABEL[holding.weight_unit]}
-            {holding.purity !== 1 ? ` · ${(holding.purity * 100).toFixed(1)}% purity` : ""}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {price ? (
-              <>
-                spot price: ${price.price_per_troy_oz_usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}/oz
-                {stale ? (
-                  <span className="text-oxblood-text">
-                    {" "}
-                    · as of {new Date(price.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })} (stale)
-                  </span>
-                ) : (
-                  <> · as of {new Date(price.fetched_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>
-                )}
-              </>
-            ) : (
-              "no price fetched yet"
-            )}
-            {holding.notes ? ` · ${holding.notes}` : ""}
-          </p>
-        </div>
-      </div>
-      <div className="flex items-center gap-3">
-        {value === null ? (
+    <AssetRow
+      mark={<MetalMark metal={holding.metal} />}
+      name={METAL_LABEL[holding.metal]}
+      detail={detail}
+      value={
+        value === null ? (
           <span className="font-mono text-sm text-muted-foreground">—</span>
         ) : (
-          <Money amount={value} tone="positive" className="text-sm font-medium" />
-        )}
-        <HoldingDialog
-          holding={holding}
-          trigger={
-            <Button size="icon" variant="ghost">
-              <Pencil className="size-3.5" />
-            </Button>
-          }
-        />
-        <Button size="icon" variant="ghost" onClick={handleDelete}>
-          <Trash2 className="size-3.5" />
-        </Button>
-      </div>
-    </div>
+          <Money amount={value} tone="neutral" className="text-sm font-medium" />
+        )
+      }
+      note={asOf ? <span className={stale ? "text-oxblood-text" : undefined}>{stale ? `Price from ${asOf}, out of date` : `Priced ${asOf}`}</span> : undefined}
+      actions={
+        <>
+          <HoldingDialog
+            holding={holding}
+            trigger={
+              <Button size="icon-sm" variant="ghost" aria-label={`Edit ${METAL_LABEL[holding.metal]}`}>
+                <Pencil className="size-3.5" />
+              </Button>
+            }
+          />
+          <Button size="icon-sm" variant="ghost" aria-label={`Remove ${METAL_LABEL[holding.metal]}`} onClick={handleDelete}>
+            <Trash2 className="size-3.5" />
+          </Button>
+        </>
+      }
+    />
   );
 }
 
@@ -388,35 +381,33 @@ export function PreciousMetalsManager({
 }) {
   const priceByMetal = new Map(prices.map((p) => [p.metal, p]));
 
+  const total = holdings.reduce(
+    (sum, h) => sum + (holdingValue(h.weight, h.weight_unit, h.purity, priceByMetal.get(h.metal)?.price_per_troy_oz_usd ?? null) ?? 0),
+    0
+  );
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-medium tracking-[0.08em] text-ash-grey uppercase">
-          Precious metals
-        </h3>
-        <div className="flex items-center gap-2">
-          <RefreshMetalPricesButton />
-          <HoldingDialog
-            trigger={
-              <Button size="sm" variant="outline">
-                <Plus className="size-3.5" />
-                Add holding
-              </Button>
-            }
-          />
-        </div>
-      </div>
+    <div>
+      <AssetSectionHeader title="Precious metals" total={holdings.length > 0 ? formatCurrency(total, "USD") : undefined}>
+        <RefreshMetalPricesButton />
+        <HoldingDialog
+          trigger={
+            <Button size="xs" variant="ghost" className="text-champagne hover:text-champagne">
+              <Plus />
+              Add holding
+            </Button>
+          }
+        />
+      </AssetSectionHeader>
 
       {holdings.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No precious metal holdings yet. Add gold or silver to include it in net worth.
-        </p>
+        <p className="px-4 py-6 text-sm text-muted-foreground">No gold or silver yet. Add a holding to count it in net worth.</p>
       ) : (
-        <div className="flex flex-col">
+        <ul>
           {holdings.map((h) => (
             <HoldingRow key={h.id} holding={h} price={priceByMetal.get(h.metal)} />
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );
