@@ -38,7 +38,7 @@ export const WARNING_THRESHOLD = 0.8;
 const MIN_DAY_FOR_PROJECTION = 5;
 
 export function categoryLabel(category: string): string {
-  return category === "OTHER" ? "Other/Uncategorized" : humanizeCategory(category);
+  return category === "OTHER" ? "Other" : humanizeCategory(category);
 }
 
 export function daysInMonth(year: number, month: number): number {

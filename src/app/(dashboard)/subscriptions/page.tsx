@@ -5,6 +5,8 @@ import { QueryErrorState } from "@/components/query-error";
 import { occurrencesBetween } from "@/lib/forecast";
 import { effectiveNextDate, subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
 import { loadFirstChargeAmounts } from "@/lib/subscription-data";
+import { detectRecurring, newDetections } from "@/lib/recurring-detection";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { streamDisplayName } from "@/lib/transaction-display";
 import { calendarNow, easternToday } from "@/lib/time";
@@ -96,6 +98,27 @@ export default async function SubscriptionsPage() {
     "USD"
   );
 
+  // Recurring charges hiding in imported Apple Card transactions, minus
+  // anything already tracked. A failed read just means no suggestions.
+  const importedRes = await fetchAllRows<{ date: string; name: string; amount: number; pfc_primary: string }>((from, to) =>
+    admin
+      .from("manual_transactions")
+      .select("date, name, amount, pfc_primary")
+      .eq("source", "apple_card_csv")
+      .order("date")
+      .order("id")
+      .range(from, to)
+  );
+  if (importedRes.error) console.error("Failed to load imported card transactions", importedRes.error);
+  const suggestions = newDetections(
+    detectRecurring(
+      (importedRes.data ?? [])
+        .filter((t) => !t.pfc_primary.startsWith("TRANSFER"))
+        .map((t) => ({ date: t.date, name: t.name, amount: Number(t.amount) }))
+    ),
+    [...activeStreams.map(streamName), ...manualSubscriptions.map((m) => m.name)]
+  );
+
   const today = easternToday();
   const end = new Date(today.getTime() + CALENDAR_DAYS * 86_400_000);
   const calendarEvents: CalendarEvent[] = [
@@ -131,6 +154,7 @@ export default async function SubscriptionsPage() {
           manualSubscriptions={manualSubscriptions}
           accounts={accounts ?? []}
           insights={insights}
+          suggestions={suggestions}
           calendarEvents={calendarEvents}
           todayIso={calendarNow().isoDate}
         />

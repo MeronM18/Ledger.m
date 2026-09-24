@@ -113,3 +113,14 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [x] Filters: search full width, dropdowns share rows; dialogs never exceed the screen height; long names truncate instead of pushing amounts off screen (overview, assets, goals, budgets, accounts)
 - [x] Browser bar takes the app's dark color; nothing can make the whole page scroll sideways
 - [ ] Needs a real phone to confirm: how each page reads at ~390px, chart legibility, dialogs with the keyboard open
+
+## Apple Card import (branch `feat/apple-card-import`)
+- [x] Import the Apple Card statement CSV from Wallet: parsed, categorized (Apple's categories plus merchant rules for the many it files under "Other"), and added as transactions of a new manual Apple Card account. Re-importing overlapping statements skips what's already there
+- [x] Apple Card is an account: balance (from the imported transactions, or typed in), credit limit, utilization, net worth (a liability), forecast, Assets and Accounts pages, filters on Transactions and Spending
+- [x] Its purchases flow into spending, categories, budgets, trends and transactions; payments to it, and Daily Cash adjustments, are transfers so nothing counts twice
+- [x] Payments from checking to Apple Card are no longer counted as spending (Apple Card is a connected card), which is what filled the "Other/Uncategorized" bucket. That bucket is now just "Other"
+- [x] Subscriptions: recurring charges found in the imported transactions (fixed price, or a bill whose amount changes) appear with a one-click Add
+- [x] Migration `0011_manual_accounts.sql` (**must be applied**)
+- [x] 20 new tests (168 total); parser checked against a real 277-row export
+- [ ] Not built: financing/installments as a dedicated view. Apple's export has none right now; if one appears it is imported as a purchase and noted "Apple Card Monthly Installment"
+- [ ] Not built: automatic sync. Apple only releases this data to its own on-device system, so it is a manual export and upload

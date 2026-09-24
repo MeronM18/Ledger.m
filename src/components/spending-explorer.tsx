@@ -59,7 +59,7 @@ export function SpendingExplorer({
         // "OTHER" key a genuinely uncategorized transaction uses, so this
         // is one filter option covering both, not two easily-confused
         // ones.
-        label: c === "OTHER" ? "Other/Uncategorized" : humanizeCategory(c),
+        label: c === "OTHER" ? "Other" : humanizeCategory(c),
       }));
   }, [transactions]);
 

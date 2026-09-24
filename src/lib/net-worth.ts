@@ -51,3 +51,12 @@ export function computeNetWorth(
 
   return { totalAssets, totalLiabilities, netWorth: totalAssets - totalLiabilities };
 }
+
+/**
+ * Manual card accounts (Apple Card) as net worth inputs: each is a liability
+ * whose balance is the amount owed. A negative balance (overpaid) counts as
+ * nothing owed rather than an asset.
+ */
+export function manualCardsAsAccounts(cards: { balance: number }[]): NetWorthAccount[] {
+  return cards.map((c) => ({ type: "credit", current_balance: Math.max(0, c.balance) }));
+}

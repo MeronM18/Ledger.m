@@ -10,6 +10,7 @@ import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth, isLiabilityAccount } from "@/lib/net-worth";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
+import { loadManualAccounts } from "@/lib/manual-accounts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prettyName } from "@/lib/transaction-display";
 
@@ -34,6 +35,7 @@ export default async function AssetsPage() {
     { data: holdingsData, error: holdingsError },
     { data: pricesData, error: pricesError },
     { data: snapshotsData, error: snapshotsError },
+    { accounts: manualCards, error: manualCardsError },
   ] = await Promise.all([
     admin
       .from("accounts")
@@ -50,6 +52,7 @@ export default async function AssetsPage() {
       .order("created_at", { ascending: false }),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
+    loadManualAccounts(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts", acctError);
@@ -58,7 +61,20 @@ export default async function AssetsPage() {
   if (pricesError) console.error("Failed to load metal prices", pricesError);
   if (snapshotsError) console.error("Failed to load net worth snapshots", snapshotsError);
 
-  const accounts = (accountsData ?? []) as AccountRow[];
+  // A manual card (Apple Card) is an account like any other here: listed under
+  // liabilities and counted in net worth.
+  const accounts = [
+    ...((accountsData ?? []) as AccountRow[]),
+    ...manualCards.map((c) => ({
+      id: `manual:${c.id}`,
+      name: c.name,
+      mask: c.mask,
+      type: "credit",
+      subtype: "credit card",
+      current_balance: Math.max(0, c.balance),
+      iso_currency_code: "USD",
+    })),
+  ] as AccountRow[];
   const manualAssets = (manualData ?? []) as ManualAsset[];
   const holdings = (holdingsData ?? []) as PreciousMetalHolding[];
   const prices = (pricesData ?? []) as MetalPriceRow[];
@@ -74,7 +90,7 @@ export default async function AssetsPage() {
     preciousMetalsValue
   );
 
-  const hasError = Boolean(acctError || manualError || holdingsError || pricesError || snapshotsError);
+  const hasError = Boolean(acctError || manualError || holdingsError || pricesError || snapshotsError || manualCardsError);
 
   return (
     <div className="flex flex-col gap-6">

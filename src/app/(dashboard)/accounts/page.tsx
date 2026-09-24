@@ -9,6 +9,8 @@ import { SyncNowButton } from "@/components/sync-now-button";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
+import { AppleCardSection } from "@/components/apple-card-section";
+import { loadManualAccounts } from "@/lib/manual-accounts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prettyName } from "@/lib/transaction-display";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -51,7 +53,7 @@ export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
   const admin = createAdminClient();
-  const [{ data: items, error }, { data: txDates, error: txDatesError }] = await Promise.all([
+  const [{ data: items, error }, { data: txDates, error: txDatesError }, { accounts: manualCards }] = await Promise.all([
     admin
       .from("items")
       .select(
@@ -69,6 +71,7 @@ export default async function AccountsPage() {
         .order("id")
         .range(from, to)
     ),
+    loadManualAccounts(admin),
   ]);
 
   if (error) {
@@ -92,8 +95,17 @@ export default async function AccountsPage() {
     if (!earliestDateByItem.has(itemId)) earliestDateByItem.set(itemId, t.date);
   }
 
-  const utilization = summarizeUtilization(
-    rows.flatMap((item) =>
+  const utilization = summarizeUtilization([
+    // Apple Card, imported from statements, counts like any connected card.
+    ...manualCards.map((c) => ({
+      id: `manual:${c.id}`,
+      name: c.name,
+      mask: c.mask,
+      institution: c.institution_name,
+      balance: c.balance,
+      limit: c.credit_limit,
+    })),
+    ...rows.flatMap((item) =>
       item.accounts
         .filter((a) => a.type === "credit")
         .map((a) => ({
@@ -104,8 +116,8 @@ export default async function AccountsPage() {
           balance: a.current_balance === null ? null : Number(a.current_balance),
           limit: a.credit_limit === null ? null : Number(a.credit_limit),
         }))
-    )
-  );
+    ),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -128,6 +140,19 @@ export default async function AccountsPage() {
           )}
 
           <CreditUtilizationCard summary={utilization} currency="USD" />
+
+          <AppleCardSection
+            cards={manualCards.map((c) => ({
+              id: c.id,
+              name: c.name,
+              balance: c.balance,
+              creditLimit: c.credit_limit,
+              hasBalanceOverride: c.balance_override !== null,
+              balanceOverride: c.balance_override,
+              transactionCount: c.transactionCount,
+              lastTransactionDate: c.lastTransactionDate,
+            }))}
+          />
 
           <div className="flex flex-col gap-4">
             {rows.map((item) => (
