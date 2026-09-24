@@ -1,14 +1,45 @@
 import { afterWelcome, expect, mockPushes, mockWrites, test } from "./test";
 
 test("income shows the baseline to budget around and this month against it", async ({ page }) => {
-  await page.goto("/income");
+  await page.goto("/reports/income");
   await expect(page.getByText(/Your lowest month in the last year was/)).toBeVisible();
   await expect(page.getByText(/(above your baseline|to go to reach your baseline)/)).toBeVisible();
   await expect(page.getByText("Every month", { exact: true })).toBeVisible();
 });
 
+test("reports: spending narrows to a category, and its totals match the list", async ({ page }) => {
+  await page.goto("/reports/spending");
+  await afterWelcome(page);
+  const count = page.getByTestId("summary-count");
+  const total = page.getByTestId("summary-total");
+  const all = Number(await count.textContent());
+  expect(all).toBeGreaterThan(0);
+
+  // Picking a category narrows the list and the summary to it.
+  const food = page.getByRole("button", { name: /Food & Drink/ }).first();
+  const foodAmount = (await food.innerText()).match(/\$[\d,]+\.\d{2}/)![0];
+  await food.click();
+  await expect(count).not.toHaveText(String(all));
+  await expect(total).toHaveText(foodAmount);
+  const rows = page.locator("[data-transaction]");
+  expect(await rows.count()).toBe(Number(await count.textContent()));
+  for (const text of await rows.allInnerTexts()) expect(text).toContain("Food & Drink");
+
+  // A row opens in the side panel.
+  await rows.first().click();
+  await expect(page.getByRole("dialog").getByText("Status", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // By merchant, as bars.
+  await page.getByRole("combobox", { name: "Group by" }).click();
+  await page.getByRole("option", { name: "By merchant" }).click();
+  await page.getByRole("radio", { name: "Bars" }).click();
+  await expect(page.getByText("Spending by merchant")).toBeVisible();
+  await expect(count).toHaveText(String(all));
+});
+
 test("year in review switches years", async ({ page }) => {
-  await page.goto("/year-in-review");
+  await page.goto("/reports/year");
   await afterWelcome(page);
   const years = page.getByRole("navigation", { name: "Year" }).getByRole("link");
   const last = years.last();

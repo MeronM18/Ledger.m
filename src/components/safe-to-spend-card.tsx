@@ -32,7 +32,7 @@ export async function SafeToSpendCard() {
           <CardTitle className="text-sm font-medium text-muted-foreground">Safe to spend</CardTitle>
         </div>
         <Link
-          href="/cash-flow"
+          href="/reports/cash-flow"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"
         >
           Cash flow <ArrowRight className="size-3" />

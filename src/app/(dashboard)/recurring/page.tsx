@@ -19,7 +19,7 @@ type StreamQueryRow = Omit<StreamRow, "firstChargeAmount"> & {
   transaction_ids: string[] | null;
 };
 
-export const metadata = { title: "Subscriptions" };
+export const metadata = { title: "Recurring" };
 
 export default async function SubscriptionsPage() {
   const admin = createAdminClient();
@@ -145,7 +145,7 @@ export default async function SubscriptionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-bone">Subscriptions</h1>
+      <h1 className="font-serif text-2xl font-semibold text-bone">Recurring</h1>
       {error || manualError || acctError ? (
         <QueryErrorState message="Couldn't load your subscriptions. Try refreshing the page." />
       ) : (

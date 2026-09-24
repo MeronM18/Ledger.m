@@ -43,7 +43,7 @@ export type MetalPriceLike = {
  * Sums holdingValue() across every holding, feeding computeNetWorth()'s
  * preciousMetalsValue parameter. Pulled out as its own function rather than
  * left as an inline reduce in each page, specifically because that's what
- * drifted before: /assets computed this sum and passed it to
+ * drifted before: the Assets page computed this sum and passed it to
  * computeNetWorth(), /overview never computed it at all and silently
  * defaulted to 0. One function, called from both places, closes that gap
  * for good — a future caller can't "forget" the reduce logic, only forget

@@ -16,7 +16,7 @@ export type NetWorthSnapshotResult =
   | { ok: false; error: string };
 
 /**
- * Computes net worth via the exact same computeNetWorth() formula /assets
+ * Computes net worth via the exact same computeNetWorth() formula /accounts
  * and /overview already use, and upserts today's snapshot — re-running this
  * later the same day corrects that day's row instead of accumulating a
  * second one, so a manual "run it again" (via the button or a retried cron)

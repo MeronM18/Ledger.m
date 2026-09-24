@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
+import { ManualAssetsManager, type ManualAsset } from "@/components/manual-assets-manager";
+import { PreciousMetalsManager, type MetalPriceRow, type PreciousMetalHolding } from "@/components/precious-metals-manager";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -144,8 +146,8 @@ export default async function AccountsPage() {
     loadCardOrder(admin, "accounts"),
     loadAccountSettings(admin),
     loadLedger(admin),
-    admin.from("manual_assets").select("id, name, category, value, is_liability, updated_at").order("created_at"),
-    admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
+    admin.from("manual_assets").select("id, name, category, value, is_liability, notes, updated_at").order("created_at"),
+    admin.from("precious_metal_holdings").select("id, metal, weight, weight_unit, purity, notes").order("created_at", { ascending: false }),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
   ]);
 
@@ -280,8 +282,8 @@ export default async function AccountsPage() {
       );
     } else {
       actions[row.id] = (
-        <Button asChild size="icon" variant="ghost" aria-label={`Edit ${row.name} in Assets`}>
-          <Link href="/assets">
+        <Button asChild size="icon" variant="ghost" aria-label={`Edit ${row.name}`}>
+          <Link href="#manual-assets">
             <Pencil className="size-3.5" />
           </Link>
         </Button>
@@ -300,6 +302,12 @@ export default async function AccountsPage() {
             activeCount={rows.filter((item) => item.status === "active").length}
           />
           <AppleImportButton hasSavings={hasSavings} />
+          <Button asChild size="sm" variant="outline">
+            <Link href="#manual-assets">
+              <Plus className="size-3.5" />
+              Add asset
+            </Link>
+          </Button>
           <PlaidLinkButton />
         </div>
       </div>
@@ -308,9 +316,28 @@ export default async function AccountsPage() {
         <QueryErrorState message="Couldn't load your accounts. Try refreshing the page." />
       ) : (
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <AccountsBoard rows={board} actions={actions} historyStart={historyStart} savedOrder={savedOrder} />
+          <div className="flex min-w-0 flex-col gap-4">
+            <AccountsBoard rows={board} actions={actions} historyStart={historyStart} savedOrder={savedOrder} />
 
-          <aside className="flex min-w-0 flex-col gap-4">
+            {/* What isn't at a bank: cash, a car, property, debts, gold and silver. */}
+            <Card id="manual-assets" className="scroll-mt-6">
+              <CardHeader>
+                <CardTitle>Assets you track yourself</CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  Cash on hand, a car, property, anything you owe outside a bank, and precious metals. They count in
+                  net worth and show in the groups above.
+                </p>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-6">
+                <ManualAssetsManager assets={(assetRows ?? []) as ManualAsset[]} />
+                <div className="border-t border-border pt-6">
+                  <PreciousMetalsManager holdings={holdings as PreciousMetalHolding[]} prices={prices as MetalPriceRow[]} />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-4">
             <AccountsSummary rows={board} />
             <CreditUtilizationCard summary={utilization} currency="USD" />
 
@@ -353,7 +380,7 @@ export default async function AccountsPage() {
                 )}
               </CardContent>
             </Card>
-          </aside>
+          </div>
         </div>
       )}
     </div>

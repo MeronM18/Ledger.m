@@ -22,7 +22,7 @@ export function paidBackToSave(value: PaidBackValue, charge: number): { amount: 
 
 /**
  * "Someone paid me back in cash" for a charge you covered for them: only
- * your share then counts as spending. Your cash on the Assets page is left
+ * your share then counts as spending. Your cash on the Accounts page is left
  * alone, since what you were handed is up to you to track.
  */
 export function PaidBackField({
@@ -75,7 +75,7 @@ export function PaidBackField({
             {share > 0
               ? `Your share, ${formatCurrency(share, "USD")}, is what counts as spending.`
               : "None of it counts as your spending."}{" "}
-            Your cash on the Assets page doesn&apos;t change.
+            Your cash on the Accounts page doesn&apos;t change.
           </p>
         </div>
       )}

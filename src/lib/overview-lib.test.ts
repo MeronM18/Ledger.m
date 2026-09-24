@@ -103,7 +103,7 @@ describe("attentionItems", () => {
       "Netflix renews tomorrow",
     ]);
     expect(items[0].detail).toContain("$30.00 over");
-    expect(items[2].href).toBe("/subscriptions");
+    expect(items[2].href).toBe("/recurring");
   });
 
   it("lists every over-budget category on its own line, furthest over first", () => {

@@ -60,7 +60,6 @@ export default async function YearInReviewPage({ searchParams }: { searchParams:
   if (ledger.error) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Year in review</h1>
         <QueryErrorState message="Couldn't load your year. Try refreshing the page." />
       </div>
     );
@@ -81,13 +80,12 @@ export default async function YearInReviewPage({ searchParams }: { searchParams:
     <div className="flex flex-col gap-6">
       {/* Room at the right for the alerts bell. */}
       <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Year in review</h1>
         {years.length > 1 && (
           <nav aria-label="Year" className="flex flex-wrap gap-1">
             {years.map((y) => (
               <Link
                 key={y}
-                href={`/year-in-review?year=${y}`}
+                href={`/reports/year?year=${y}`}
                 aria-current={y === year ? "page" : undefined}
                 className={cn(
                   "rounded-md px-3 py-1.5 font-mono text-sm tabular-nums transition-colors",

@@ -10,13 +10,13 @@ test("the sidebar collapses to icons, stays that way after a reload, and opens a
   await expect(sidebar).toHaveAttribute("data-collapsed", "true");
   await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(64);
   // Icons still navigate, with the page's name on hover.
-  await expect(sidebar.getByRole("link", { name: "Income" })).toHaveAttribute("title", "Income");
+  await expect(sidebar.getByRole("link", { name: "Reports" })).toHaveAttribute("title", "Reports");
 
   await page.reload();
   await afterWelcome(page);
   await expect(sidebar).toHaveAttribute("data-collapsed", "true");
-  await sidebar.getByRole("link", { name: "Income" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Income" })).toBeVisible();
+  await sidebar.getByRole("link", { name: "Reports" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
 
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await expect.poll(async () => Math.round((await sidebar.boundingBox())!.width)).toBe(224);

@@ -1,7 +1,7 @@
 import { afterWelcome, expect, mockWrites, test } from "./test";
 
 test("cash can be added to or taken from instead of retyped", async ({ page }) => {
-  await page.goto("/assets");
+  await page.goto("/accounts");
   await afterWelcome(page);
   await page.getByRole("button", { name: "Add to or take from Cash" }).click();
   const dialog = page.getByRole("dialog");

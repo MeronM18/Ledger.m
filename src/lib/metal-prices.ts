@@ -73,7 +73,7 @@ async function fetchSpotPrice(symbol: "XAU" | "XAG"): Promise<{ price: number } 
 /**
  * Fetches gold and silver spot prices and upserts each into metal_prices.
  * A failure on one metal doesn't affect the other, and never throws — a
- * failed fetch simply leaves that metal's cached row untouched, so /assets
+ * failed fetch simply leaves that metal's cached row untouched, so /accounts
  * keeps showing the last known price (with staleness surfaced in the UI
  * once it's old enough) rather than losing the value entirely.
  */

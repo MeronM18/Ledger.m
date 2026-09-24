@@ -87,7 +87,7 @@ export function attentionItems(
       tone: "info",
       title: `${u.label} renews ${when}`,
       detail: `About ${formatCurrency(u.amount, currency)}`,
-      href: "/subscriptions",
+      href: "/recurring",
     });
   }
 

@@ -300,7 +300,7 @@ export default async function OverviewPage() {
               <DragHandle />
               <CardTitle>{monthLabel} spending</CardTitle>
             </div>
-            <SectionLink href="/spending" />
+            <SectionLink href="/reports/spending" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {spendingError ? (
@@ -340,7 +340,7 @@ export default async function OverviewPage() {
               <DragHandle />
               <CardTitle>Subscriptions</CardTitle>
             </div>
-            <SectionLink href="/subscriptions" />
+            <SectionLink href="/recurring" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {subscriptionsError ? (
@@ -371,7 +371,7 @@ export default async function OverviewPage() {
               <DragHandle />
               <CardTitle>Upcoming</CardTitle>
             </div>
-            <SectionLink href="/subscriptions" />
+            <SectionLink href="/recurring" />
           </CardHeader>
           <CardContent>
             {subscriptionsError ? (

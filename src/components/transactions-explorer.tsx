@@ -183,7 +183,7 @@ function Row({
   );
 }
 
-function SummaryLine({ label, children }: { label: string; children: React.ReactNode }) {
+export function SummaryLine({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1.5">
       <dt className="text-muted-foreground">{label}</dt>
@@ -328,6 +328,115 @@ function TransactionPanel({
   );
 }
 
+/**
+ * A list of transactions in a card: by day with each day's net when it's
+ * sorted by date, otherwise one list with the date on each row.
+ */
+export function TransactionDayList({
+  rows,
+  byDate,
+  institutions,
+  onOpen,
+  empty = "No transactions match these filters.",
+  label = "Transactions list",
+}: {
+  rows: TransactionRow[];
+  byDate: boolean;
+  institutions: Record<string, string>;
+  onOpen: (id: string) => void;
+  empty?: string;
+  label?: string;
+}) {
+  const days = useMemo(() => (byDate ? groupByDay(rows) : null), [byDate, rows]);
+  const list = (items: TransactionRow[], showDate: boolean) => (
+    <ul>
+      {items.map((t) => (
+        <Row key={t.id} t={t} showDate={showDate} institutions={institutions} onOpen={onOpen} />
+      ))}
+    </ul>
+  );
+  return (
+    <Card className="gap-0 py-0" aria-label={label}>
+      {rows.length === 0 ? (
+        <p className="py-12 text-center text-sm text-muted-foreground">{empty}</p>
+      ) : days ? (
+        days.map((d) => (
+          <section key={d.date} aria-label={longDay(d.date)} className="border-t border-border first:border-t-0">
+            <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 py-2 pr-11 pl-4 text-xs">
+              <h2 className="font-medium text-muted-foreground">{longDay(d.date)}</h2>
+              <span className={cn("font-mono tabular-nums", d.net > 0 ? "text-moss" : "text-muted-foreground")}>
+                {d.net > 0 ? "+" : d.net < 0 ? "−" : ""}
+                {formatCurrency(Math.abs(d.net), "USD")}
+              </span>
+            </div>
+            {list(d.rows, false)}
+          </section>
+        ))
+      ) : (
+        list(rows, true)
+      )}
+    </Card>
+  );
+}
+
+/**
+ * Which transaction's panel is open, for a page with a list. Each opening
+ * gets a fresh key, so the panel's form starts from the row every time.
+ */
+export function useTransactionPanel() {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [openCount, setOpenCount] = useState(0);
+  return {
+    openId,
+    openKey: `${openId}:${openCount}`,
+    open: (id: string) => {
+      setOpenCount((n) => n + 1);
+      setOpenId(id);
+    },
+    close: () => setOpenId(null),
+  };
+}
+
+/** The panel that slides in from the right for the open transaction. */
+export function TransactionSheet({
+  transaction,
+  openKey,
+  onClose,
+  transactions,
+  cards,
+  institutions,
+}: {
+  transaction: TransactionRow | null;
+  openKey: string;
+  onClose: () => void;
+  transactions: TransactionRow[];
+  cards: StatementCard[];
+  institutions: Record<string, string>;
+}) {
+  return (
+    <Sheet open={transaction !== null} onOpenChange={(next) => !next && onClose()}>
+      <SheetContent
+        // Focus the panel, not its first field, so a phone's keyboard doesn't cover it on open.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement).focus();
+        }}
+      >
+        {transaction && (
+          <TransactionPanel
+            key={openKey}
+            t={transaction}
+            transactions={transactions}
+            cards={cards}
+            institutions={institutions}
+            onClose={onClose}
+          />
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 export function TransactionsExplorer({
   transactions,
   accounts,
@@ -351,9 +460,7 @@ export function TransactionsExplorer({
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [monthFilter, setMonthFilter] = useState<string>("all");
   const [listOptions, setListOptions] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
-  const [openId, setOpenId] = useState<string | null>(null);
-  // Bumped each time a panel opens, so its form starts fresh from the row.
-  const [openCount, setOpenCount] = useState(0);
+  const panel = useTransactionPanel();
 
   const categories = useMemo(() => {
     const present = new Set<string>();
@@ -399,18 +506,13 @@ export function TransactionsExplorer({
   // Plaid and manual rows, which aren't interleaved by date.
   const sorted = useMemo(() => applyListOptions(filtered, listOptions), [filtered, listOptions]);
   const byDate = listOptions.sort === "newest" || listOptions.sort === "oldest";
-  const days = useMemo(() => (byDate ? groupByDay(sorted) : null), [byDate, sorted]);
 
   const accountOptions = useMemo(
     () => [...accounts, MANUAL_ACCOUNT_OPTION].map((a) => ({ value: a.id, label: accountLabel(a) })),
     [accounts]
   );
 
-  const open = openId ? transactions.find((t) => t.id === openId) ?? null : null;
-  function openPanel(id: string) {
-    setOpenCount((n) => n + 1);
-    setOpenId(id);
-  }
+  const open = panel.openId ? (transactions.find((t) => t.id === panel.openId) ?? null) : null;
 
   // Exports exactly what's on screen, every filter and the sort applied.
   function exportCsv() {
@@ -432,14 +534,6 @@ export function TransactionsExplorer({
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date());
     downloadCsv(`ledger-transactions-${today}.csv`, toCsv(headers, rows));
   }
-
-  const renderRows = (rows: TransactionRow[], showDate: boolean) => (
-    <ul>
-      {rows.map((t) => (
-        <Row key={t.id} t={t} showDate={showDate} institutions={institutions} onOpen={openPanel} />
-      ))}
-    </ul>
-  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -483,52 +577,21 @@ export function TransactionsExplorer({
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <Card className="gap-0 py-0" aria-label="Transactions list">
-          {sorted.length === 0 ? (
-            <p className="py-12 text-center text-sm text-muted-foreground">No transactions match these filters.</p>
-          ) : days ? (
-            days.map((d) => (
-              <section key={d.date} aria-label={longDay(d.date)} className="border-t border-border first:border-t-0">
-                <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 py-2 pr-11 pl-4 text-xs">
-                  <h2 className="font-medium text-muted-foreground">{longDay(d.date)}</h2>
-                  <span className={cn("font-mono tabular-nums", d.net > 0 ? "text-moss" : "text-muted-foreground")}>
-                    {d.net > 0 ? "+" : d.net < 0 ? "−" : ""}
-                    {formatCurrency(Math.abs(d.net), "USD")}
-                  </span>
-                </div>
-                {renderRows(d.rows, false)}
-              </section>
-            ))
-          ) : (
-            renderRows(sorted, true)
-          )}
-        </Card>
+        <TransactionDayList rows={sorted} byDate={byDate} institutions={institutions} onOpen={panel.open} />
 
-        <aside className="lg:sticky lg:top-6">
+        <div className="lg:sticky lg:top-6">
           <Summary rows={sorted} onExport={exportCsv} />
-        </aside>
+        </div>
       </div>
 
-      <Sheet open={open !== null} onOpenChange={(next) => !next && setOpenId(null)}>
-        <SheetContent
-          // Focus the panel, not its first field, so a phone's keyboard doesn't cover it on open.
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            (e.currentTarget as HTMLElement).focus();
-          }}
-        >
-          {open && (
-            <TransactionPanel
-              key={`${open.id}:${openCount}`}
-              t={open}
-              transactions={transactions}
-              cards={cards}
-              institutions={institutions}
-              onClose={() => setOpenId(null)}
-            />
-          )}
-        </SheetContent>
-      </Sheet>
+      <TransactionSheet
+        transaction={open}
+        openKey={panel.openKey}
+        onClose={panel.close}
+        transactions={transactions}
+        cards={cards}
+        institutions={institutions}
+      />
     </div>
   );
 }

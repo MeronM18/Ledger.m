@@ -1,4 +1,4 @@
-// Pure, dependency-free so /assets and /overview compute net worth from the
+// Pure, dependency-free so /accounts and /overview compute net worth from the
 // exact same formula instead of two hand-copied reduces that can drift.
 
 export type NetWorthAccount = {

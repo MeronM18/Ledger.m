@@ -8,7 +8,7 @@ function hasCronSecret(request: Request): boolean {
 }
 
 /**
- * Manual trigger — the "Refresh prices" button on /assets. Auth is either a
+ * Manual trigger — the "Refresh prices" button on /accounts. Auth is either a
  * logged-in session or the CRON_SECRET bearer header, same pattern as
  * /api/plaid/sync.
  */

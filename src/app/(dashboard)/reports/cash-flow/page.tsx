@@ -23,7 +23,6 @@ export default async function CashFlowPage() {
   if (data.error) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Cash flow</h1>
         <QueryErrorState message="Couldn't load your cash flow. Try refreshing the page." />
       </div>
     );
@@ -34,7 +33,6 @@ export default async function CashFlowPage() {
   if (!hasCashAccount) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Cash flow</h1>
         <p className="text-sm text-muted-foreground">
           Connect a checking or savings account on the Accounts page to see what&apos;s safe to spend.
         </p>
@@ -47,7 +45,6 @@ export default async function CashFlowPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-bone">Cash flow</h1>
 
       <Card>
         <CardContent className="flex flex-col gap-4">

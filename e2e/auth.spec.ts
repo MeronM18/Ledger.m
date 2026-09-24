@@ -2,7 +2,7 @@ import { test as base, expect } from "@playwright/test";
 
 // Deliberately the plain Playwright test: no session cookie.
 base("a visitor without a session is sent to the login page", async ({ page }) => {
-  await page.goto("/income");
+  await page.goto("/reports/income");
   await expect(page).toHaveURL(/\/login$/);
 });
 

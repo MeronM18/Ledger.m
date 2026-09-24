@@ -86,7 +86,6 @@ export default async function IncomePage() {
   if (ledger.error) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Income</h1>
         <QueryErrorState message="Couldn't load your income. Try refreshing the page." />
       </div>
     );
@@ -98,7 +97,6 @@ export default async function IncomePage() {
   if (s.recent.length === 0) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Income</h1>
         <p className="text-sm text-muted-foreground">
           No income has come in yet. Once a paycheck or other deposit lands, this page shows your months side by side.
         </p>
@@ -116,7 +114,6 @@ export default async function IncomePage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="font-serif text-2xl font-semibold text-bone">Income</h1>
 
       <Card>
         <CardHeader>

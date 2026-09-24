@@ -49,7 +49,7 @@ export function SpendingPaceCard({
           <CardTitle className="text-sm font-medium text-muted-foreground">Spending pace</CardTitle>
         </div>
         <Link
-          href="/spending"
+          href="/reports/spending"
           className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"
         >
           Spending <ArrowRight className="size-3" />

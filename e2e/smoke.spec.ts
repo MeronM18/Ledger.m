@@ -5,15 +5,14 @@ import { test, expect } from "./test";
 const PAGES = [
   { path: "/", heading: /Good (morning|afternoon|evening)/, shows: "Safe to spend" },
   { path: "/transactions", heading: "Transactions", shows: "Kroger" },
-  { path: "/subscriptions", heading: "Subscriptions", shows: "Netflix" },
-  { path: "/spending", heading: "Spending", shows: "Food & Drink" },
-  { path: "/income", heading: "Income", shows: "What you can count on" },
+  { path: "/recurring", heading: "Recurring", shows: "Netflix" },
+  { path: "/reports/spending", heading: "Reports", shows: "Food & Drink" },
+  { path: "/reports/income", heading: "Reports", shows: "What you can count on" },
   { path: "/budgets", heading: "Budgets", shows: "Food & Drink" },
-  { path: "/cash-flow", heading: "Cash flow", shows: "Coming up" },
+  { path: "/reports/cash-flow", heading: "Reports", shows: "Coming up" },
   { path: "/goals", heading: "Goals", shows: "Emergency fund" },
-  { path: "/year-in-review", heading: "Year in review", shows: "Where it went" },
-  { path: "/assets", heading: "Assets", shows: "Honda Civic" },
-  { path: "/accounts", heading: "Accounts", shows: "Credit utilization" },
+  { path: "/reports/year", heading: "Reports", shows: "Where it went" },
+  { path: "/accounts", heading: "Accounts", shows: "Honda Civic" },
   { path: "/settings", heading: "Settings", shows: "Download backup" },
 ];
 
@@ -29,3 +28,18 @@ for (const { path, heading, shows } of PAGES) {
     expect(overflow, "page scrolls sideways").toBeLessThanOrEqual(0);
   });
 }
+
+test("pages that moved still open from their old addresses", async ({ page }) => {
+  for (const [from, to] of [
+    ["/spending", "/reports/spending"],
+    ["/income", "/reports/income"],
+    ["/cash-flow", "/reports/cash-flow"],
+    ["/year-in-review", "/reports/year"],
+    ["/assets", "/accounts"],
+    ["/subscriptions", "/recurring"],
+    ["/reports", "/reports/spending"],
+  ]) {
+    await page.goto(from);
+    await expect(page).toHaveURL(new RegExp(`${to}$`));
+  }
+});

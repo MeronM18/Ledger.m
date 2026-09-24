@@ -41,7 +41,7 @@ export function NetWorthHero({
                 <DragHandle />
                 <span className="mr-1 text-sm font-medium text-muted-foreground">Net worth</span>
                 <Link
-                  href="/assets"
+                  href="/accounts"
                   className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne"
                 >
                   Details <ArrowRight className="size-3" />
