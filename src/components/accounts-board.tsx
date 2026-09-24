@@ -13,14 +13,13 @@ import { changeOver, PERIODS, thin, type Period } from "@/lib/account-history";
 import { GROUPS, netWorthSeries, summarize, type BoardRow, type GroupKey, type SummaryKind } from "@/lib/accounts-board";
 import { applyCardOrder } from "@/lib/card-order";
 import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
-import { formatCompactCurrency, formatCurrency, timeAgo } from "@/lib/format";
+import { dateTicks, dayPoints, formatTickMoney, valueTicks, type DayPoint } from "@/lib/day-chart";
+import { formatCurrency, timeAgo } from "@/lib/format";
 import { sparklinePath } from "@/lib/net-worth-trend";
 import { cn } from "@/lib/utils";
 
 const monthYear = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
-const dayLabel = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const fullDay = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 
@@ -108,16 +107,18 @@ function NetWorthPanel({
   onPeriod: (p: Period) => void;
 }) {
   const days = periodDays(period, series.length);
-  const span = series.slice(series.length - 1 - days);
-  const firstDay = addDaysIso(historyStart, series.length - 1 - days);
   const now = series[series.length - 1] ?? 0;
-  const change = now - (span[0] ?? now);
-  const data = useMemo(() => {
-    // One point a day up to a few months; beyond that, spaced out so the line stays smooth.
-    const step = Math.max(1, Math.ceil(span.length / 180));
-    const points = span.flatMap((v, i) => (i % step === 0 || i === span.length - 1 ? [{ date: addDaysIso(firstDay, i), value: v }] : []));
-    return points.map((p) => ({ ...p, label: dayLabel(p.date) }));
-  }, [span, firstDay]);
+  // Every day, none skipped, so the line and what hovering reads are the
+  // balances themselves (two years is only ~730 points).
+  const { data, xTicks, xLabel, yTicks } = useMemo(() => {
+    const data = dayPoints(series.slice(series.length - 1 - days), addDaysIso(historyStart, series.length - 1 - days));
+    const values = data.map((p) => p.value);
+    const x = data.length > 1 ? dateTicks(data[0].t, data[data.length - 1].t) : { ticks: [], label: () => "" };
+    return { data, xTicks: x.ticks, xLabel: x.label, yTicks: valueTicks(Math.min(...values), Math.max(...values)) };
+  }, [series, days, historyStart]);
+  const change = now - (data[0]?.value ?? now);
+  const yStep = yTicks.length > 1 ? yTicks[1] - yTicks[0] : 1;
+  const lastT = data[data.length - 1]?.t;
 
   return (
     <Card>
@@ -127,7 +128,7 @@ function NetWorthPanel({
           <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <Money amount={now} currency="USD" tone="neutral" className="text-3xl font-semibold" />
             <span className="inline-flex items-baseline gap-1.5">
-              <Change amount={change} base={span[0]} className="text-sm" />
+              <Change amount={change} base={data[0]?.value} className="text-sm" />
               <span className="text-xs text-muted-foreground">{periodPhrase(period, historyStart)}</span>
             </span>
           </p>
@@ -158,35 +159,51 @@ function NetWorthPanel({
                 </linearGradient>
               </defs>
               <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
+              {/* Time, not a label per point: a day's place is its date, so the pointer finds that day. */}
               <XAxis
-                dataKey="label"
+                dataKey="t"
+                type="number"
+                domain={["dataMin", "dataMax"]}
+                ticks={xTicks}
+                tickFormatter={xLabel}
+                interval="preserveStartEnd"
                 tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                 axisLine={false}
                 tickLine={false}
-                minTickGap={28}
+                minTickGap={16}
               />
               <YAxis
-                tickFormatter={(v: number) => formatCompactCurrency(v, "USD")}
+                domain={[yTicks[0], yTicks[yTicks.length - 1]]}
+                ticks={yTicks}
+                interval={0}
+                allowDataOverflow
+                tickFormatter={(v: number) => formatTickMoney(v, yStep)}
                 tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                 axisLine={false}
                 tickLine={false}
-                width={52}
-                domain={["auto", "auto"]}
+                width={56}
               />
               <Tooltip
                 {...chartTooltipProps}
+                cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }}
                 contentStyle={tooltipContentStyle}
                 labelStyle={{ color: "var(--bone)" }}
                 itemStyle={{ color: "var(--popover-foreground)" }}
-                labelFormatter={(_, payload) => (payload?.[0] ? fullDay((payload[0].payload as { date: string }).date) : "")}
+                labelFormatter={(_, payload) => {
+                  const point = payload?.[0]?.payload as DayPoint | undefined;
+                  if (!point) return "";
+                  return point.t === lastT ? `Today, ${fullDay(point.date)}` : fullDay(point.date);
+                }}
                 formatter={(v) => [formatCurrency(Number(v), "USD"), "Net worth"]}
               />
               <Area
-                type="monotone"
+                type="linear"
                 dataKey="value"
                 stroke="var(--champagne)"
                 strokeWidth={1.75}
+                strokeLinejoin="round"
                 fill="url(#accountsNetWorthFill)"
+                activeDot={{ r: 4, fill: "var(--champagne)", stroke: "var(--card)", strokeWidth: 2 }}
                 isAnimationActive={false}
               />
             </AreaChart>

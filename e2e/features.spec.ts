@@ -107,6 +107,28 @@ test("accounts: grouped by what they are, with net worth over a chosen period an
   await page.getByRole("option", { name: "1 year" }).click();
   await expect(page.getByText("1 year change").first()).toBeVisible();
 
+  // Pointing at a date on the net worth line reads that date, with over a
+  // year of history too: the line was once keyed on "Sep 1"-style labels,
+  // and pointing at the later of two took the tooltip to the earlier.
+  await page.getByRole("combobox", { name: "Period" }).click();
+  await page.getByRole("option", { name: "All time" }).click();
+  await expect(page.getByRole("combobox", { name: "Period" })).toHaveText("All time");
+  await expect(page.getByRole("listbox")).toHaveCount(0);
+  const chart = page.locator(".recharts-wrapper").first();
+  // The last tick but one: recharts may nudge the last label in from the edge.
+  const tick = chart.locator(".recharts-xAxis-tick-labels .recharts-cartesian-axis-tick-value").nth(-2);
+  const [month, year] = (await tick.textContent())!.split(" ");
+  const tickX = await tick.evaluate((el) => {
+    const text = el as SVGTextElement;
+    const point = text.ownerSVGElement!.createSVGPoint();
+    point.x = Number(text.getAttribute("x"));
+    return point.matrixTransform(text.getScreenCTM()!).x;
+  });
+  const plot = (await chart.locator(".recharts-area-curve").boundingBox())!;
+  await page.mouse.move(tickX - 40, plot.y + plot.height / 2);
+  await page.mouse.move(tickX, plot.y + plot.height / 2, { steps: 4 });
+  await expect(chart.locator(".recharts-tooltip-label")).toHaveText(new RegExp(`^${month}\\w* 1, ${year}$`));
+
   // A group folds shut.
   await page.getByRole("button", { name: "Collapse Credit cards" }).click();
   await expect(page.getByRole("link", { name: "Chase Freedom Flex" })).toHaveCount(0);

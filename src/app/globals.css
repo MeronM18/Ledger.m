@@ -215,11 +215,13 @@
     }
   }
   /* A chart's own surface takes focus when clicked and would draw a box
-     around the whole thing. The data stays reachable; the box isn't needed. */
+     around the whole thing. The data stays reachable; the box isn't needed.
+     Its inner layers (tabindex -1) take focus only from a click, never Tab. */
   .recharts-wrapper:focus,
   .recharts-wrapper:focus-visible,
   .recharts-surface:focus,
-  .recharts-surface:focus-visible {
+  .recharts-surface:focus-visible,
+  .recharts-wrapper [tabindex="-1"]:focus {
     outline: none;
   }
   /* Keyboard focus is always visible, including on plain links. */
