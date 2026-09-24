@@ -50,14 +50,21 @@ describe("breakdown", () => {
       ["Food & Drink", 30],
     ]);
     expect(b.total).toBe(130);
+    expect(b.credits).toBe(0);
   });
 
-  it("totals by merchant as they're shown", () => {
+  it("totals by merchant as they're shown, net of credits no merchant absorbs", () => {
     const b = breakdown(rows, "merchant");
     expect(b.items.map((i) => [i.key, i.amount])).toEqual([
       ["Shell", 100],
       ["Kroger", 30],
     ]);
+    // A fee and its waiver are different merchants: the waiver is a credit.
+    const fee = [tx({ amount: 13, pfc_primary: "BANK_FEES", merchant_name: "Maintenance Fee" }), tx({ amount: -13, pfc_primary: "BANK_FEES", merchant_name: "Maintenance Fee Waiver" })];
+    const byMerchant = breakdown([...rows, ...fee], "merchant");
+    const byCategory = breakdown([...rows, ...fee], "category");
+    expect(byMerchant).toMatchObject({ gross: 143, credits: -13, total: 130 });
+    expect(byCategory.total).toBe(byMerchant.total);
   });
 
   it("puts the rest of a long list together as Everything else", () => {

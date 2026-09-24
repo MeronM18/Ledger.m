@@ -95,11 +95,14 @@ function Segmented<T extends string>({
 function Donut({
   slices,
   total,
+  gross,
   selected,
   onSelect,
 }: {
   slices: BreakdownItem[];
+  // The net spent (in the middle), and what the slices add up to (their shares).
   total: number;
+  gross: number;
   selected: string | null;
   onSelect: (key: string) => void;
 }) {
@@ -138,7 +141,7 @@ function Donut({
           <>
             <span className="max-w-[8.5rem] truncate text-xs text-muted-foreground">{shown.label}</span>
             <Money amount={shown.amount} currency="USD" tone="neutral" className="text-lg font-semibold" />
-            <span className="text-xs text-muted-foreground">{pct(shown.amount, total)}</span>
+            <span className="text-xs text-muted-foreground">{pct(shown.amount, gross)}</span>
           </>
         ) : (
           <>
@@ -187,6 +190,16 @@ function Legend({
         </li>
       ))}
     </ul>
+  );
+}
+
+/** Refunds and credits that don't come off any one slice (a waiver, by merchant), taken off the total. */
+function Credits({ credits }: { credits: number }) {
+  if (credits >= 0) return null;
+  return (
+    <p className="px-2 text-xs text-muted-foreground">
+      Less <span className="font-mono text-moss tabular-nums">{formatCurrency(-credits, "USD")}</span> in refunds and credits, taken off the total.
+    </p>
   );
 }
 
@@ -316,7 +329,7 @@ export function SpendingReport({
 
   const range = useMemo(() => periodRange(period, today), [period, today]);
   const inPeriod = useMemo(() => scoped.filter((t) => inRange(t.date, range)), [scoped, range]);
-  const { items, total } = useMemo(() => breakdown(inPeriod, by), [inPeriod, by]);
+  const { items, gross, credits, total } = useMemo(() => breakdown(inPeriod, by), [inPeriod, by]);
   const slices = donutSlices(items, LEGEND_LIMIT);
   const legend = showAll ? items : items.slice(0, LEGEND_LIMIT);
   const selectedItem = selected ? items.find((i) => i.key === selected) : undefined;
@@ -489,9 +502,10 @@ export function SpendingReport({
               <p className="py-16 text-center text-sm text-muted-foreground">No spending in this period.</p>
             ) : chart === "donut" ? (
               <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center">
-                <Donut slices={slices} total={total} selected={selected} onSelect={select} />
+                <Donut slices={slices} total={total} gross={gross} selected={selected} onSelect={select} />
                 <div className="flex w-full min-w-0 flex-col gap-2">
-                  <Legend items={legend} total={total} selected={selected} onSelect={select} />
+                  <Legend items={legend} total={gross} selected={selected} onSelect={select} />
+                  <Credits credits={credits} />
                   {items.length > LEGEND_LIMIT && (
                     <button
                       type="button"
@@ -506,7 +520,8 @@ export function SpendingReport({
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <Bars items={legend} selected={selected} onSelect={select} total={total} />
+                <Bars items={legend} selected={selected} onSelect={select} total={gross} />
+                <Credits credits={credits} />
                 {items.length > LEGEND_LIMIT && (
                   <button type="button" onClick={() => setShowAll((s) => !s)} className="inline-flex items-center gap-1 self-center text-xs text-champagne hover:underline">
                     {showAll ? "Show fewer" : `Show all ${items.length} ${by === "category" ? "categories" : "merchants"}`}

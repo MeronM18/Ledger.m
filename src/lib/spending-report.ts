@@ -96,15 +96,23 @@ export function breakdownKey(t: SpendingTransaction, by: BreakdownBy): string {
 /**
  * Spending split by category or merchant, largest first. Refunds come off
  * what they refunded; anything netting to zero or less is left out, as a
- * donut can't draw it.
+ * donut can't draw it, and counted in `credits` instead, so `total` is
+ * always the net spent whichever way it's split. (By merchant, a waiver
+ * is its own "merchant" with nothing to come off, where by category it
+ * nets against the fee it waived.)
  */
-export function breakdown(transactions: SpendingTransaction[], by: BreakdownBy): { items: BreakdownItem[]; total: number } {
+export function breakdown(
+  transactions: SpendingTransaction[],
+  by: BreakdownBy
+): { items: BreakdownItem[]; gross: number; credits: number; total: number } {
   const totals = new Map<string, number>();
   for (const t of transactions) {
     const key = breakdownKey(t, by);
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }
-  const items = Array.from(totals, ([key, amount]) => ({ key, amount: Math.round(amount * 100) / 100 }))
+  const all = Array.from(totals, ([key, amount]) => ({ key, amount: Math.round(amount * 100) / 100 }));
+  const credits = Math.round(all.filter((i) => i.amount < 0).reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  const items = all
     .filter((i) => i.amount > 0)
     .sort((a, b) => b.amount - a.amount || a.key.localeCompare(b.key))
     .map((i, index) => ({
@@ -112,7 +120,8 @@ export function breakdown(transactions: SpendingTransaction[], by: BreakdownBy):
       label: by === "category" ? (i.key === "OTHER" ? "Other" : humanizeCategory(i.key)) : i.key,
       colorSlot: by === "category" ? (categoryColorSlot(i.key) ?? OTHER_CATEGORY_COLOR_SLOT) : (index % 13) + 1,
     }));
-  return { items, total: Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100 };
+  const gross = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  return { items, gross, credits, total: Math.round((gross + credits) * 100) / 100 };
 }
 
 export const EVERYTHING_ELSE = "__everything_else__";
