@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Coins, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { MetalMark } from "@/components/institution-avatar";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -330,9 +331,7 @@ function HoldingRow({
   return (
     <div className="flex items-center justify-between gap-3 border-t border-border py-3 transition-colors duration-150 first:border-t-0 first:pt-0 hover:bg-muted/40">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-champagne">
-          <Coins className="size-4" />
-        </span>
+        <MetalMark metal={holding.metal} />
         <div>
           <p className="text-sm font-medium">
             {METAL_LABEL[holding.metal]} · {holding.weight} {UNIT_LABEL[holding.weight_unit]}

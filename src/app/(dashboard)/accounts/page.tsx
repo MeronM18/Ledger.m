@@ -224,7 +224,12 @@ export default async function AccountsPage() {
     ),
     manualAccounts: manualCards,
     assets: ((assetRows ?? []) as ManualAssetInput[]).map((a) => ({ ...a, value: Number(a.value) })),
-    metals: { value: totalPreciousMetalsValue(holdings, prices), count: holdings.length, pricedAt },
+    metals: {
+      value: totalPreciousMetalsValue(holdings, prices),
+      count: holdings.length,
+      pricedAt,
+      kinds: Array.from(new Set(holdings.map((h) => h.metal as "gold" | "silver"))),
+    },
     settings,
     transactions: transactionsByAccount,
     todayIso: today,

@@ -41,7 +41,7 @@ function colorFor(name: string): string {
   return FALLBACK[hash % FALLBACK.length];
 }
 
-export type AvatarIcon = "cash" | "vehicle" | "property" | "crypto" | "metals" | "other" | "wallet" | "bank";
+export type AvatarIcon = "cash" | "vehicle" | "property" | "crypto" | "metals" | "gold" | "silver" | "other" | "wallet" | "bank";
 
 const ICONS: Record<AvatarIcon, LucideIcon> = {
   cash: Banknote,
@@ -49,6 +49,8 @@ const ICONS: Record<AvatarIcon, LucideIcon> = {
   property: House,
   crypto: Coins,
   metals: Gem,
+  gold: Gem,
+  silver: Gem,
   other: Package,
   wallet: Wallet,
   bank: Landmark,
@@ -122,6 +124,9 @@ export function InstitutionAvatar({
       </span>
     );
   }
+  if (icon === "metals" || icon === "gold" || icon === "silver") {
+    return <MetalMark metal={icon === "metals" ? "both" : icon} size={size} className={className} />;
+  }
   const Icon = ICONS[icon ?? "bank"];
   const color = ICON_COLOR[icon ?? "bank"] ?? "var(--champagne)";
   return (
@@ -131,6 +136,49 @@ export function InstitutionAvatar({
       style={{ color, backgroundColor: `color-mix(in oklab, ${color} 18%, transparent)` }}
     >
       <Icon className={size === "sm" ? "size-3" : "size-4"} />
+    </span>
+  );
+}
+
+const METAL_TONES = {
+  gold: { top: "#f7dc86", front: "#d6a53a", edge: "#9c7219", glow: "#d6a53a" },
+  silver: { top: "#f1f3f6", front: "#b4bcc6", edge: "#7d8793", glow: "#b4bcc6" },
+} as const;
+
+/** One bar of bullion, `dy` down from the middle. */
+function Ingot({ metal, dy = 0 }: { metal: "gold" | "silver"; dy?: number }) {
+  const t = METAL_TONES[metal];
+  return (
+    <g transform={`translate(0 ${dy})`} stroke={t.edge} strokeWidth={0.6} strokeLinejoin="round">
+      <path d="M5.5 12h13l1.6 4.4H3.9Z" fill={t.front} />
+      <path d="M7.6 8.4h8.8l2.1 3.6h-13Z" fill={t.top} />
+      <path d="M8.6 9.4h6.2" stroke="#ffffff" strokeOpacity={0.7} strokeWidth={0.7} strokeLinecap="round" />
+    </g>
+  );
+}
+
+/**
+ * Gold, silver, or a small stack of both (for all your metals together):
+ * bullion bars in a round badge tinted to match.
+ */
+export function MetalMark({ metal, size = "md", className }: { metal: "gold" | "silver" | "both"; size?: "sm" | "md"; className?: string }) {
+  const glow = METAL_TONES[metal === "silver" ? "silver" : "gold"].glow;
+  return (
+    <span
+      aria-hidden
+      className={cn("flex shrink-0 items-center justify-center rounded-full", size === "sm" ? "size-5" : "size-8", className)}
+      style={{ backgroundColor: `color-mix(in oklab, ${glow} 18%, transparent)` }}
+    >
+      <svg viewBox="0 0 24 24" className="size-[92%]">
+        {metal === "both" ? (
+          <>
+            <Ingot metal="silver" dy={2.6} />
+            <Ingot metal="gold" dy={-3.2} />
+          </>
+        ) : (
+          <Ingot metal={metal} />
+        )}
+      </svg>
     </span>
   );
 }

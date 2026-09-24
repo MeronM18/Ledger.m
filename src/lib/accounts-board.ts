@@ -24,7 +24,7 @@ export const GROUPS: { key: GroupKey; label: string; liability: boolean }[] = [
 // What the Summary splits assets and liabilities into.
 export type SummaryKind = "Cash" | "Investments" | "Property" | "Vehicles" | "Other" | "Credit cards" | "Loans";
 
-export type RowIcon = "cash" | "vehicle" | "property" | "crypto" | "metals" | "other";
+export type RowIcon = "cash" | "vehicle" | "property" | "crypto" | "metals" | "gold" | "silver" | "other";
 
 export type BoardRow = {
   id: string;
@@ -96,7 +96,8 @@ export type BoardInput = {
   plaid: PlaidAccountInput[];
   manualAccounts: ManualAccountInput[];
   assets: ManualAssetInput[];
-  metals: { value: number; count: number; pricedAt: string | null };
+  // Which metals are held decides the mark: a gold bar, a silver bar, or both.
+  metals: { value: number; count: number; pricedAt: string | null; kinds?: ("gold" | "silver")[] };
   settings: AccountSettings;
   // Posted transactions by account id (a manual account's as `manual:<id>`).
   transactions: Map<string, HistoryTx[]>;
@@ -257,7 +258,7 @@ export function buildBoard(input: BoardInput): BoardRow[] {
       mask: null,
       detail: `${input.metals.count} ${input.metals.count === 1 ? "holding" : "holdings"} at today's prices`,
       institution: null,
-      icon: "metals",
+      icon: input.metals.kinds?.length === 1 ? input.metals.kinds[0] : "metals",
       balance: input.metals.value,
       liability: false,
       series: null,
