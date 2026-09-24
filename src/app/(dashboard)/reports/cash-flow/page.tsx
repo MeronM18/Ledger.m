@@ -1,3 +1,4 @@
+import { CashFlowFlows } from "@/components/cash-flow-report";
 import { ForecastChart } from "@/components/forecast-chart";
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
@@ -5,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ALERT_THRESHOLDS } from "@/lib/config";
 import { loadForecast } from "@/lib/forecast-data";
 import { formatCurrency } from "@/lib/format";
+import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function longDate(iso: string): string {
@@ -18,11 +20,15 @@ function shortDate(iso: string): string {
 export const metadata = { title: "Cash flow" };
 
 export default async function CashFlowPage() {
-  const data = await loadForecast(createAdminClient());
+  const admin = createAdminClient();
+  const [data, ledger] = await Promise.all([loadForecast(admin), loadLedger(admin)]);
+  // Looking back: where the money came from and went, over a period you pick.
+  const flows = ledger.error ? null : <CashFlowFlows transactions={ledger.transactions} connectedCardIssuers={ledger.connectedCardIssuers} />;
 
   if (data.error) {
     return (
       <div className="flex flex-col gap-6">
+        {flows}
         <QueryErrorState message="Couldn't load your cash flow. Try refreshing the page." />
       </div>
     );
@@ -33,6 +39,7 @@ export default async function CashFlowPage() {
   if (!hasCashAccount) {
     return (
       <div className="flex flex-col gap-6">
+        {flows}
         <p className="text-sm text-muted-foreground">
           Connect a checking or savings account on the Accounts page to see what&apos;s safe to spend.
         </p>
@@ -45,6 +52,12 @@ export default async function CashFlowPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {flows}
+
+      <div className="flex flex-col gap-1 pt-4">
+        <h2 className="font-serif text-xl text-bone">Looking ahead</h2>
+        <p className="text-sm text-muted-foreground">What&apos;s safe to spend, and your balance over the next 30 days.</p>
+      </div>
 
       <Card>
         <CardContent className="flex flex-col gap-4">

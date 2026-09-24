@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import { CalendarDays, ChartBarBig, ChartPie, ChevronDown, Download, SlidersHorizontal, X } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/money";
 import { SpendingTrends } from "@/components/spending-trends";
 import {
@@ -92,56 +92,86 @@ function Segmented<T extends string>({
   );
 }
 
+// The donut, drawn directly so a slice can pop out smoothly: 240px square,
+// a ring between these radii, with a hair of space between slices.
+const SIZE = 240;
+const C = SIZE / 2;
+const R_OUT = 108;
+const R_IN = 74;
+const GAP = 0.012; // radians between slices
+
+function arc(start: number, end: number, rOut: number, rIn: number): string {
+  const p = (r: number, a: number) => `${(C + r * Math.sin(a)).toFixed(2)} ${(C - r * Math.cos(a)).toFixed(2)}`;
+  const large = end - start > Math.PI ? 1 : 0;
+  return `M${p(rOut, start)}A${rOut} ${rOut} 0 ${large} 1 ${p(rOut, end)}L${p(rIn, end)}A${rIn} ${rIn} 0 ${large} 0 ${p(rIn, start)}Z`;
+}
+
+/**
+ * The spending donut. The slice in focus (pointed at here or in the legend,
+ * or picked) lifts out and the rest fade back; its name, amount and share
+ * show in the middle.
+ */
 function Donut({
   slices,
   total,
   gross,
-  selected,
+  focus,
+  onHover,
   onSelect,
 }: {
   slices: BreakdownItem[];
   // The net spent (in the middle), and what the slices add up to (their shares).
   total: number;
   gross: number;
-  selected: string | null;
+  focus: string | null;
+  onHover: (key: string | null) => void;
   onSelect: (key: string) => void;
 }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const shown = hover !== null ? slices[hover] : (slices.find((s) => s.key === selected) ?? null);
+  const shown = focus ? (slices.find((s) => s.key === focus) ?? null) : null;
+  const gap = slices.length > 1 ? GAP : 0;
+  // Where each slice starts, going round from the top.
+  const starts = slices.map((_, i) => slices.slice(0, i).reduce((sum, s) => sum + (gross > 0 ? (s.amount / gross) * Math.PI * 2 : 0), 0));
   return (
-    <div className="relative mx-auto size-[240px] shrink-0">
-      <ResponsiveContainer {...CHART_RESIZE} width="100%" height="100%">
-        <PieChart>
-          <Pie
-            data={slices}
-            dataKey="amount"
-            nameKey="label"
-            innerRadius={78}
-            outerRadius={112}
-            paddingAngle={slices.length > 1 ? 1 : 0}
-            strokeWidth={0}
-            isAnimationActive={false}
-            onMouseEnter={(_: unknown, i: number) => setHover(i)}
-            onMouseLeave={() => setHover(null)}
-            onClick={(_: unknown, i: number) => slices[i].key !== EVERYTHING_ELSE && onSelect(slices[i].key)}
-          >
-            {slices.map((s) => (
-              <Cell
-                key={s.key}
-                fill={vizColor(s.colorSlot)}
-                className="cursor-pointer outline-none"
-                fillOpacity={selected === null || selected === s.key ? 1 : 0.3}
-              />
-            ))}
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+    <div className="relative mx-auto size-[240px] shrink-0" onMouseLeave={() => onHover(null)}>
+      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} className="size-full overflow-visible" role="img" aria-label="Spending by share">
+        {slices.map((s, i) => {
+          const sweep = gross > 0 ? (s.amount / gross) * Math.PI * 2 : 0;
+          const start = starts[i] + gap / 2;
+          // A single slice is a whole ring: stop a hair short so the arc still draws.
+          const end = Math.min(start + Math.PI * 2 - 0.0005, Math.max(start + 0.001, starts[i] + sweep - gap / 2));
+          const active = focus === s.key;
+          const dimmed = focus !== null && !active;
+          const clickable = s.key !== EVERYTHING_ELSE;
+          return (
+            <path
+              key={s.key}
+              d={arc(start, end, R_OUT, R_IN)}
+              fill={vizColor(s.colorSlot)}
+              onMouseEnter={() => onHover(s.key)}
+              onClick={() => clickable && onSelect(s.key)}
+              className={cn("outline-none", clickable && "cursor-pointer")}
+              style={{
+                transformOrigin: `${C}px ${C}px`,
+                transform: active ? "scale(1.07)" : "scale(1)",
+                opacity: dimmed ? 0.28 : 1,
+                filter: active ? `drop-shadow(0 0 10px color-mix(in oklab, ${vizColor(s.colorSlot)} 45%, transparent))` : "none",
+                transition: "transform 260ms cubic-bezier(0.16, 1, 0.3, 1), opacity 200ms ease, filter 260ms ease",
+              }}
+            >
+              <title>{`${s.label}: ${formatCurrency(s.amount, "USD")} (${pct(s.amount, gross)})`}</title>
+            </path>
+          );
+        })}
+      </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
         {shown ? (
           <>
-            <span className="max-w-[8.5rem] truncate text-xs text-muted-foreground">{shown.label}</span>
+            <span className="flex max-w-[8.5rem] items-center gap-1.5 text-xs text-muted-foreground">
+              <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: vizColor(shown.colorSlot) }} />
+              <span className="truncate">{shown.label}</span>
+            </span>
             <Money amount={shown.amount} currency="USD" tone="neutral" className="text-lg font-semibold" />
-            <span className="text-xs text-muted-foreground">{pct(shown.amount, gross)}</span>
+            <span className="text-xs text-muted-foreground">{pct(shown.amount, gross)} of spending</span>
           </>
         ) : (
           <>
@@ -158,28 +188,39 @@ function Legend({
   items,
   total,
   selected,
+  focus,
+  onHover,
   onSelect,
 }: {
   items: BreakdownItem[];
   total: number;
   selected: string | null;
+  focus: string | null;
+  onHover: (key: string | null) => void;
   onSelect: (key: string) => void;
 }) {
   return (
-    <ul className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
+    <ul className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3" onMouseLeave={() => onHover(null)}>
       {items.map((i) => (
         <li key={i.key}>
           <button
             type="button"
             onClick={() => onSelect(i.key)}
+            onMouseEnter={() => onHover(i.key)}
+            onFocus={() => onHover(i.key)}
+            onBlur={() => onHover(null)}
             aria-pressed={selected === i.key}
             className={cn(
-              "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60",
-              selected === i.key && "bg-muted",
-              selected !== null && selected !== i.key && "opacity-50"
+              "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left transition-[background-color,opacity] duration-200",
+              focus === i.key && "bg-muted",
+              focus !== null && focus !== i.key && "opacity-45"
             )}
           >
-            <span className="mt-1.5 size-2 shrink-0 rounded-full" style={{ backgroundColor: vizColor(i.colorSlot) }} aria-hidden />
+            <span
+              className={cn("mt-1.5 size-2 shrink-0 rounded-full transition-transform duration-200", focus === i.key && "scale-150")}
+              style={{ backgroundColor: vizColor(i.colorSlot) }}
+              aria-hidden
+            />
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-sm">{i.label}</span>
               <span className="font-mono text-xs text-muted-foreground tabular-nums">
@@ -206,27 +247,32 @@ function Credits({ credits }: { credits: number }) {
 function Bars({
   items,
   selected,
+  focus,
+  onHover,
   onSelect,
   total,
 }: {
   items: BreakdownItem[];
   selected: string | null;
+  focus: string | null;
+  onHover: (key: string | null) => void;
   onSelect: (key: string) => void;
   total: number;
 }) {
   const max = items[0]?.amount ?? 1;
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col gap-1" onMouseLeave={() => onHover(null)}>
       {items.map((i) => (
         <li key={i.key}>
           <button
             type="button"
             onClick={() => onSelect(i.key)}
+            onMouseEnter={() => onHover(i.key)}
             aria-pressed={selected === i.key}
             className={cn(
-              "grid w-full grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-muted/60 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_9rem]",
-              selected === i.key && "bg-muted",
-              selected !== null && selected !== i.key && "opacity-50"
+              "grid w-full grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-1.5 text-left transition-[background-color,opacity] duration-200 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_9rem]",
+              focus === i.key && "bg-muted",
+              focus !== null && focus !== i.key && "opacity-45"
             )}
           >
             <span className="truncate text-sm">{i.label}</span>
@@ -298,6 +344,8 @@ export function SpendingReport({
   const [view, setView] = useState<"total" | "change">("total");
   const [chart, setChart] = useState<"donut" | "bars">("donut");
   const [selected, setSelected] = useState<string | null>(null);
+  // The slice pointed at, in the donut, the legend or the bars; the picked one otherwise.
+  const [hovered, setHovered] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [account, setAccount] = useState("all");
   const [search, setSearch] = useState("");
@@ -333,6 +381,9 @@ export function SpendingReport({
   const slices = donutSlices(items, LEGEND_LIMIT);
   const legend = showAll ? items : items.slice(0, LEGEND_LIMIT);
   const selectedItem = selected ? items.find((i) => i.key === selected) : undefined;
+  // Everything else stands in for the smaller ones folded into it.
+  const inDonut = (key: string | null) => (key && !slices.some((sl) => sl.key === key) && items.some((i) => i.key === key) ? EVERYTHING_ELSE : key);
+  const focus = hovered ?? selected;
 
   // The list: the period's spending, narrowed to the picked category or merchant.
   const listed = useMemo(
@@ -502,9 +553,9 @@ export function SpendingReport({
               <p className="py-16 text-center text-sm text-muted-foreground">No spending in this period.</p>
             ) : chart === "donut" ? (
               <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center">
-                <Donut slices={slices} total={total} gross={gross} selected={selected} onSelect={select} />
+                <Donut slices={slices} total={total} gross={gross} focus={inDonut(focus)} onHover={setHovered} onSelect={select} />
                 <div className="flex w-full min-w-0 flex-col gap-2">
-                  <Legend items={legend} total={gross} selected={selected} onSelect={select} />
+                  <Legend items={legend} total={gross} selected={selected} focus={focus} onHover={setHovered} onSelect={select} />
                   <Credits credits={credits} />
                   {items.length > LEGEND_LIMIT && (
                     <button
@@ -520,7 +571,7 @@ export function SpendingReport({
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                <Bars items={legend} selected={selected} onSelect={select} total={gross} />
+                <Bars items={legend} selected={selected} focus={focus} onHover={setHovered} onSelect={select} total={gross} />
                 <Credits credits={credits} />
                 {items.length > LEGEND_LIMIT && (
                   <button type="button" onClick={() => setShowAll((s) => !s)} className="inline-flex items-center gap-1 self-center text-xs text-champagne hover:underline">

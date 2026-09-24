@@ -6,7 +6,7 @@ const PAGES = [
   { path: "/", heading: /Good (morning|afternoon|evening)/, shows: "Safe to spend" },
   { path: "/transactions", heading: "Transactions", shows: "Kroger" },
   { path: "/recurring", heading: "Recurring", shows: "Netflix" },
-  { path: "/reports/spending", heading: "Reports", shows: "Food & Drink" },
+  { path: "/reports/spending", heading: "Reports", shows: "Spending by category" },
   { path: "/reports/income", heading: "Reports", shows: "What you can count on" },
   { path: "/budgets", heading: "Budgets", shows: "Food & Drink" },
   { path: "/reports/cash-flow", heading: "Reports", shows: "Coming up" },

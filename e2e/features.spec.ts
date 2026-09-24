@@ -38,6 +38,22 @@ test("reports: spending narrows to a category, and its totals match the list", a
   await expect(count).toHaveText(String(all));
 });
 
+test("reports: cash flow shows where the money came from and went", async ({ page }) => {
+  await page.goto("/reports/cash-flow");
+  await afterWelcome(page);
+  for (const label of ["Total income", "Total expenses", "Net income", "Savings rate"]) {
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+  }
+  const labels = page.locator('[aria-label="Where your money came from and went"] text');
+  await expect(labels.filter({ hasText: /^Income\$/ })).toBeVisible();
+  await expect(labels.filter({ hasText: /^Food & Drink\$/ })).toBeVisible();
+  await page.getByRole("combobox", { name: "Period" }).click();
+  await page.getByRole("option", { name: "This year" }).click();
+  await expect(page.getByText(/^Jan 1 – /)).toBeVisible();
+  // The forecast is still below.
+  await expect(page.getByText("Looking ahead")).toBeVisible();
+});
+
 test("year in review switches years", async ({ page }) => {
   await page.goto("/reports/year");
   await afterWelcome(page);
