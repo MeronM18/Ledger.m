@@ -74,9 +74,19 @@ export function attentionItems(
   budgets: BudgetProgress[],
   upcoming: UpcomingLike[],
   todayIso: string,
-  currency: string
+  currency: string,
+  // Banks that stopped syncing until they're signed in to again: first,
+  // since every other number on the page goes stale while they're out.
+  disconnected: { id: string; name: string }[] = []
 ): AttentionItem[] {
   const items: AttentionItem[] = [
+    ...disconnected.map((bank) => ({
+      key: `reconnect-${bank.id}`,
+      tone: "over" as const,
+      title: `Sign in to ${bank.name} again`,
+      detail: "It stopped syncing. Reconnect it on the Accounts page",
+      href: "/accounts",
+    })),
     ...group("over", budgets.filter((b) => b.status === "over"), currency),
     ...group("warning", budgets.filter((b) => b.status === "warning"), currency),
   ];

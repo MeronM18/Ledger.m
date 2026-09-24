@@ -129,3 +129,13 @@ describe("attentionItems", () => {
     expect(attentionItems([progress({})], [], today, "USD")).toEqual([]);
   });
 });
+
+describe("attentionItems with a disconnected bank", () => {
+  it("puts the bank first", () => {
+    const items = attentionItems([progress({ category: "B", label: "B", status: "over", remaining: -30 })], [], today, "USD", [
+      { id: "x", name: "Fifth Third Bank" },
+    ]);
+    expect(items[0]).toMatchObject({ key: "reconnect-x", title: "Sign in to Fifth Third Bank again", href: "/accounts" });
+    expect(items[1].key).toBe("over-B");
+  });
+});

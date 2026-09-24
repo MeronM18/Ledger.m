@@ -119,9 +119,15 @@ export async function POST(request: Request) {
         .from("items")
         .update({ status: payload.webhook_code.toLowerCase() })
         .eq("id", itemDbId);
+    } else if (payload.webhook_type === "ITEM" && payload.webhook_code === "LOGIN_REPAIRED") {
+      // Signed in again somewhere else (another app using the same bank
+      // login): healthy again, so catch up now.
+      await admin.from("items").update({ status: "active", error_code: null }).eq("id", itemDbId);
+      const result = await syncItemTransactions(itemDbId);
+      if (!result.ok) processingError = result.error;
     }
-    // Other webhook codes (NEW_ACCOUNTS_AVAILABLE, LOGIN_REPAIRED, etc.) are
-    // recorded above but not acted on yet.
+    // Other webhook codes (NEW_ACCOUNTS_AVAILABLE, etc.) are recorded above
+    // but not acted on yet.
   } catch (err) {
     processingError = err instanceof Error ? err.message : String(err);
     console.error("Failed to process Plaid webhook", err);

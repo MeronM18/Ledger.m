@@ -6,6 +6,8 @@ import { PlaidLinkButton } from "@/components/plaid-link-button";
 import { QueryErrorState } from "@/components/query-error";
 import { SyncAllButton } from "@/components/sync-all-button";
 import { SyncNowButton } from "@/components/sync-now-button";
+import { ReconnectButton } from "@/components/reconnect-button";
+import { isDisconnected, needsReconnect, statusLabel } from "@/lib/item-status";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
@@ -44,9 +46,9 @@ type ItemRow = {
 
 const LIABILITY_TYPES = new Set(["credit", "loan"]);
 
-function statusBadgeVariant(status: string): "default" | "destructive" | "secondary" {
-  if (status === "active") return "default";
-  if (status === "requires_reauth" || status === "error") return "destructive";
+function statusBadgeVariant(item: ItemRow): "default" | "destructive" | "secondary" {
+  if (item.status === "active") return "default";
+  if (isDisconnected(item) || item.status === "error") return "destructive";
   return "secondary";
 }
 
@@ -66,16 +68,27 @@ function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: 
               <LastSyncedLabel timestamp={item.last_synced_at} />
               {" · "}
               {earliestDate ? `History from ${formatHistoryStart(earliestDate)}` : "No transaction history yet"}
-              {item.error_code ? ` · ${item.error_code}` : ""}
+              {item.error_code && !needsReconnect(item) ? ` · ${item.error_code}` : ""}
             </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={statusBadgeVariant(item.status)}>{item.status}</Badge>
-          <SyncNowButton itemId={item.id} />
+          <Badge variant={statusBadgeVariant(item)}>{statusLabel(item)}</Badge>
+          {needsReconnect(item) ? (
+            <ReconnectButton itemId={item.id} institutionName={item.institution_name ?? "this bank"} />
+          ) : (
+            <SyncNowButton itemId={item.id} />
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {needsReconnect(item) && (
+          <p className="rounded-md border border-oxblood/40 bg-oxblood/10 px-3 py-2 text-sm text-bone">
+            {isDisconnected(item)
+              ? `${item.institution_name ?? "This bank"} signed you out, so it has stopped syncing. Reconnect to sign in again; your accounts and history stay as they are.`
+              : `${item.institution_name ?? "This bank"} will stop syncing soon unless you sign in again. Reconnect now to keep it going.`}
+          </p>
+        )}
         {item.accounts.map((account) => (
           <div
             key={account.id}

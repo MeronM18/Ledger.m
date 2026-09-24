@@ -28,6 +28,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow } from "@/lib/time";
 import { BudgetBar } from "@/components/budgets-manager";
 import { attentionItems } from "@/lib/attention";
+import { isDisconnected } from "@/lib/item-status";
 import { budgetProgress } from "@/lib/budgets";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import { paceComparison, previousMonth } from "@/lib/trends";
@@ -60,6 +61,7 @@ export default async function OverviewPage() {
     { data: budgetRows, error: budgetsError },
     { data: alertRows, error: alertsError },
     { data: snapshotRows, error: snapshotsError },
+    { data: itemRows },
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -80,6 +82,7 @@ export default async function OverviewPage() {
     admin.from("budgets").select("id, category, monthly_amount"),
     admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(5),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
+    admin.from("items").select("id, institution_name, status, error_code"),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -180,7 +183,10 @@ export default async function OverviewPage() {
   );
   const prev = previousMonth({ year: now.year, month: now.month });
   const previousMonthName = new Date(prev.year, prev.month, 1).toLocaleDateString("en-US", { month: "long" });
-  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency);
+  const disconnected = (itemRows ?? [])
+    .filter((i) => isDisconnected(i))
+    .map((i) => ({ id: i.id as string, name: (i.institution_name as string | null) ?? "a bank" }));
+  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency, disconnected);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError || manualCardsError);
   const spendingError = ledger.error;
