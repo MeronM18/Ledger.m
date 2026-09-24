@@ -4,14 +4,17 @@
 export type Snapshot = { date: string; net_worth: number };
 
 export type NetWorthTrend = {
-  // Net worth now minus its value about `days` ago; null with too little history to say.
+  // Net worth now minus its value about `days` ago, or, with a younger
+  // history, since the first snapshot; null with no earlier day to compare.
   change: number | null;
+  // The day the change is measured from when that isn't a full `days` ago
+  // ("since Sep 20"); null when it is.
+  since: string | null;
   changePct: number | null; // null when the starting point was 0
   // Oldest to newest, ending on today's live figure, for the sparkline.
   values: number[];
 };
 
-const MIN_HISTORY_DAYS = 7;
 const SPARKLINE_DAYS = 90;
 
 function daysBetween(fromIso: string, toIso: string): number {
@@ -20,9 +23,9 @@ function daysBetween(fromIso: string, toIso: string): number {
 
 /**
  * Change over `days`, measured from the latest snapshot on or before that
- * date. With no snapshot that old (a young history), the earliest one
- * stands in, but only if it's at least a week old: "up $12 since yesterday"
- * dressed up as a 30-day figure would mislead.
+ * date. With no snapshot that old (a young history), the change is since
+ * the earliest one, and `since` says from when, so a few days of history
+ * isn't dressed up as a 30-day figure.
  */
 export function netWorthTrend(
   snapshots: Snapshot[],
@@ -39,15 +42,14 @@ export function netWorthTrend(
   values.push(currentNetWorth);
 
   const cutoff = sorted.filter((s) => daysBetween(s.date, todayIso) >= days).at(-1);
-  const earliest = sorted[0];
-  const baseline =
-    cutoff ?? (earliest && daysBetween(earliest.date, todayIso) >= MIN_HISTORY_DAYS ? earliest : undefined);
+  const earliest = sorted.find((s) => s.date < todayIso);
+  const baseline = cutoff ?? earliest;
 
-  if (!baseline) return { change: null, changePct: null, values };
+  if (!baseline) return { change: null, changePct: null, since: null, values };
 
   const change = currentNetWorth - baseline.net_worth;
   const changePct = baseline.net_worth !== 0 ? change / Math.abs(baseline.net_worth) : null;
-  return { change, changePct, values };
+  return { change, changePct, since: cutoff ? null : baseline.date, values };
 }
 
 /**

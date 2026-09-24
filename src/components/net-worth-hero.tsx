@@ -63,7 +63,11 @@ export function NetWorthHero({
                     {formatCurrency(Math.abs(trend.change), currency)}
                     {trend.changePct !== null ? ` (${up ? "+" : "-"}${Math.abs(trend.changePct * 100).toFixed(1)}%)` : ""}
                   </span>
-                  <span className="text-muted-foreground">in the last 30 days</span>
+                  <span className="text-muted-foreground">
+                    {trend.since
+                      ? `since ${new Date(`${trend.since}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}`
+                      : "in the last 30 days"}
+                  </span>
                 </p>
               )}
             </div>

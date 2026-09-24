@@ -24,12 +24,18 @@ describe("netWorthTrend", () => {
     expect(t.values).toHaveLength(4);
   });
 
-  it("falls back to the earliest snapshot only when it is at least a week old", () => {
+  it("with a young history, gives the change since the first snapshot and says from when", () => {
     const young = [{ date: "2026-09-10", net_worth: 1000 }];
-    expect(netWorthTrend(young, 1100, today).change).toBe(100);
-    const tooYoung = [{ date: "2026-09-20", net_worth: 1000 }];
-    expect(netWorthTrend(tooYoung, 1100, today).change).toBeNull();
-    expect(netWorthTrend([], 1100, today)).toEqual({ change: null, changePct: null, values: [1100] });
+    expect(netWorthTrend(young, 1100, today)).toMatchObject({ change: 100, since: "2026-09-10" });
+    const days = [{ date: "2026-09-20", net_worth: 1000 }, { date: "2026-09-22", net_worth: 1050 }];
+    expect(netWorthTrend(days, 1100, today)).toMatchObject({ change: 100, since: "2026-09-20" });
+    // Only today's snapshot: nothing earlier to compare with.
+    expect(netWorthTrend([{ date: today, net_worth: 1000 }], 1100, today).change).toBeNull();
+    expect(netWorthTrend([], 1100, today)).toEqual({ change: null, changePct: null, since: null, values: [1100] });
+  });
+
+  it("says nothing about a start date once a full 30 days are covered", () => {
+    expect(netWorthTrend([{ date: "2026-08-01", net_worth: 1000 }], 1100, today).since).toBeNull();
   });
 
   it("gives no percentage from a zero start, and handles a decline", () => {
@@ -100,7 +106,7 @@ describe("attentionItems", () => {
     expect(items[2].href).toBe("/subscriptions");
   });
 
-  it("collapses a pile of over-budget rows into one line that names the worst", () => {
+  it("lists every over-budget category on its own line, furthest over first", () => {
     const over = (n: string, remaining: number) =>
       progress({ category: n, label: n, status: "over", remaining, percentUsed: 1.5, budget: 100, spent: 100 - remaining });
     const items = attentionItems(
@@ -109,9 +115,14 @@ describe("attentionItems", () => {
       today,
       "USD"
     );
-    expect(items).toHaveLength(1);
-    expect(items[0].title).toBe("5 budgets are over");
-    expect(items[0].detail).toBe("Huge (+$400.00), Big (+$120.00), Mid (+$50.00), and 2 more");
+    expect(items.map((i) => i.title)).toEqual([
+      "Huge is over budget",
+      "Big is over budget",
+      "Mid is over budget",
+      "Small is over budget",
+      "Tiny is over budget",
+    ]);
+    expect(items[0].detail).toBe("$400.00 over your $100.00 budget");
   });
 
   it("keeps one or two of a kind as their own rows", () => {
@@ -124,8 +135,8 @@ describe("attentionItems", () => {
   });
 
   it("caps the total and is empty when nothing needs attention", () => {
-    const renewals = Array.from({ length: 8 }, (_, i) => ({ key: `r${i}`, label: `R${i}`, amount: 5, date: "2026-09-24" }));
-    expect(attentionItems([], renewals, today, "USD")).toHaveLength(5);
+    const renewals = Array.from({ length: 14 }, (_, i) => ({ key: `r${i}`, label: `R${i}`, amount: 5, date: "2026-09-24" }));
+    expect(attentionItems([], renewals, today, "USD")).toHaveLength(10);
     expect(attentionItems([progress({})], [], today, "USD")).toEqual([]);
   });
 });
