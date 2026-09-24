@@ -224,6 +224,13 @@
   .recharts-wrapper [tabindex="-1"]:focus {
     outline: none;
   }
+  /* The net worth line is picked from, so it shows keyboard focus after all:
+     around the chart, since the chart itself clips anything drawn outside. */
+  .net-worth-chart:has(.recharts-surface:focus-visible) {
+    outline: 2px solid var(--ring);
+    outline-offset: 4px;
+    border-radius: var(--radius-md);
+  }
   /* Keyboard focus is always visible, including on plain links. */
   :where(a, button, [role="button"], summary):focus-visible {
     outline: 2px solid var(--ring);

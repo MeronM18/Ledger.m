@@ -129,6 +129,15 @@ test("accounts: grouped by what they are, with net worth over a chosen period an
   await page.mouse.move(tickX, plot.y + plot.height / 2, { steps: 4 });
   await expect(chart.locator(".recharts-tooltip-label")).toHaveText(new RegExp(`^${month}\\w* 1, ${year}$`));
 
+  // Clicking that day takes its net worth apart, adding up to the line's value.
+  const value = await chart.locator(".recharts-tooltip-item-value").textContent();
+  await page.mouse.click(tickX, plot.y + plot.height / 2);
+  const day = page.getByRole("region", { name: new RegExp(`^Net worth on ${month}\\w* 1, ${year}$`) });
+  await expect(day.getByRole("rowheader", { name: "Cash", exact: true }).first()).toBeVisible();
+  await expect(day.locator("tfoot td").first()).toHaveText(value!);
+  await day.getByRole("button", { name: "Back to today" }).click();
+  await expect(day).toHaveCount(0);
+
   // A group folds shut.
   await page.getByRole("button", { name: "Collapse Credit cards" }).click();
   await expect(page.getByRole("link", { name: "Chase Freedom Flex" })).toHaveCount(0);

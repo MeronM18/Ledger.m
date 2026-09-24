@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { changeOver, dailyBalances, periodStart, thin } from "@/lib/account-history";
-import { buildBoard, historyStartFor, netWorthSeries, summarize, type BoardInput } from "@/lib/accounts-board";
+import { breakdownOn, buildBoard, historyStartFor, netWorthSeries, summarize, type BoardInput } from "@/lib/accounts-board";
 
 describe("dailyBalances", () => {
   it("walks a checking account back through what went out and came in", () => {
@@ -123,6 +123,27 @@ describe("buildBoard", () => {
     expect(line.at(-1)).toBe(s.netWorth);
     // Before yesterday's $50 went out of checking, net worth was $50 higher.
     expect(line[0] - line.at(-1)!).toBe(50);
+  });
+
+  it("breaks a day's net worth into its groups and accounts, adding up to the line that day", () => {
+    const line = netWorthSeries(rows);
+    for (let i = 0; i < line.length; i++) expect(breakdownOn(rows, i).netWorthThen).toBe(line[i]);
+
+    // The first day: checking still had the $50 that went out on the 23rd.
+    const day = breakdownOn(rows, 0);
+    const cash = day.groups.find((g) => g.key === "cash")!;
+    expect(cash).toMatchObject({ label: "Cash", then: 1350, now: 1300 });
+    expect(cash.rows.map((r) => [r.row.id, r.then, r.now, r.tracked])).toEqual([
+      ["chk", 1050, 1000, true],
+      ["asset:cash", 300, 300, false],
+    ]);
+    expect(day.netWorthNow).toBe(summarize(rows).netWorth);
+  });
+
+  it("lists groups in the order given and leaves out empty ones", () => {
+    const keys = breakdownOn(rows, 0, ["property", "loans", "credit", "cash", "investments"]).groups.map((g) => g.key);
+    expect(keys).toEqual(["property", "loans", "credit", "cash", "investments"]);
+    expect(breakdownOn(rows.filter((r) => r.group === "cash"), 0).groups.map((g) => g.key)).toEqual(["cash"]);
   });
 
   it("starts the history the day before the oldest transaction, within the limit", () => {

@@ -328,3 +328,52 @@ export function netWorthSeries(rows: BoardRow[]): number[] {
   }
   return out.map((v) => Math.round(v * 100) / 100);
 }
+
+export type DayRow = {
+  row: BoardRow;
+  // Its balance at the end of the day, and today.
+  then: number;
+  now: number;
+  // False for something with no history, counted at today's value.
+  tracked: boolean;
+};
+
+export type DayGroup = { key: GroupKey; label: string; liability: boolean; then: number; now: number; rows: DayRow[] };
+
+/**
+ * What net worth was made of at the end of day `index` of the history
+ * (0 is the history's first day): each group's total and each account's
+ * balance, then and today. Groups follow `order`; accounts go largest first.
+ * The net worth it adds up to is the line's on that day.
+ */
+export function breakdownOn(
+  rows: BoardRow[],
+  index: number,
+  order: GroupKey[] = GROUPS.map((g) => g.key)
+): { groups: DayGroup[]; netWorthThen: number; netWorthNow: number } {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const groups = order.flatMap((key) => {
+    const group = GROUPS.find((g) => g.key === key)!;
+    const members: DayRow[] = rows
+      .filter((r) => r.group === key)
+      .map((r) => {
+        const series = r.series;
+        const then = series ? series[Math.min(Math.max(0, index), series.length - 1)] : r.balance;
+        return { row: r, then, now: r.balance, tracked: series !== null };
+      })
+      .sort((a, b) => b.then - a.then);
+    if (members.length === 0) return [];
+    return [
+      {
+        key,
+        label: group.label,
+        liability: group.liability,
+        then: r2(members.reduce((s, m) => s + m.then, 0)),
+        now: r2(members.reduce((s, m) => s + m.now, 0)),
+        rows: members,
+      },
+    ];
+  });
+  const net = (pick: (g: DayGroup) => number) => r2(groups.reduce((s, g) => s + (g.liability ? -1 : 1) * pick(g), 0));
+  return { groups, netWorthThen: net((g) => g.then), netWorthNow: net((g) => g.now) };
+}

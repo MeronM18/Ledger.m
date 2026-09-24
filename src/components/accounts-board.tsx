@@ -1,16 +1,29 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ChevronRight } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ArrowDown, ArrowUp, ChevronRight, X } from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  useActiveTooltipDataPoints,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { InstitutionAvatar } from "@/components/institution-avatar";
 import { Money } from "@/components/money";
 import { DragHandle, SortableCardList, type SortableCard } from "@/components/sortable-card-list";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { changeOver, PERIODS, thin, type Period } from "@/lib/account-history";
-import { GROUPS, netWorthSeries, summarize, type BoardRow, type GroupKey, type SummaryKind } from "@/lib/accounts-board";
+import { changeOver, daysBetween, PERIODS, thin, type Period } from "@/lib/account-history";
+import { breakdownOn, GROUPS, netWorthSeries, summarize, type BoardRow, type GroupKey, type SummaryKind } from "@/lib/accounts-board";
 import { applyCardOrder } from "@/lib/card-order";
 import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 import { dateTicks, dayPoints, formatTickMoney, valueTicks, type DayPoint } from "@/lib/day-chart";
@@ -22,6 +35,8 @@ const monthYear = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
 const fullDay = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
+const shortDay = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -95,17 +110,42 @@ const tooltipContentStyle: CSSProperties = {
   fontSize: 12,
 };
 
+// Inside the chart: tells the panel which day the tooltip is on, so Enter
+// can pick it when the chart is driven from the keyboard.
+function ActiveDay({ onChange }: { onChange: (point: DayPoint | null) => void }) {
+  const points = useActiveTooltipDataPoints<DayPoint>();
+  const point = points?.[0] ?? null;
+  useEffect(() => onChange(point), [point, onChange]);
+  return null;
+}
+
 function NetWorthPanel({
+  rows,
   series,
   historyStart,
+  groupOrder,
   period,
   onPeriod,
 }: {
+  rows: BoardRow[];
   series: number[];
   historyStart: string;
+  groupOrder: GroupKey[];
   period: Period;
   onPeriod: (p: Period) => void;
 }) {
+  // A day picked on the line, to see what net worth was made of then.
+  const [picked, setPicked] = useState<string | null>(null);
+  const active = useRef<DayPoint | null>(null);
+  const onActive = useCallback((point: DayPoint | null) => {
+    active.current = point;
+  }, []);
+  const pickActive = (e: KeyboardEvent) => {
+    if ((e.key === "Enter" || e.key === " ") && active.current) {
+      e.preventDefault();
+      setPicked(active.current.date);
+    }
+  };
   const days = periodDays(period, series.length);
   const now = series[series.length - 1] ?? 0;
   // Every day, none skipped, so the line and what hovering reads are the
@@ -119,6 +159,9 @@ function NetWorthPanel({
   const change = now - (data[0]?.value ?? now);
   const yStep = yTicks.length > 1 ? yTicks[1] - yTicks[0] : 1;
   const lastT = data[data.length - 1]?.t;
+  const today = addDaysIso(historyStart, series.length - 1);
+  const pickedIndex = picked === null ? null : daysBetween(historyStart, picked);
+  const pickedT = picked === null ? null : Date.parse(`${picked}T00:00:00Z`);
 
   return (
     <Card>
@@ -150,8 +193,19 @@ function NetWorthPanel({
         {data.length < 2 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">Your net worth line starts once there&apos;s a day of history.</p>
         ) : (
+          // Enter or Space picks the day the keyboard has moved the tooltip to.
+          <div className="net-worth-chart" role="group" aria-label="Net worth by day" onKeyDown={pickActive}>
           <ResponsiveContainer {...CHART_RESIZE} width="100%" height={220}>
-            <AreaChart data={data} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
+            <AreaChart
+              data={data}
+              margin={{ top: 8, right: 4, bottom: 0, left: 0 }}
+              style={{ cursor: "pointer" }}
+              desc="Arrow keys move from day to day. Enter shows what that day's net worth was made of."
+              onClick={(state) => {
+                const point = data[Number(state?.activeTooltipIndex)];
+                if (point) setPicked(point.date);
+              }}
+            >
               <defs>
                 <linearGradient id="accountsNetWorthFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--champagne)" stopOpacity={0.3} />
@@ -206,14 +260,181 @@ function NetWorthPanel({
                 activeDot={{ r: 4, fill: "var(--champagne)", stroke: "var(--card)", strokeWidth: 2 }}
                 isAnimationActive={false}
               />
+              {pickedT !== null && pickedIndex !== null && (
+                <>
+                  <ReferenceLine x={pickedT} stroke="var(--champagne)" strokeOpacity={0.55} />
+                  <ReferenceDot
+                    x={pickedT}
+                    y={series[pickedIndex]}
+                    r={4.5}
+                    fill="var(--champagne)"
+                    stroke="var(--card)"
+                    strokeWidth={2}
+                  />
+                </>
+              )}
+              <ActiveDay onChange={onActive} />
             </AreaChart>
           </ResponsiveContainer>
+          </div>
+        )}
+        {picked !== null && pickedIndex !== null && (
+          <DayBreakdown
+            rows={rows}
+            date={picked}
+            index={pickedIndex}
+            order={groupOrder}
+            firstDay={historyStart}
+            today={today}
+            onDate={setPicked}
+            onClose={() => setPicked(null)}
+          />
         )}
         <p className="mt-2 text-[11px] text-muted-foreground">
           Worked out from today&apos;s balances and the transactions since. Cash, property and metals count at today&apos;s value.
+          {picked === null && data.length >= 2 && " Click a day to see what it was made of."}
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * A picked day's net worth, taken apart: each group and account as it stood
+ * at the end of that day, beside today, and how each has moved since.
+ */
+function DayBreakdown({
+  rows,
+  date,
+  index,
+  order,
+  firstDay,
+  today,
+  onDate,
+  onClose,
+}: {
+  rows: BoardRow[];
+  date: string;
+  index: number;
+  order: GroupKey[];
+  firstDay: string;
+  today: string;
+  onDate: (iso: string) => void;
+  onClose: () => void;
+}) {
+  const { groups, netWorthThen, netWorthNow } = useMemo(() => breakdownOn(rows, index, order), [rows, index, order]);
+  const headingId = useId();
+  const cell = "py-1.5 pl-3 text-right align-baseline whitespace-nowrap";
+
+  return (
+    <section aria-labelledby={headingId} className="mt-4 border-t border-border pt-4">
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-col gap-1">
+          <h3 id={headingId} className="text-sm font-medium text-bone">
+            Net worth on {fullDay(date)}
+          </h3>
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <Money amount={netWorthThen} currency="USD" tone="neutral" className="text-xl font-semibold" />
+            <span className="inline-flex items-baseline gap-1.5">
+              <Change amount={netWorthNow - netWorthThen} base={netWorthThen} className="text-sm" />
+              <span className="text-xs text-muted-foreground">since then</span>
+            </span>
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="date"
+            aria-label="Day"
+            value={date}
+            min={firstDay}
+            max={today}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v >= firstDay && v <= today) onDate(v);
+            }}
+            className="h-7 w-[8.75rem] px-2 text-xs"
+          />
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+            <X aria-hidden />
+            Back to today
+          </Button>
+        </div>
+      </div>
+
+      <table className="mt-4 w-full border-collapse text-sm">
+        <caption className="sr-only">
+          Each account on {fullDay(date)}, today, and the change since
+        </caption>
+        <thead>
+          <tr className="text-[11px] text-muted-foreground">
+            <th scope="col" className="pb-1.5 text-left font-normal">
+              Account
+            </th>
+            <th scope="col" className="pb-1.5 pl-3 text-right font-normal">
+              {shortDay(date)}
+            </th>
+            <th scope="col" className="hidden pb-1.5 pl-3 text-right font-normal sm:table-cell">
+              Today
+            </th>
+            <th scope="col" className="pb-1.5 pl-3 text-right font-normal">
+              Since then
+            </th>
+          </tr>
+        </thead>
+        {groups.map((g) => (
+          <tbody key={g.key} className="border-t border-border">
+            <tr>
+              <th scope="rowgroup" className="pt-3 pb-1 text-left font-medium">
+                {g.label}
+                {g.liability && <span className="font-normal text-muted-foreground"> owed</span>}
+              </th>
+              <td className={cn(cell, "pt-3 pb-1")}>
+                <Money amount={g.then} currency="USD" tone="neutral" className="text-sm font-medium" />
+              </td>
+              <td className={cn(cell, "hidden pt-3 pb-1 sm:table-cell")}>
+                <Money amount={g.now} currency="USD" tone="neutral" className="text-sm text-muted-foreground" />
+              </td>
+              <td className={cn(cell, "pt-3 pb-1")}>
+                {/* Nothing with a history in it, nothing known about how it moved. */}
+                {g.rows.some((r) => r.tracked) && <Change amount={g.now - g.then} liability={g.liability} />}
+              </td>
+            </tr>
+            {g.rows.map(({ row, then, now, tracked }) => (
+              <tr key={row.id} className="text-muted-foreground">
+                <th scope="row" className="py-1.5 pl-3 text-left align-baseline font-normal">
+                  <span className="text-foreground">{row.name}</span>
+                  {row.mask && <span className="ml-1.5 hidden font-mono text-xs sm:inline">••{row.mask}</span>}
+                  {!tracked && <span className="block text-[11px]">Counted at today&apos;s value</span>}
+                </th>
+                <td className={cell}>
+                  <Money amount={then} currency="USD" tone="neutral" className="text-xs" />
+                </td>
+                <td className={cn(cell, "hidden sm:table-cell")}>
+                  <Money amount={now} currency="USD" tone="neutral" className="text-xs text-muted-foreground" />
+                </td>
+                <td className={cell}>{tracked && <Change amount={now - then} liability={row.liability} />}</td>
+              </tr>
+            ))}
+          </tbody>
+        ))}
+        <tfoot>
+          <tr className="border-t border-border">
+            <th scope="row" className="pt-3 text-left font-medium">
+              Net worth
+            </th>
+            <td className={cn(cell, "pt-3")}>
+              <Money amount={netWorthThen} currency="USD" tone="neutral" className="text-sm font-semibold" />
+            </td>
+            <td className={cn(cell, "hidden pt-3 sm:table-cell")}>
+              <Money amount={netWorthNow} currency="USD" tone="neutral" className="text-sm text-muted-foreground" />
+            </td>
+            <td className={cn(cell, "pt-3")}>
+              <Change amount={netWorthNow - netWorthThen} />
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </section>
   );
 }
 
@@ -454,7 +675,14 @@ export function AccountsBoard({
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
-      <NetWorthPanel series={series} historyStart={historyStart} period={period} onPeriod={setPeriod} />
+      <NetWorthPanel
+        rows={rows}
+        series={series}
+        historyStart={historyStart}
+        groupOrder={cards.map((c) => c.id.slice("group:".length) as GroupKey)}
+        period={period}
+        onPeriod={setPeriod}
+      />
       {cards.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">No accounts yet. Add one to get started.</p>
       ) : (
