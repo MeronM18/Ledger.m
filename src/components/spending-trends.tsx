@@ -8,6 +8,7 @@ import { Money } from "@/components/money";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import { dailyAverage, type CategoryChange, type MonthRef, type Pace } from "@/lib/trends";
 import { cn } from "@/lib/utils";
+import { chartTooltipProps } from "@/lib/chart-style";
 
 const tooltipContentStyle: CSSProperties = {
   background: "var(--popover)",
@@ -157,6 +158,7 @@ export function SpendingTrends({
                   width={56}
                 />
                 <Tooltip
+        {...chartTooltipProps}
                   formatter={(value) => formatCurrency(Number(value), currency)}
                   labelFormatter={(day) => `Day ${day}`}
                   contentStyle={tooltipContentStyle}

@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { chartTooltipProps } from "@/lib/chart-style";
 
 export type NetWorthSnapshotPoint = { date: string; netWorth: number };
 
@@ -79,6 +80,7 @@ export function NetWorthChart({ snapshots }: { snapshots: NetWorthSnapshotPoint[
                 domain={["auto", "auto"]}
               />
               <Tooltip
+        {...chartTooltipProps}
                 formatter={(value) => formatCurrency(Number(value), "USD")}
                 cursor={{ stroke: "var(--border)" }}
                 contentStyle={tooltipContentStyle}
