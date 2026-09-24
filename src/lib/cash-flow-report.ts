@@ -42,9 +42,10 @@ const MAX_CATEGORIES = 8;
 const MAX_SUBCATEGORIES = 4;
 
 const round = (n: number) => Math.round(n * 100) / 100;
-// Money coming in is teal, what's kept is green, like Monarch's.
-const INCOME_COLOR = "#2fa7c4";
-const SAVINGS_COLOR = "#5cb86a";
+// From the site's own muted palette: money coming in is its soft sky blue,
+// what's kept its sage green (the same green income has everywhere else).
+const INCOME_COLOR = "var(--cat-travel)";
+const SAVINGS_COLOR = "var(--cat-income)";
 
 /** "Restaurant" for FOOD_AND_DRINK_RESTAURANT: the finer category, without its parent's name. */
 export function detailedLabel(category: string, detailed: string | null | undefined): string | null {
