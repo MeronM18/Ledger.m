@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { MerchantRule, TransactionOverride } from "@/lib/transaction-edits";
@@ -11,7 +12,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
  * can show its normal error state, rather than silently rendering the
  * unedited Plaid data as if the edits didn't exist.
  */
-export async function loadTransactionEdits(admin: AdminClient): Promise<{
+export const loadTransactionEdits = cache(async function loadTransactionEdits(admin: AdminClient): Promise<{
   overrides: Map<string, TransactionOverride>;
   rules: MerchantRule[];
   error: boolean;
@@ -35,4 +36,4 @@ export async function loadTransactionEdits(admin: AdminClient): Promise<{
     rules: (rulesRes.data ?? []) as MerchantRule[],
     error: Boolean(overridesRes.error || rulesRes.error),
   };
-}
+});

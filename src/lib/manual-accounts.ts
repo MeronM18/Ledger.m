@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
@@ -28,7 +29,7 @@ export type ManualAccount = {
 };
 
 /** Every manual account (Apple Card) with its balance worked out from its imported transactions. */
-export async function loadManualAccounts(
+export const loadManualAccounts = cache(async function loadManualAccounts(
   admin: AdminClient
 ): Promise<{ accounts: ManualAccount[]; error: boolean }> {
   const [accountsRes, txRes] = await Promise.all([
@@ -82,14 +83,14 @@ export async function loadManualAccounts(
       };
     }),
   };
-}
+});
 
 /**
  * The institutions whose card purchases are already in the app, so a payment
  * to one of them is not counted as spending a second time. Connected credit
  * accounts (Chase) plus any manual card account (Apple Card).
  */
-export async function loadConnectedCardIssuers(
+export const loadConnectedCardIssuers = cache(async function loadConnectedCardIssuers(
   admin: AdminClient
 ): Promise<{ issuers: string[]; error: boolean }> {
   const [plaidRes, manualRes] = await Promise.all([
@@ -108,4 +109,4 @@ export async function loadConnectedCardIssuers(
   ].filter((n): n is string => Boolean(n));
 
   return { issuers: Array.from(new Set(names)), error: Boolean(plaidRes.error || manualRes.error) };
-}
+});

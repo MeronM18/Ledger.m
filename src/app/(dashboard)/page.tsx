@@ -12,16 +12,11 @@ import { SafeToSpendCard, SafeToSpendSkeleton } from "@/components/safe-to-spend
 import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
-import { loadConnectedCardIssuers, loadManualAccounts } from "@/lib/manual-accounts";
+import { loadManualAccounts } from "@/lib/manual-accounts";
+import { loadLedger } from "@/lib/spending-data";
 import { formatCurrency, timeAgo } from "@/lib/format";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
-import {
-  categoryTotalsForMonth,
-  filterSpendingTransactions,
-  incomeBySourceForMonth,
-  manualTransactionToSpendingTransaction,
-  monthlyIncomeVsSpending,
-} from "@/lib/spending-aggregation";
+import { categoryTotalsForMonth, incomeBySourceForMonth, monthlyIncomeVsSpending } from "@/lib/spending-aggregation";
 import {
   isWithinNextDays,
   projectNextOccurrence,
@@ -30,27 +25,12 @@ import {
 import { effectiveNextDate } from "@/lib/subscription-insights";
 import { humanizeTransactionName, streamDisplayName } from "@/lib/transaction-display";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { calendarNow } from "@/lib/time";
 import { BudgetBar } from "@/components/budgets-manager";
 import { attentionItems } from "@/lib/attention";
 import { budgetProgress } from "@/lib/budgets";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import { paceComparison, previousMonth } from "@/lib/trends";
-import { applyEditsToAll } from "@/lib/transaction-edits";
-import { loadTransactionEdits } from "@/lib/transaction-edits-server";
-
-type RecentTransaction = {
-  id: string;
-  date: string;
-  name: string | null;
-  merchant_name: string | null;
-  logo_url: string | null;
-  amount: number;
-  iso_currency_code: string | null;
-  pending: boolean;
-  isManual: boolean;
-};
 
 function SectionLink({ href }: { href: string }) {
   return (
@@ -73,15 +53,10 @@ export default async function OverviewPage() {
     { data: manualData, error: manualError },
     { data: holdingsData, error: holdingsError },
     { data: pricesData, error: pricesError },
-    { data: txData, error: txError },
-    { data: manualTxData, error: manualTxError },
+    ledger,
     { data: streamsData, error: streamsError },
     { data: manualSubsData, error: manualSubsError },
-    { data: recentData, error: recentError },
-    { data: recentManualData, error: recentManualError },
-    { issuers: connectedCardIssuers, error: creditAcctError },
     { accounts: manualCards, error: manualCardsError },
-    edits,
     { data: budgetRows, error: budgetsError },
     { data: alertRows, error: alertsError },
     { data: snapshotRows, error: snapshotsError },
@@ -90,15 +65,7 @@ export default async function OverviewPage() {
     admin.from("manual_assets").select("value, is_liability"),
     admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),
-    fetchAllRows((from, to) =>
-      admin
-        .from("transactions")
-        .select("id, date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code")
-        .order("date", { ascending: false })
-        .order("id")
-        .range(from, to)
-    ),
-    admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
+    loadLedger(admin),
     admin
       .from("recurring_streams")
       .select(
@@ -108,19 +75,8 @@ export default async function OverviewPage() {
     admin
       .from("manual_subscriptions")
       .select("id, name, amount, frequency, next_billing_date, is_active"),
-    admin
-      .from("transactions")
-      .select("id, date, name, merchant_name, logo_url, amount, iso_currency_code, pending")
-      .order("date", { ascending: false })
-      .limit(5),
-    admin
-      .from("manual_transactions")
-      .select("id, date, name, amount")
-      .order("date", { ascending: false })
-      .limit(5),
-    loadConnectedCardIssuers(admin),
+    // Shared with the ledger above (same request), so this isn't a second read.
     loadManualAccounts(admin),
-    loadTransactionEdits(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(5),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
@@ -130,12 +86,8 @@ export default async function OverviewPage() {
   if (manualError) console.error("Failed to load manual assets for overview", manualError);
   if (holdingsError) console.error("Failed to load precious metal holdings for overview", holdingsError);
   if (pricesError) console.error("Failed to load metal prices for overview", pricesError);
-  if (txError) console.error("Failed to load transactions for overview", txError);
-  if (manualTxError) console.error("Failed to load manual transactions for overview", manualTxError);
   if (streamsError) console.error("Failed to load recurring streams for overview", streamsError);
   if (manualSubsError) console.error("Failed to load manual subscriptions for overview", manualSubsError);
-  if (recentError) console.error("Failed to load recent transactions for overview", recentError);
-  if (recentManualError) console.error("Failed to load recent manual transactions for overview", recentManualError);
   if (budgetsError) console.error("Failed to load budgets for overview", budgetsError);
   if (alertsError) console.error("Failed to load alerts for overview", alertsError);
   if (snapshotsError) console.error("Failed to load net worth history for overview", snapshotsError);
@@ -147,26 +99,16 @@ export default async function OverviewPage() {
     preciousMetalsValue
   );
 
-  const allTransactions = [
-    ...applyEditsToAll(txData ?? [], edits.overrides, edits.rules),
-    ...(manualTxData ?? []).map(manualTransactionToSpendingTransaction),
-  ];
-  const currency = txData?.[0]?.iso_currency_code ?? "USD";
-
-  // Only institutions with a connected *credit*-type account count as a
-  // "connected card" for the payment-exclusion rule — a connected
-  // savings/checking account at the same institution a card payment happens
-  // to be processed under (Amex here is a savings account, not a card)
-  // must never accidentally suppress that payment as if it were the card
-  // itself.
-  const spending = filterSpendingTransactions(allTransactions, connectedCardIssuers);
+  const allTransactions = ledger.transactions;
+  const currency = ledger.currency;
+  const spending = ledger.spending;
   const now = calendarNow();
   const categoryTotals = categoryTotalsForMonth(spending, now.year, now.month);
   const monthTotal = categoryTotals.reduce((sum, c) => sum + c.amount, 0);
   const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
   const monthLabel = now.monthLabel;
   const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
-  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month, connectedCardIssuers);
+  const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month, ledger.connectedCardIssuers);
 
   const allBudgetProgress = budgetProgress(
     categoryTotals,
@@ -223,28 +165,8 @@ export default async function OverviewPage() {
       })),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
-  // Merge the two sources' own top-5s, then re-take the top 5 overall —
-  // fetching 5 from each and re-slicing guarantees correctness even when a
-  // manual entry is more recent than some/all of the Plaid ones, rather
-  // than always showing 5 Plaid rows plus manual ones bolted on separately.
-  const recent = [
-    ...applyEditsToAll((recentData ?? []) as Omit<RecentTransaction, "isManual">[], edits.overrides, edits.rules).map(
-      (t) => ({ ...t, isManual: false })
-    ),
-    ...(recentManualData ?? []).map((m) => ({
-      id: m.id,
-      date: m.date,
-      name: null,
-      merchant_name: m.name,
-      logo_url: null,
-      amount: m.amount,
-      iso_currency_code: null,
-      pending: false,
-      isManual: true,
-    })),
-  ]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, 5);
+  // The ledger is already newest first, Plaid and manual together.
+  const recent = allTransactions.slice(0, 5);
 
   const trend = netWorthTrend(
     (snapshotRows ?? []).map((r) => ({ date: r.date as string, net_worth: Number(r.net_worth) })),
@@ -261,9 +183,9 @@ export default async function OverviewPage() {
   const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError || manualCardsError);
-  const spendingError = Boolean(txError || manualTxError || creditAcctError || manualCardsError || edits.error);
+  const spendingError = ledger.error;
   const subscriptionsError = Boolean(streamsError || manualSubsError);
-  const recentTransactionsError = Boolean(recentError || recentManualError || edits.error);
+  const recentTransactionsError = ledger.error;
 
   return (
     <div className="flex flex-col gap-6">

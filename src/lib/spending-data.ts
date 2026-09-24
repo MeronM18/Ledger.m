@@ -1,4 +1,6 @@
 import "server-only";
+import { cache } from "react";
+import type { ManualTransaction } from "@/components/manual-transaction-form";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import {
@@ -6,53 +8,137 @@ import {
   manualTransactionToSpendingTransaction,
   type SpendingTransaction,
 } from "@/lib/spending-aggregation";
-import { applyEditsToAll } from "@/lib/transaction-edits";
-import { loadConnectedCardIssuers } from "@/lib/manual-accounts";
+import { applyEditsToAll, type EditMeta, type MerchantRule } from "@/lib/transaction-edits";
+import { loadConnectedCardIssuers, loadManualAccounts, type ManualAccount } from "@/lib/manual-accounts";
 import { loadTransactionEdits } from "@/lib/transaction-edits-server";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
+export type LedgerAccountRef = { id: string; name: string; mask: string | null };
+
+/** One transaction, Plaid or manual, with the user's edits and rules applied. */
+export type LedgerTransaction = SpendingTransaction &
+  Partial<EditMeta> & {
+    id: string;
+    logo_url: string | null;
+    iso_currency_code: string | null;
+    account: LedgerAccountRef | null;
+    isManual: boolean;
+    // The stored row a manual entry came from, for its edit dialog.
+    manualSource?: ManualTransaction;
+  };
+
+export type Ledger = {
+  // Every transaction, newest first.
+  transactions: LedgerTransaction[];
+  // The spending-only view: transfers, income and pending removed, payments
+  // to cards that aren't connected carved back in.
+  spending: LedgerTransaction[];
+  // Connected accounts plus manual ones (Apple Card), for account filters.
+  accounts: LedgerAccountRef[];
+  manualAccounts: ManualAccount[];
+  connectedCardIssuers: string[];
+  rules: MerchantRule[];
+  currency: string;
+  error: boolean;
+};
+
+type PlaidRow = SpendingTransaction & {
+  id: string;
+  logo_url: string | null;
+  iso_currency_code: string | null;
+  account: LedgerAccountRef | null;
+};
+
+type ManualRow = ManualTransaction & { manual_account_id: string | null };
+
 /**
- * The one server-side loader for "every transaction, ready to aggregate":
- * Plaid (paged) + manual, with the user's edits and rules applied, plus the
- * spending-only view (transfers/income/pending removed, unconnected-card
- * payments carved back in). Built for the pages added after the original
- * overview/spending/transactions trio so new features share one load path
- * instead of each re-deriving it.
+ * The one loader for "every transaction": Plaid (paged) and manual, with
+ * edits and merchant rules applied. Every page that shows transactions or
+ * totals reads it, so they can't disagree about what's in a month.
+ *
+ * Wrapped in React's cache(), so within one page render (the overview and
+ * the Safe to spend and Goals cards inside it, say) it runs once, not once
+ * per component. Outside a render (a cron or webhook) it simply runs.
  */
+export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
+  const [txRes, manualRes, accountsRes, issuersRes, manualAccountsRes, edits] = await Promise.all([
+    fetchAllRows((from, to) =>
+      admin
+        .from("transactions")
+        .select(
+          "id, date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code, logo_url, account:accounts(id, name, mask)"
+        )
+        .order("date", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAllRows<ManualRow>((from, to) =>
+      admin
+        .from("manual_transactions")
+        .select("id, date, name, amount, pfc_primary, payment_method, notes, manual_account_id")
+        .order("date", { ascending: false })
+        .order("id")
+        .range(from, to)
+    ),
+    admin.from("accounts").select("id, name, mask").order("name"),
+    loadConnectedCardIssuers(admin),
+    loadManualAccounts(admin),
+    loadTransactionEdits(admin),
+  ]);
+
+  if (txRes.error) console.error("Failed to load transactions", txRes.error);
+  if (manualRes.error) console.error("Failed to load manual transactions", manualRes.error);
+  if (accountsRes.error) console.error("Failed to load accounts", accountsRes.error);
+
+  // A manual card account (Apple Card) is an account like a connected one;
+  // plain manual entries (cash) have none.
+  const manualAccountRefs = new Map(
+    manualAccountsRes.accounts.map((c) => [c.id, { id: `manual:${c.id}`, name: c.name, mask: c.mask }])
+  );
+
+  // A many-to-one embed comes back as one object; the generated types say array.
+  const plaidRows = (txRes.data ?? []) as unknown as PlaidRow[];
+  const plaid: LedgerTransaction[] = applyEditsToAll(plaidRows, edits.overrides, edits.rules).map((t) => ({
+    ...t,
+    isManual: false,
+  }));
+  const manual: LedgerTransaction[] = (manualRes.data ?? []).map((m) => {
+    const { manual_account_id, ...source } = m;
+    return {
+      ...manualTransactionToSpendingTransaction(m),
+      id: m.id,
+      logo_url: null,
+      iso_currency_code: null,
+      account: (manual_account_id && manualAccountRefs.get(manual_account_id)) || null,
+      isManual: true,
+      manualSource: source,
+    };
+  });
+
+  const transactions = [...plaid, ...manual].sort((a, b) => b.date.localeCompare(a.date));
+
+  return {
+    transactions,
+    spending: filterSpendingTransactions(transactions, issuersRes.issuers) as LedgerTransaction[],
+    accounts: [...(accountsRes.data ?? []), ...manualAccountRefs.values()],
+    manualAccounts: manualAccountsRes.accounts,
+    connectedCardIssuers: issuersRes.issuers,
+    rules: edits.rules,
+    currency: plaidRows[0]?.iso_currency_code ?? "USD",
+    error: Boolean(
+      txRes.error || manualRes.error || accountsRes.error || issuersRes.error || manualAccountsRes.error || edits.error
+    ),
+  };
+});
+
+/** The ledger as plain totals-ready transactions, for the budgets, forecast and alerts code. */
 export async function loadSpendingData(admin: AdminClient): Promise<{
   all: SpendingTransaction[];
   spending: SpendingTransaction[];
   currency: string;
   error: boolean;
 }> {
-  const [txRes, manualRes, issuersRes, edits] = await Promise.all([
-    fetchAllRows<SpendingTransaction & { id: string; iso_currency_code: string | null }>((from, to) =>
-      admin
-        .from("transactions")
-        .select("id, date, amount, pfc_primary, pfc_detailed, merchant_name, name, pending, iso_currency_code")
-        .order("date", { ascending: false })
-        .order("id")
-        .range(from, to)
-    ),
-    admin.from("manual_transactions").select("date, name, amount, pfc_primary"),
-    loadConnectedCardIssuers(admin),
-    loadTransactionEdits(admin),
-  ]);
-
-  if (txRes.error) console.error("Failed to load transactions", txRes.error);
-  if (manualRes.error) console.error("Failed to load manual transactions", manualRes.error);
-
-  const plaid = applyEditsToAll(txRes.data ?? [], edits.overrides, edits.rules);
-  const all: SpendingTransaction[] = [
-    ...plaid,
-    ...(manualRes.data ?? []).map(manualTransactionToSpendingTransaction),
-  ];
-
-  return {
-    all,
-    spending: filterSpendingTransactions(all, issuersRes.issuers),
-    currency: txRes.data?.[0]?.iso_currency_code ?? "USD",
-    error: Boolean(txRes.error || manualRes.error || issuersRes.error || edits.error),
-  };
+  const ledger = await loadLedger(admin);
+  return { all: ledger.transactions, spending: ledger.spending, currency: ledger.currency, error: ledger.error };
 }
