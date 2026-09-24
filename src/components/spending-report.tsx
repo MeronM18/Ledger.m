@@ -82,7 +82,7 @@ function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             "inline-flex items-center gap-1 rounded-[5px] px-2.5 py-1 transition-colors",
-            value === o.value ? "bg-bone/10 text-bone" : "text-muted-foreground hover:text-foreground"
+            value === o.value ? "bg-bone/12 text-bone ring-1 ring-bone/10 ring-inset hover:bg-bone/16" : "text-muted-foreground hover:bg-bone/6 hover:text-bone"
           )}
         >
           {o.label}

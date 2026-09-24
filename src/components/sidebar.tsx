@@ -73,8 +73,11 @@ export function NavLinks({ onNavigate, collapsed = false }: { onNavigate?: () =>
             // Collapsed, the name shows on hover.
             title={collapsed ? label : undefined}
             className={cn(
-              "flex items-center gap-3 overflow-hidden border-l-2 py-2 pr-2 pl-2.5 text-sm font-medium whitespace-nowrap transition-colors",
-              isActive ? "border-champagne text-champagne" : "border-transparent text-ash-grey hover:text-bone"
+              "flex items-center gap-3 overflow-hidden rounded-r-md border-l-2 py-2 pr-2 pl-2.5 text-sm font-medium whitespace-nowrap transition-colors",
+              // The page you're on keeps its highlight, and brightens on hover like the rest.
+              isActive
+                ? "border-champagne bg-champagne/10 text-champagne hover:bg-champagne/15"
+                : "border-transparent text-ash-grey hover:bg-bone/6 hover:text-bone"
             )}
           >
             <Icon className="size-4 shrink-0" aria-hidden />

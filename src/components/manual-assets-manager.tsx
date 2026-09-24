@@ -140,7 +140,7 @@ function AdjustCashButton({ asset }: { asset: ManualAsset }) {
                 onClick={() => setDirection(d)}
                 className={cn(
                   "flex items-center justify-center gap-1.5 rounded-[5px] py-1.5 text-sm transition-colors",
-                  direction === d ? "bg-bone/10 text-bone" : "text-muted-foreground hover:text-foreground"
+                  direction === d ? "bg-bone/12 text-bone ring-1 ring-bone/10 ring-inset hover:bg-bone/16" : "text-muted-foreground hover:bg-bone/6 hover:text-bone"
                 )}
               >
                 {d === "add" ? <Plus className="size-3.5 shrink-0" aria-hidden /> : <Minus className="size-3.5 shrink-0" aria-hidden />}

@@ -89,7 +89,7 @@ export default async function YearInReviewPage({ searchParams }: { searchParams:
                 aria-current={y === year ? "page" : undefined}
                 className={cn(
                   "rounded-md px-3 py-1.5 font-mono text-sm tabular-nums transition-colors",
-                  y === year ? "bg-muted text-champagne" : "text-muted-foreground hover:text-bone"
+                  y === year ? "bg-champagne/15 text-champagne ring-1 ring-champagne/35 ring-inset hover:bg-champagne/20" : "text-muted-foreground hover:bg-bone/6 hover:text-bone"
                 )}
               >
                 {y}

@@ -27,8 +27,8 @@ export function ReportsTabs() {
               "shrink-0 rounded-md px-3 py-1.5 text-sm transition-colors",
               // The tab you're on is a filled champagne pill; the rest recede.
               active
-                ? "bg-champagne/15 font-medium text-champagne ring-1 ring-champagne/35 ring-inset"
-                : "text-muted-foreground/80 hover:bg-muted hover:text-bone"
+                ? "bg-champagne/15 font-medium text-champagne ring-1 ring-champagne/35 ring-inset hover:bg-champagne/20"
+                : "text-muted-foreground/80 hover:bg-bone/6 hover:text-bone"
             )}
           >
             {tab.label}
