@@ -5,6 +5,7 @@ import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
 import { selectTransactionsToNotify, formatTransactionNotification, isLargeCharge } from "@/lib/plaid-notify-format";
 import { runAlertChecks } from "@/lib/alerts";
+import { loadAlertSettings } from "@/lib/ui-preferences";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -121,7 +122,13 @@ async function notifyNewTransactions(
 ): Promise<number> {
   if (added.length === 0) return 0;
 
-  const { toPush } = selectTransactionsToNotify(added, previouslyNotifiedIds);
+  const { toPush: candidates } = selectTransactionsToNotify(added, previouslyNotifiedIds);
+  // With "every new transaction" switched off, only large charges still
+  // push (if those are on).
+  const settings = candidates.length > 0 ? await loadAlertSettings(admin) : null;
+  const toPush = settings
+    ? candidates.filter((t) => settings.transaction || (settings["large-charge"] && isLargeCharge(t)))
+    : [];
 
   if (toPush.length > 0) {
     const { data: accountRows } = await admin
@@ -138,7 +145,7 @@ async function notifyNewTransactions(
       );
       // A batch summary must not swallow a large charge: those still get
       // their own push.
-      for (const t of toPush.filter((t) => isLargeCharge(t))) {
+      for (const t of toPush.filter((t) => settings?.["large-charge"] && isLargeCharge(t))) {
         const account = accountByPlaidId.get(t.account_id);
         const accountLabel = account
           ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}`

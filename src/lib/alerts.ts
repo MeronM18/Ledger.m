@@ -1,19 +1,25 @@
 import "server-only";
 import { ALERT_THRESHOLDS } from "@/lib/config";
 import {
+  bankSigninAlerts,
   budgetAlerts,
   lowBalanceAlerts,
   priceIncreaseAlerts,
   renewalAlerts,
+  unusualChargeAlerts,
   type Alert,
   type RenewalCandidate,
 } from "@/lib/alerts-logic";
+import type { AlertSettings } from "@/lib/alert-settings";
+import { isDisconnected } from "@/lib/item-status";
+import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
+import { loadAlertSettings } from "@/lib/ui-preferences";
 import { budgetProgress } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
 import { effectiveNextDate } from "@/lib/subscription-insights";
 import { streamDisplayName } from "@/lib/transaction-display";
 import { categoryTotalsForMonth } from "@/lib/spending-aggregation";
-import { loadSpendingData } from "@/lib/spending-data";
+import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow, easternToday } from "@/lib/time";
 
@@ -87,8 +93,8 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes] = await Promise.all([
-    loadSpendingData(admin),
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings] = await Promise.all([
+    loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
       .from("recurring_streams")
@@ -104,6 +110,9 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       .from("accounts")
       .select("id, name, mask, type, available_balance, current_balance")
       .eq("is_hidden", false),
+    admin.from("items").select("id, institution_name, status, error_code"),
+    admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
+    loadAlertSettings(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -120,6 +129,42 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       now
     );
     alerts.push(...budgetAlerts(progress, now.isoDate.slice(0, 7), currency));
+  }
+
+  if (data.error) {
+    console.error("Skipping unusual-charge alerts: load failed");
+  } else {
+    alerts.push(...unusualChargeAlerts(data.spending, now.isoDate, currency));
+  }
+
+  // Early in a new month, one summary of the month before. Limited to the
+  // first week so a late first run doesn't send a stale one.
+  if (Number(now.isoDate.slice(8, 10)) <= 7) {
+    if (data.error || budgetsRes.error || snapshotsRes.error) {
+      console.error("Skipping the monthly summary: load failed", budgetsRes.error ?? snapshotsRes.error);
+    } else {
+      const summary = monthlySummary(
+        data.transactions,
+        data.spending,
+        (budgetsRes.data ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) })),
+        (snapshotsRes.data ?? []).map((r) => ({ date: r.date as string, net_worth: Number(r.net_worth) })),
+        now.isoDate
+      );
+      if (summary) alerts.push(monthlySummaryAlert(summary, currency));
+    }
+  }
+
+  if (itemsRes.error) {
+    console.error("Skipping bank sign-in alerts: load failed", itemsRes.error);
+  } else {
+    alerts.push(
+      ...bankSigninAlerts(
+        (itemsRes.data ?? [])
+          .filter((i) => isDisconnected(i))
+          .map((i) => ({ id: i.id as string, name: (i.institution_name as string | null) ?? "A bank" })),
+        now.isoDate
+      )
+    );
   }
 
   if (streamsRes.error || manualSubsRes.error) {
@@ -178,5 +223,10 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     );
   }
 
-  return dispatchAlerts(admin, alerts);
+  return dispatchAlerts(admin, enabledAlerts(alerts, settings));
+}
+
+/** Drops the kinds switched off in settings. They aren't recorded either, so switching one back on picks up what's true then. */
+export function enabledAlerts(alerts: Alert[], settings: AlertSettings): Alert[] {
+  return alerts.filter((a) => settings[a.kind]);
 }

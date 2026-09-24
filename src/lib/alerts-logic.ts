@@ -1,12 +1,22 @@
 import type { BudgetProgress } from "@/lib/budgets";
 import { formatCurrency } from "@/lib/format";
+import type { SpendingTransaction } from "@/lib/spending-aggregation";
 import { hasLapsed, hasPriceIncrease, isWithinNextDays, projectNextOccurrence } from "@/lib/subscriptions-aggregation";
+import { humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure, dependency-free. Each function turns current data into the alerts
 // that are true right now; the dedupe key says "this exact situation", so
 // the dispatcher (alerts.ts) can insert-then-push and never repeat itself.
 
-export type AlertKind = "budget-over" | "budget-warning" | "renewal" | "price-increase" | "low-balance";
+export type AlertKind =
+  | "budget-over"
+  | "budget-warning"
+  | "renewal"
+  | "price-increase"
+  | "low-balance"
+  | "unusual-charge"
+  | "bank-signin"
+  | "monthly-summary";
 
 export type Alert = { key: string; kind: AlertKind; title: string; body: string };
 
@@ -143,4 +153,84 @@ export function lowBalanceAlerts(
         },
       ];
     });
+}
+
+// An unusual charge: well above what that merchant normally costs you, with
+// enough history to know what "normally" is.
+export const UNUSUAL_CHARGE = {
+  // Charges this recent are checked (the daily run plus a little slack).
+  withinDays: 3,
+  // Earlier charges at the same merchant needed, over the past year.
+  minHistory: 3,
+  // At least this many times the usual (median) amount...
+  multiple: 2.5,
+  // ...and at least this many dollars over it, so $4 coffee vs $12 isn't news.
+  minDollarsOver: 50,
+};
+
+const DAY_MS = 86_400_000;
+const dayNumber = (iso: string) => Math.round(new Date(`${iso}T00:00:00Z`).getTime() / DAY_MS);
+
+function medianOf(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+/**
+ * Recent charges far above the merchant's usual amount, and above anything
+ * paid there in the past year. `spending` is the spending-only view (no
+ * transfers or income). Pending charges wait until they settle: a pending
+ * charge gets a new id when it posts, so keying on it would alert twice.
+ */
+export function unusualChargeAlerts(
+  spending: (SpendingTransaction & { id: string })[],
+  todayIso: string,
+  currency: string
+): Alert[] {
+  const today = dayNumber(todayIso);
+  const byMerchant = new Map<string, (SpendingTransaction & { id: string })[]>();
+  for (const t of spending) {
+    if (t.pending || t.amount <= 0) continue;
+    const key = humanizeTransactionName(t).toLowerCase();
+    const list = byMerchant.get(key) ?? [];
+    list.push(t);
+    byMerchant.set(key, list);
+  }
+
+  const alerts: Alert[] = [];
+  for (const charges of byMerchant.values()) {
+    for (const t of charges) {
+      const age = today - dayNumber(t.date);
+      if (age < 0 || age > UNUSUAL_CHARGE.withinDays) continue;
+      const prior = charges
+        .filter((p) => p.id !== t.id && p.date < t.date && dayNumber(t.date) - dayNumber(p.date) <= 365)
+        .map((p) => p.amount);
+      if (prior.length < UNUSUAL_CHARGE.minHistory) continue;
+      const usual = medianOf(prior);
+      if (t.amount < usual * UNUSUAL_CHARGE.multiple) continue;
+      if (t.amount - usual < UNUSUAL_CHARGE.minDollarsOver) continue;
+      if (t.amount <= Math.max(...prior)) continue;
+
+      const merchant = humanizeTransactionName(t);
+      alerts.push({
+        key: `unusual-charge:${t.id}`,
+        kind: "unusual-charge",
+        title: `Unusual charge at ${merchant}`,
+        body: `${formatCurrency(t.amount, currency)}, about ${Math.round(t.amount / usual)}x the usual ${formatCurrency(usual, currency)} there. Worth a look if you don't recognize it.`,
+      });
+    }
+  }
+  return alerts;
+}
+
+/** A bank that stopped syncing until it's signed in to again. Repeats weekly while it stays that way. */
+export function bankSigninAlerts(banks: { id: string; name: string }[], isoDate: string): Alert[] {
+  const week = weekStart(isoDate);
+  return banks.map((b) => ({
+    key: `bank-signin:${b.id}:${week}`,
+    kind: "bank-signin" as const,
+    title: `Sign in to ${b.name} again`,
+    body: `${b.name} stopped syncing. Open Accounts in Ledger.m and tap Reconnect.`,
+  }));
 }

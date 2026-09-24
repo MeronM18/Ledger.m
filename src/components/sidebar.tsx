@@ -13,6 +13,7 @@ import {
   Wallet,
   Landmark,
   HandCoins,
+  Settings,
 } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { cn } from "@/lib/utils";
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: "/goals", label: "Goals", icon: PiggyBank },
   { href: "/assets", label: "Assets", icon: Wallet },
   { href: "/accounts", label: "Accounts", icon: Landmark },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 /** The nav links, shared by the desktop sidebar and the mobile drawer. */
