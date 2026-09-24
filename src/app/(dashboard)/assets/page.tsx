@@ -65,15 +65,17 @@ export default async function AssetsPage() {
   // liabilities and counted in net worth.
   const accounts = [
     ...((accountsData ?? []) as AccountRow[]),
-    ...manualCards.map((c) => ({
-      id: `manual:${c.id}`,
-      name: c.name,
-      mask: c.mask,
-      type: "credit",
-      subtype: "credit card",
-      current_balance: Math.max(0, c.balance),
-      iso_currency_code: "USD",
-    })),
+    ...manualCards
+      .filter((c) => c.balanceKnown)
+      .map((c) => ({
+        id: `manual:${c.id}`,
+        name: c.name,
+        mask: c.mask,
+        type: c.type,
+        subtype: c.type === "credit" ? "credit card" : "savings",
+        current_balance: c.type === "credit" ? Math.max(0, c.balance) : c.balance,
+        iso_currency_code: "USD",
+      })),
   ] as AccountRow[];
   const manualAssets = (manualData ?? []) as ManualAsset[];
   const holdings = (holdingsData ?? []) as PreciousMetalHolding[];

@@ -122,5 +122,6 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [x] Subscriptions: recurring charges found in the imported transactions (fixed price, or a bill whose amount changes) appear with a one-click Add
 - [x] Migration `0011_manual_accounts.sql` (**must be applied**)
 - [x] 20 new tests (168 total); parser checked against a real 277-row export
+- [x] Apple Savings (same branch): the savings export (Daily Cash deposits, interest, transfers) imports through the same button, which tells the two files apart from the header. Deposits are stored as money in; interest and Daily Cash count as income; other deposits and withdrawals are transfers. Checked on a real August export: 33 rows, +$17.44, $316.94 to $334.38, matching the statement exactly. The savings balance is entered by hand (the export has none) and counts in net worth. Migration `0012_manual_account_types.sql` (run after 0011)
 - [ ] Not built: financing/installments as a dedicated view. Apple's export has none right now; if one appears it is imported as a purchase and noted "Apple Card Monthly Installment"
 - [ ] Not built: automatic sync. Apple only releases this data to its own on-device system, so it is a manual export and upload

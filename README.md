@@ -82,7 +82,8 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 **Goals**
 - Savings goals with a target and optional date: how much to set aside each month to finish on time, tracked by hand or by following a connected account's balance
 
-**Apple Card**
+**Apple Card and Apple Savings**
+- Apple Savings imports the same way (Daily Cash deposits and interest count as income; its balance is entered by hand and counts in net worth).
 - Apple Card can't connect through Plaid, so its statement CSV (exported from Wallet) is imported instead: purchases are categorized and flow into spending, budgets, trends and subscriptions; the card has a balance, credit limit and utilization, and counts in net worth. Importing an overlapping statement again skips what's already there
 
 **Credit**

@@ -6,14 +6,21 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 
 export type ManualAccount = {
   id: string;
+  type: "credit" | "depository";
   name: string;
   institution_name: string;
   mask: string | null;
   credit_limit: number | null;
   balance_override: number | null;
-  // Amount owed: the typed-in override if there is one, otherwise the sum of
-  // the imported transactions (purchases positive, payments negative).
+  // A card: the amount owed, the typed-in override if there is one, otherwise
+  // the sum of the imported transactions (purchases positive, payments
+  // negative). A deposit account: the typed-in balance, since a statement
+  // export doesn't carry one.
   balance: number;
+  // False for a deposit account that has no balance entered yet.
+  balanceKnown: boolean;
+  // Interest and rewards credited by imported transactions (a deposit account's earnings).
+  earned: number;
   transactionCount: number;
   lastTransactionDate: string | null;
 };
@@ -25,12 +32,12 @@ export async function loadManualAccounts(
   const [accountsRes, txRes] = await Promise.all([
     admin
       .from("manual_accounts")
-      .select("id, name, institution_name, mask, credit_limit, balance_override")
+      .select("id, type, name, institution_name, mask, credit_limit, balance_override")
       .order("created_at"),
-    fetchAllRows<{ manual_account_id: string; amount: number; date: string }>((from, to) =>
+    fetchAllRows<{ manual_account_id: string; amount: number; date: string; pfc_primary: string }>((from, to) =>
       admin
         .from("manual_transactions")
-        .select("manual_account_id, amount, date")
+        .select("manual_account_id, amount, date, pfc_primary")
         .not("manual_account_id", "is", null)
         .order("id")
         .range(from, to)
@@ -41,11 +48,12 @@ export async function loadManualAccounts(
   if (txRes.error) console.error("Failed to load manual account transactions", txRes.error);
   if (accountsRes.error || txRes.error) return { accounts: [], error: true };
 
-  const sums = new Map<string, { sum: number; count: number; last: string | null }>();
+  const sums = new Map<string, { sum: number; count: number; last: string | null; earned: number }>();
   for (const t of txRes.data ?? []) {
-    const entry = sums.get(t.manual_account_id) ?? { sum: 0, count: 0, last: null };
+    const entry = sums.get(t.manual_account_id) ?? { sum: 0, count: 0, last: null, earned: 0 };
     entry.sum += Number(t.amount);
     entry.count += 1;
+    if (t.pfc_primary === "INCOME") entry.earned += -Number(t.amount);
     if (entry.last === null || t.date > entry.last) entry.last = t.date;
     sums.set(t.manual_account_id, entry);
   }
@@ -57,12 +65,15 @@ export async function loadManualAccounts(
       const override = a.balance_override === null ? null : Number(a.balance_override);
       return {
         id: a.id as string,
+        type: a.type as "credit" | "depository",
         name: a.name as string,
         institution_name: a.institution_name as string,
         mask: a.mask as string | null,
         credit_limit: a.credit_limit === null ? null : Number(a.credit_limit),
         balance_override: override,
-        balance: override ?? Math.round((s?.sum ?? 0) * 100) / 100,
+        balance: override ?? (a.type === "credit" ? Math.round((s?.sum ?? 0) * 100) / 100 : 0),
+        balanceKnown: a.type === "credit" || override !== null,
+        earned: Math.round((s?.earned ?? 0) * 100) / 100,
         transactionCount: s?.count ?? 0,
         lastTransactionDate: s?.last ?? null,
       };

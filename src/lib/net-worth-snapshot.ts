@@ -1,5 +1,5 @@
 import "server-only";
-import { computeNetWorth, manualCardsAsAccounts } from "@/lib/net-worth";
+import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -47,7 +47,7 @@ export async function takeNetWorthSnapshot(): Promise<NetWorthSnapshotResult> {
 
   const preciousMetalsValue = totalPreciousMetalsValue(holdingsData ?? [], pricesData ?? []);
   const { totalAssets, totalLiabilities, netWorth } = computeNetWorth(
-    [...(accountsData ?? []), ...manualCardsAsAccounts(manualCards)],
+    [...(accountsData ?? []), ...manualAccountsAsAccounts(manualCards)],
     manualData ?? [],
     preciousMetalsValue
   );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeNetWorth, manualCardsAsAccounts } from "@/lib/net-worth";
+import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
 
 describe("computeNetWorth", () => {
   it("subtracts credit and loan balances, adds everything else", () => {
@@ -26,13 +26,22 @@ describe("computeNetWorth", () => {
   });
 });
 
-describe("manualCardsAsAccounts", () => {
-  it("makes a manual card a liability, counting an overpaid card as nothing owed", () => {
-    const accounts = manualCardsAsAccounts([{ balance: 153.04 }, { balance: -20 }]);
+describe("manualAccountsAsAccounts", () => {
+  it("makes a card a liability and a savings account an asset", () => {
+    const accounts = manualAccountsAsAccounts([
+      { type: "credit", balance: 153.04, balanceKnown: true },
+      { type: "credit", balance: -20, balanceKnown: true },
+      { type: "depository", balance: 334.38, balanceKnown: true },
+    ]);
     expect(accounts).toEqual([
       { type: "credit", current_balance: 153.04 },
       { type: "credit", current_balance: 0 },
+      { type: "depository", current_balance: 334.38 },
     ]);
-    expect(computeNetWorth([{ type: "depository", current_balance: 1000 }, ...accounts], []).netWorth).toBeCloseTo(846.96);
+    expect(computeNetWorth([{ type: "depository", current_balance: 1000 }, ...accounts], []).netWorth).toBeCloseTo(1181.34);
+  });
+
+  it("leaves out a savings account whose balance hasn't been entered", () => {
+    expect(manualAccountsAsAccounts([{ type: "depository", balance: 0, balanceKnown: false }])).toEqual([]);
   });
 });
