@@ -27,6 +27,7 @@ export type AppleCard = {
   balance: number;
   balanceKnown: boolean;
   earned: number;
+  apy: number | null;
   creditLimit: number | null;
   hasBalanceOverride: boolean;
   balanceOverride: number | null;
@@ -52,12 +53,14 @@ function ImportDialog({ hasSavings, trigger }: { hasSavings: boolean; trigger: R
   const [file, setFile] = useState<{ name: string; text: string; kind: "card" | "savings" | null } | null>(null);
   const [limit, setLimit] = useState("");
   const [balance, setBalance] = useState("");
+  const [apy, setApy] = useState("");
 
   function handleOpenChange(next: boolean) {
     if (next) {
       setFile(null);
       setLimit("");
       setBalance("");
+      setApy("");
     }
     setOpen(next);
   }
@@ -79,6 +82,11 @@ function ImportDialog({ hasSavings, trigger }: { hasSavings: boolean; trigger: R
     }
     const limitValue = limit === "" ? undefined : Number(limit);
     const balanceValue = balance === "" ? undefined : Number(balance);
+    const apyValue = apy === "" ? undefined : Number(apy);
+    if (apyValue !== undefined && !(apyValue >= 0 && apyValue <= 100)) {
+      toast.error("Enter the APY as a percent, like 3.39");
+      return;
+    }
     if (file.kind === "card" && limitValue !== undefined && !(limitValue > 0)) {
       toast.error("Enter the credit limit as a number above 0, or leave it blank");
       return;
@@ -97,6 +105,7 @@ function ImportDialog({ hasSavings, trigger }: { hasSavings: boolean; trigger: R
         csv: file.text,
         ...(file.kind === "card" && limitValue !== undefined ? { credit_limit: limitValue } : {}),
         ...(file.kind === "savings" && balanceValue !== undefined ? { balance: balanceValue } : {}),
+        ...(file.kind === "savings" && apyValue !== undefined ? { apy: apyValue } : {}),
       });
       toast.success(
         result.added === 0
@@ -150,6 +159,13 @@ function ImportDialog({ hasSavings, trigger }: { hasSavings: boolean; trigger: R
               <p className="text-xs text-muted-foreground">The export lists deposits but not your balance. Copy it from Wallet.</p>
             </div>
           )}
+          {file?.kind === "savings" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="apple-apy">APY (optional)</Label>
+              <Input id="apple-apy" type="number" min="0" max="100" step="0.01" value={apy} onChange={(e) => setApy(e.target.value)} placeholder="e.g. 3.39" />
+              <p className="text-xs text-muted-foreground">Your statement shows it as &quot;Annual Percentage Yield Earned&quot;.</p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={handleImport} disabled={saving || !file?.kind}>
@@ -167,9 +183,11 @@ function EditDialog({ card }: { card: AppleCard }) {
   const [saving, setSaving] = useState(false);
   const [limit, setLimit] = useState("");
   const [balance, setBalance] = useState("");
+  const [apy, setApy] = useState("");
 
   function handleOpenChange(next: boolean) {
     if (next) {
+      setApy(card.apy !== null ? String(card.apy) : "");
       setLimit(card.creditLimit ? String(card.creditLimit) : "");
       setBalance(card.balanceOverride !== null ? String(card.balanceOverride) : "");
     }
@@ -179,6 +197,11 @@ function EditDialog({ card }: { card: AppleCard }) {
   async function handleSave() {
     const limitValue = limit === "" ? null : Number(limit);
     const balanceValue = balance === "" ? null : Number(balance);
+    const apyValue = apy === "" ? null : Number(apy);
+    if (apyValue !== null && !(apyValue >= 0 && apyValue <= 100)) {
+      toast.error("Enter the APY as a percent, like 3.39");
+      return;
+    }
     if ((limitValue !== null && !(limitValue > 0)) || (balanceValue !== null && !Number.isFinite(balanceValue)) || (card.type === "depository" && balanceValue === null)) {
       toast.error("Enter valid numbers, or leave a field blank");
       return;
@@ -186,7 +209,7 @@ function EditDialog({ card }: { card: AppleCard }) {
     setSaving(true);
     try {
       await send(`/api/manual-accounts/${card.id}`, "PATCH", {
-        ...(card.type === "credit" ? { credit_limit: limitValue } : {}),
+        ...(card.type === "credit" ? { credit_limit: limitValue } : { apy: apyValue }),
         balance_override: balanceValue,
       });
       toast.success(`${card.name} updated`);
@@ -233,6 +256,12 @@ function EditDialog({ card }: { card: AppleCard }) {
               placeholder="Leave blank to use the imported transactions"
             />
           </div>
+          {card.type === "depository" && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="apple-edit-apy">APY (optional)</Label>
+              <Input id="apple-edit-apy" type="number" min="0" max="100" step="0.01" value={apy} onChange={(e) => setApy(e.target.value)} placeholder="e.g. 3.39" />
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={saving}>
@@ -345,9 +374,22 @@ export function AppleCardSection({ cards }: { cards: AppleCard[] }) {
                       <p className="text-sm text-muted-foreground">Not entered yet. Add it with the pencil so it counts in net worth.</p>
                     )}
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {formatCurrency(card.earned, "USD")} earned in imported interest and Daily Cash
-                  </p>
+                  <div className="flex flex-col gap-1 sm:items-end">
+                    {card.apy !== null && (
+                      <p className="text-sm">
+                        <span className="font-mono tabular-nums text-moss">{card.apy}% APY</span>
+                        {card.balanceKnown && card.balance > 0 && (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · about {formatCurrency((card.balance * card.apy) / 100 / 12, "USD")} a month in interest
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <p className="text-sm text-muted-foreground">
+                      {formatCurrency(card.earned, "USD")} earned in imported interest and Daily Cash
+                    </p>
+                  </div>
                 </>
               )}
             </CardContent>

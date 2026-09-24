@@ -9,6 +9,7 @@ const bodySchema = z
     credit_limit: z.number().positive().max(10_000_000).nullable(),
     // null clears it, so the balance goes back to being worked out from the transactions.
     balance_override: z.number().min(-10_000_000).max(10_000_000).nullable(),
+    apy: z.number().min(0).max(100).nullable(),
   })
   .partial();
 

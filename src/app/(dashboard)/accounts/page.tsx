@@ -151,6 +151,7 @@ export default async function AccountsPage() {
               balance: c.balance,
               balanceKnown: c.balanceKnown,
               earned: c.earned,
+              apy: c.apy,
               creditLimit: c.credit_limit,
               hasBalanceOverride: c.balance_override !== null,
               balanceOverride: c.balance_override,
