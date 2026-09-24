@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { NavLinks } from "@/components/sidebar";
+import { NavLinks, Wordmark } from "@/components/sidebar";
 import { SignOutButton } from "@/components/sign-out-button";
 
 /**
@@ -17,7 +17,7 @@ export function MobileNav() {
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:hidden">
-      <span className="font-serif text-lg font-bold tracking-tight text-champagne">Ledger.m</span>
+      <Wordmark className="text-xl" />
 
       <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
         <DialogPrimitive.Trigger
@@ -33,8 +33,8 @@ export function MobileNav() {
             className="fixed inset-y-0 left-0 z-50 flex w-64 max-w-[80vw] flex-col border-r border-border bg-background p-4 outline-none duration-150 data-[state=open]:animate-in data-[state=open]:slide-in-from-left data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left"
           >
             <div className="mb-6 flex items-center justify-between px-2">
-              <DialogPrimitive.Title className="font-serif text-lg font-bold tracking-tight text-champagne">
-                Ledger.m
+              <DialogPrimitive.Title>
+                <Wordmark className="text-xl" />
               </DialogPrimitive.Title>
               <DialogPrimitive.Close
                 aria-label="Close menu"

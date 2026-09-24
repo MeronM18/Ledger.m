@@ -8,7 +8,7 @@ import { Money } from "@/components/money";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import { dailyAverage, type CategoryChange, type MonthRef, type Pace } from "@/lib/trends";
 import { cn } from "@/lib/utils";
-import { chartTooltipProps } from "@/lib/chart-style";
+import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 
 const tooltipContentStyle: CSSProperties = {
   background: "var(--popover)",
@@ -139,7 +139,7 @@ export function SpendingTrends({
           </dl>
           {pace.hasPrevious && (
             <div className="min-h-[220px] flex-1">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer {...CHART_RESIZE} width="100%" height="100%">
               <LineChart data={pace.series}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
                 <XAxis

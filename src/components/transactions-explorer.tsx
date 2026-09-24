@@ -240,7 +240,9 @@ export function TransactionsExplorer({
               const { displayName, displayCategoryLabel } = humanizeTransaction(t);
 
               return (
-                <TableRow key={t.id}>
+                // Off-screen rows skip layout, so the sidebar sliding (which resizes
+                // the table every frame) only lays out what you can see.
+                <TableRow key={t.id} className="[contain-intrinsic-size:auto_49px] [content-visibility:auto]">
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {new Date(`${t.date}T00:00:00`).toLocaleDateString("en-US", {
                       month: "short",

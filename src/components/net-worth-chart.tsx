@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
-import { chartTooltipProps } from "@/lib/chart-style";
+import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 
 export type NetWorthSnapshotPoint = { date: string; netWorth: number };
 
@@ -56,7 +56,7 @@ export function NetWorthChart({ snapshots }: { snapshots: NetWorthSnapshotPoint[
             </p>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer {...CHART_RESIZE} width="100%" height={260}>
             <AreaChart data={data}>
               <defs>
                 <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">

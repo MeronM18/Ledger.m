@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { IncomeMonth } from "@/lib/income";
-import { chartTooltipProps } from "@/lib/chart-style";
+import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 
 const tooltipContentStyle: CSSProperties = {
   background: "var(--popover)",
@@ -32,7 +32,7 @@ export function IncomeChart({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <ResponsiveContainer width="100%" height={280}>
+      <ResponsiveContainer {...CHART_RESIZE} width="100%" height={280}>
         <ComposedChart data={months} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
           <CartesianGrid vertical={false} stroke="var(--border)" />
           <XAxis

@@ -4,7 +4,7 @@ import type { CSSProperties } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { ForecastPoint } from "@/lib/forecast";
-import { chartTooltipProps } from "@/lib/chart-style";
+import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 
 const tooltipContentStyle: CSSProperties = {
   background: "var(--popover)",
@@ -31,7 +31,7 @@ export function ForecastChart({
   currency: string;
 }) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <ResponsiveContainer {...CHART_RESIZE} width="100%" height={280}>
       <LineChart data={points}>
         <CartesianGrid vertical={false} stroke="var(--border)" />
         <XAxis

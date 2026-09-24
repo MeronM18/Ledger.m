@@ -1,13 +1,16 @@
 import { requireUser } from "@/lib/auth";
 import { MobileNav } from "@/components/mobile-nav";
 import { PageTransition } from "@/components/page-transition";
+import { cookies } from "next/headers";
 import { Sidebar } from "@/components/sidebar";
+import { SIDEBAR_COOKIE } from "@/lib/sidebar-state";
 import { Toaster } from "@/components/ui/sonner";
 import { WelcomeOverlay } from "@/components/welcome-overlay";
 import { calendarNow } from "@/lib/time";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   await requireUser();
+  const sidebarCollapsed = (await cookies()).get(SIDEBAR_COOKIE)?.value === "collapsed";
   // Today in Eastern time, worked out here so the server and browser agree.
   const [year, month, day] = calendarNow().isoDate.split("-");
   const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", { month: "short" });
@@ -18,7 +21,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <div className="welcome-stage flex min-h-screen flex-col md:flex-row">
       <WelcomeOverlay month={monthName} day={String(Number(day))} year={year} />
       <MobileNav />
-      <Sidebar />
+      <Sidebar defaultCollapsed={sidebarCollapsed} />
       {/* min-w-0 lets wide content (tables, charts) shrink instead of
           stretching the page; the inner cap keeps lines and cards a readable
           width on big monitors instead of spanning the whole screen. */}

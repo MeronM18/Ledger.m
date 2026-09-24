@@ -8,3 +8,12 @@ export const chartTooltipProps = {
   isAnimationActive: false,
   wrapperStyle: { zIndex: 50, pointerEvents: "none" } as CSSProperties,
 };
+
+// Shared by every ResponsiveContainer. While the sidebar slides open or shut
+// the page resizes every frame; redrawing a chart at every width makes the
+// slide stutter, so a chart redraws once, just after resizing stops, and
+// until then is clipped to its box rather than spilling past its card.
+export const CHART_RESIZE = {
+  debounce: 120,
+  style: { overflow: "hidden" } as CSSProperties,
+};

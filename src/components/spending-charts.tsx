@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/money";
-import { chartTooltipProps } from "@/lib/chart-style";
+import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
 import type { CategoryTotal, MonthTotal } from "@/lib/spending-aggregation";
 
@@ -69,7 +69,7 @@ export function SpendingCharts({
             </p>
           ) : (
             <div className="relative">
-              <ResponsiveContainer width="100%" height={300}>
+              <ResponsiveContainer {...CHART_RESIZE} width="100%" height={300}>
                 <PieChart>
                   <Pie
                     data={categoryTotals}
@@ -133,7 +133,7 @@ export function SpendingCharts({
               No spending history yet.
             </p>
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer {...CHART_RESIZE} width="100%" height={300}>
               <BarChart data={monthlyTotals}>
                 <CartesianGrid vertical={false} stroke="var(--border)" />
                 <XAxis
