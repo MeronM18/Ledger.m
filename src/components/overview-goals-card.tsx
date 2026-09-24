@@ -4,8 +4,10 @@ import { QueryErrorState } from "@/components/query-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DragHandle } from "@/components/sortable-card-list";
 import { formatCurrency } from "@/lib/format";
+import { VERDICT, verdictLine } from "@/lib/goal-copy";
 import { loadGoals } from "@/lib/goals-data";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calendarNow } from "@/lib/time";
 
 export function OverviewGoalsSkeleton() {
   return <div className="h-40 animate-pulse rounded-xl bg-muted" />;
@@ -14,6 +16,8 @@ export function OverviewGoalsSkeleton() {
 /** Async server component for <Suspense>: loads its own data so it never delays the rest of the overview. */
 export async function OverviewGoalsCard() {
   const { rows, error } = await loadGoals(createAdminClient());
+  const today = calendarNow().isoDate;
+  const TONE = { good: "text-moss", bad: "text-oxblood-text", quiet: "text-muted-foreground" } as const;
 
   // Unfinished goals first, closest to done first; reached goals only fill any spare rows.
   const shown = [...rows]
@@ -67,6 +71,10 @@ export async function OverviewGoalsCard() {
                   style={{ width: `${g.percent * 100}%` }}
                 />
               </div>
+              {/* Where it stands and when it lands, as the Goals page reads it. */}
+              {verdictLine(g.insight, today) && (
+                <p className={`text-xs ${TONE[VERDICT[g.insight.verdict].tone]}`}>{verdictLine(g.insight, today)}</p>
+              )}
             </div>
           ))
         )}

@@ -91,6 +91,10 @@ export function buildFixtures(now = new Date()) {
     tx(at(15), IDS.checking, -(1450 + big * 820 + between(0, 90)), "UNITED MORTGAGE PAYROLL 925644358895XMS", null, "INCOME", "INCOME_WAGES");
     tx(lastDay, IDS.checking, -(1450 + big * 610 + between(0, 90)), "UNITED MORTGAGE PAYROLL 925644358895XMS", null, "INCOME", "INCOME_WAGES");
     tx(lastDay, IDS.savings, -(48 + m * 0.9), "INTEREST PAYMENT", null, "INCOME", "INCOME_INTEREST_EARNED");
+    // The day after the mid-month check, some of it goes to savings: more in a big month.
+    const moved = Math.round(150 + big * 110);
+    tx(at(16), IDS.checking, moved, "ONLINE TRANSFER TO AMEX SAVINGS", null, "TRANSFER_OUT", "TRANSFER_OUT_SAVINGS");
+    tx(at(16), IDS.savings, -moved, "TRANSFER FROM CHASE CHECKING", null, "TRANSFER_IN", "TRANSFER_IN_ACCOUNT_TRANSFER");
 
     tx(at(1), IDS.checking, 1850, "PARKVIEW APTS RENT", "Parkview Apartments", "RENT_AND_UTILITIES", "RENT_AND_UTILITIES_RENT");
     tx(at(6), IDS.checking, between(84, 138), "DUKE ENERGY", "Duke Energy", "RENT_AND_UTILITIES", "RENT_AND_UTILITIES_GAS_AND_ELECTRICITY");
@@ -193,7 +197,9 @@ export function buildFixtures(now = new Date()) {
       { id: uuid("bg"), category: "ENTERTAINMENT", monthly_amount: 60 },
     ],
     savings_goals: [
-      { id: uuid("sg"), name: "Emergency fund", target_amount: 20000, saved_amount: 0, target_date: null, account_id: null, account_refs: [IDS.savings] },
+      // Follows the high-yield savings and Apple Savings, with a date: pace, forecast, plan, the latest paycheck's share.
+      { id: uuid("sg"), name: "Start a business", target_amount: 25000, saved_amount: 0, target_date: iso(addDays(today, 130)), account_id: null, account_refs: [`plaid:${IDS.savings}`, `manual:${IDS.appleSavings}`] },
+      { id: uuid("sg"), name: "Emergency fund", target_amount: 20000, saved_amount: 6500, target_date: null, account_id: null, account_refs: [] },
       { id: uuid("sg"), name: "Japan trip", target_amount: 4500, saved_amount: 1200, target_date: iso(addDays(today, 240)), account_id: null, account_refs: [] },
     ],
     alert_events: [

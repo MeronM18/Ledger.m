@@ -158,6 +158,32 @@ test("accounts: grouped by what they are, with net worth over a chosen period an
   await expect(page.locator("[data-transaction]").first()).toContainText("Chase Freedom Flex");
 });
 
+test("goals: a goal that follows savings reads its pace, plans from pay, and asks for the latest check's share", async ({ page }) => {
+  await page.goto("/goals");
+  await afterWelcome(page);
+  const panel = (name: string) => page.locator("[data-slot=card]").filter({ has: page.getByRole("heading", { name, exact: true }) });
+
+  const business = panel("Start a business");
+  await expect(business.getByText(/^(Ahead of pace|On pace|Behind pace)$/)).toBeVisible();
+  await expect(business.getByText(/Growing \+\$[\d,]+ a month over the last 3 months/)).toBeVisible();
+  await expect(business.getByRole("heading", { name: /^To finish by / })).toBeVisible();
+  await expect(business.getByText(/% of every check/)).toBeVisible();
+  await expect(business.getByText(/^Paid [A-Z][a-z]{2} \d+:/)).toBeVisible();
+  await expect(business.getByRole("list", { name: "Milestones" }).getByRole("listitem")).toHaveCount(4);
+  await expect(business.getByRole("group", { name: /saved over time/ })).toBeVisible();
+
+  // Tracked by hand: no pace to read, but still a plan.
+  const trip = panel("Japan trip");
+  await expect(trip.getByText("Tracked by hand", { exact: true })).toBeVisible();
+  await expect(trip.getByRole("heading", { name: /^To finish by / })).toBeVisible();
+
+  // A new goal says what it would take before it's saved.
+  await page.getByRole("button", { name: "New goal" }).click();
+  await page.getByLabel("Target", { exact: true }).fill("8000");
+  await page.getByLabel("Target date (optional)").fill("2030-06-30");
+  await expect(page.getByRole("dialog").getByText(/^That's \$[\d,]+ a month for \d+ months, about \d+% of a typical month's pay\.$/)).toBeVisible();
+});
+
 test("settings: switching an alert off sticks and stops that alert", async ({ page }) => {
   await page.goto("/settings");
   await afterWelcome(page);

@@ -81,13 +81,18 @@ function shiftMonth(month: string, by: number): string {
   return d.toISOString().slice(0, 7);
 }
 
+/** Interest a bank or savings account paid, by its category or its name. */
+export function isInterest(t: Pick<SpendingTransaction, "pfc_detailed" | "merchant_name" | "name">): boolean {
+  return t.pfc_detailed === "INCOME_INTEREST_EARNED" || /\binterest\b/i.test(`${t.merchant_name ?? ""} ${t.name ?? ""}`);
+}
+
 /** Every settled deposit categorized as income, newest first. A reversal (money taken back) counts against it. */
 export function incomeDeposits(transactions: SpendingTransaction[]): IncomeDeposit[] {
   return transactions
     .filter((t) => !t.pending && effectiveCategory(t) === "INCOME")
     .map((t) => {
       const payroll = detectPayrollCompany(t.name ?? "");
-      const interest = t.pfc_detailed === "INCOME_INTEREST_EARNED" || /\binterest\b/i.test(`${t.merchant_name ?? ""} ${t.name ?? ""}`);
+      const interest = isInterest(t);
       return {
         date: t.date,
         amount: -t.amount,
