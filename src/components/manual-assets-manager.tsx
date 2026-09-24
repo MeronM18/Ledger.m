@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Diff, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -24,6 +25,9 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Money } from "@/components/money";
+import { adjustedCash, type CashDirection } from "@/lib/cash-adjust";
+import { formatCurrency } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export type ManualAsset = {
   id: string;
@@ -57,6 +61,130 @@ const EMPTY_FORM: FormState = {
   is_liability: false,
   notes: "",
 };
+
+/**
+ * Cash only: add to it or take from it ("spent $40", "got $200 back")
+ * instead of retyping the total. Shows the new balance before saving.
+ */
+function AdjustCashButton({ asset }: { asset: ManualAsset }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [direction, setDirection] = useState<CashDirection>("add");
+  const [amount, setAmount] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const result = amount.trim() === "" ? null : adjustedCash(asset.value, direction, Number(amount));
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      setDirection("add");
+      setAmount("");
+    }
+    setOpen(next);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!result || "error" in result) {
+      toast.error(result && "error" in result ? result.error : "Enter an amount");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/manual-assets/${asset.id}/adjust`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ direction, amount: Number(amount) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to update the balance");
+      toast.success(
+        `${direction === "add" ? "Added" : "Took"} ${formatCurrency(Number(amount), "USD")} ${direction === "add" ? "to" : "from"} ${asset.name}. Now ${formatCurrency(data.value, "USD")}.`
+      );
+      setOpen(false);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update the balance");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" aria-label={`Add to or take from ${asset.name}`} title="Add or subtract">
+          <Diff className="size-3.5" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-sm">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle>Update {asset.name}</DialogTitle>
+            <DialogDescription>
+              Now <span className="font-mono tabular-nums">{formatCurrency(asset.value, "USD")}</span>. Add to it or take from it.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div role="radiogroup" aria-label="Add or subtract" className="grid grid-cols-2 gap-1 rounded-md border border-border p-0.5">
+            {(["add", "subtract"] as const).map((d) => (
+              <button
+                key={d}
+                type="button"
+                role="radio"
+                aria-checked={direction === d}
+                onClick={() => setDirection(d)}
+                className={cn(
+                  "flex items-center justify-center gap-1.5 rounded-[5px] py-1.5 text-sm transition-colors",
+                  direction === d ? "bg-bone/10 text-bone" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {d === "add" ? <Plus className="size-3.5" aria-hidden /> : <span aria-hidden className="text-base leading-none">−</span>}
+                {d === "add" ? "Add" : "Subtract"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`cash-amount-${asset.id}`}>Amount</Label>
+            <Input
+              id={`cash-amount-${asset.id}`}
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="0.01"
+              autoFocus
+              className="no-spinner"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+
+          <p className="min-h-5 text-sm" aria-live="polite">
+            {result && "value" in result ? (
+              <>
+                <span className="font-mono text-muted-foreground tabular-nums">{formatCurrency(asset.value, "USD")}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span className={cn("font-mono tabular-nums", direction === "add" ? "text-moss" : "text-oxblood-text")}>
+                  {formatCurrency(result.value, "USD")}
+                </span>
+              </>
+            ) : result ? (
+              <span className="text-oxblood-text">{result.error}</span>
+            ) : null}
+          </p>
+
+          <DialogFooter>
+            <Button type="submit" disabled={saving || !result || "error" in result}>
+              {saving ? "Saving..." : direction === "add" ? "Add" : "Subtract"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
   const router = useRouter();
@@ -253,6 +381,7 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
                   tone={asset.is_liability ? "negative" : "positive"}
                   className="text-sm font-medium"
                 />
+                {asset.category === "cash" && <AdjustCashButton asset={asset} />}
                 <Button size="icon" variant="ghost" onClick={() => openEdit(asset)}>
                   <Pencil className="size-3.5" />
                 </Button>

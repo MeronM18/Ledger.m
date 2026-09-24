@@ -696,3 +696,16 @@
     animation: welcome-dissolve-now 320ms ease-out both;
   }
 }
+
+/* Number fields for money: no browser up/down arrows (they're white on the
+   dark theme, and nobody steps a dollar amount by one). */
+@utility no-spinner {
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-inner-spin-button,
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}

@@ -41,7 +41,7 @@ function Choice<T extends string>({
             onClick={() => onChange(o.value)}
             className={cn(
               "rounded-[5px] px-2 py-1 text-xs transition-colors",
-              value === o.value ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
+              value === o.value ? "bg-bone/10 text-bone" : "text-muted-foreground hover:text-foreground"
             )}
           >
             {o.label}
@@ -114,6 +114,7 @@ export function TransactionFiltersMenu({ options, onChange }: { options: ListOpt
               min="0"
               step="1"
               inputMode="decimal"
+              className="no-spinner"
               placeholder="Min $"
               value={amountValue(options.minAmount)}
               onChange={(e) => set("minAmount", parseAmount(e.target.value))}
@@ -125,6 +126,7 @@ export function TransactionFiltersMenu({ options, onChange }: { options: ListOpt
               min="0"
               step="1"
               inputMode="decimal"
+              className="no-spinner"
               placeholder="Max $"
               value={amountValue(options.maxAmount)}
               onChange={(e) => set("maxAmount", parseAmount(e.target.value))}

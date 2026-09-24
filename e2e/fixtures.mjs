@@ -177,6 +177,7 @@ export function buildFixtures(now = new Date()) {
       { id: uuid("ms"), name: "Snapchat+", amount: 1.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 29)), notes: null, is_active: true },
     ],
     manual_assets: [
+      { id: uuid("ma"), name: "Cash", category: "cash", value: 620, is_liability: false, notes: null },
       { id: uuid("ma"), name: "2019 Honda Civic", category: "vehicle", value: 14500, is_liability: false, notes: null },
       { id: uuid("ma"), name: "Student loan", category: "other", value: 8200, is_liability: true, notes: null },
     ],
