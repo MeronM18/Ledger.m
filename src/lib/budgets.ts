@@ -1,6 +1,7 @@
 import { ALL_PFC_CATEGORIES, categoryColorSlot, humanizeCategory, isSpendingCategory, OTHER_CATEGORY_COLOR_SLOT } from "@/lib/plaid-categories";
 import { categoryTotalsForMonth, type CategoryTotal, type SpendingTransaction } from "@/lib/spending-aggregation";
 import { effectiveCategory } from "@/lib/transaction-display";
+import { incomeDeposits } from "@/lib/income";
 
 // Pure, dependency-free. Budgets are per spending category, keyed exactly
 // like the spending views group (displayCategoryKey: a PFC primary, with the
@@ -227,6 +228,43 @@ export function typicalIncome(transactions: SpendingTransaction[], key: string, 
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return Math.round((sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2) * 100) / 100;
+}
+
+export type BudgetIncome = {
+  // What your paychecks usually add up to in a month (the middle of the
+  // complete months before this one), or null with none to go on.
+  expected: number | null;
+  paychecks: number; // paychecks received this month
+  extra: number; // other income this month (refunds, transfers in, interest...)
+  // Paycheck money a usual month still has to bring: nothing once it's in.
+  stillExpected: number;
+};
+
+/**
+ * This month's income for budgeting. Only paychecks are counted on: other
+ * money in (a refund, a Zelle, interest) counts when it lands but is never
+ * assumed, so what's left to budget can't lean on money that may not come.
+ */
+export function budgetIncome(transactions: SpendingTransaction[], key: string, monthsBack = 6): BudgetIncome {
+  const deposits = incomeDeposits(transactions);
+  const paychecksIn = (m: string) => deposits.filter((d) => d.kind === "paycheck" && d.date.slice(0, 7) === m).reduce((s, d) => s + d.amount, 0);
+  const first = transactions.reduce<string | null>((min, t) => (min === null || t.date < min ? t.date : min), null);
+  const values: number[] = [];
+  if (first) {
+    for (let i = 1; i <= monthsBack; i++) {
+      const m = shiftBudgetMonth(key, -i);
+      // The month history starts in is usually partial.
+      if (m <= first.slice(0, 7)) break;
+      values.push(paychecksIn(m));
+    }
+  }
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length === 0 ? null : sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const expected = median === null || median <= 0 ? null : Math.round(median * 100) / 100;
+  const paychecks = Math.round(paychecksIn(key) * 100) / 100;
+  const extra = Math.max(0, Math.round((incomeForMonth(transactions, key) - paychecks) * 100) / 100);
+  return { expected, paychecks, extra, stillExpected: expected === null ? 0 : Math.max(0, Math.round((expected - paychecks) * 100) / 100) };
 }
 
 // ---- Staying on track --------------------------------------------------------

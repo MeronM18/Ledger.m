@@ -37,7 +37,7 @@ test("pages that moved still open from their old addresses", async ({ page }) =>
     ["/year-in-review", "/reports/year"],
     ["/assets", "/accounts"],
     ["/subscriptions", "/recurring"],
-    ["/reports", "/reports/spending"],
+    ["/reports", "/reports/cash-flow"],
   ]) {
     await page.goto(from);
     await expect(page).toHaveURL(new RegExp(`${to}$`));

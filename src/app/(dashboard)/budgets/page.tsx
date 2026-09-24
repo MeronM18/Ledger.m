@@ -5,14 +5,13 @@ import { QueryErrorState } from "@/components/query-error";
 import { Button } from "@/components/ui/button";
 import {
   BUDGETABLE_CATEGORIES,
+  budgetIncome,
   budgetMonth,
   budgetProgress,
   budgetTips,
   categoryLabel,
-  incomeForMonth,
   shiftBudgetMonth,
   suggestBudget,
-  typicalIncome,
   unbudgetedSpending,
   type Budget,
 } from "@/lib/budgets";
@@ -64,7 +63,7 @@ export default async function BudgetsPage({ searchParams }: { searchParams: Prom
   const taken = new Set([...budgets.map((b) => b.category), ...unbudgeted.map((u) => u.category)]);
   const others = BUDGETABLE_CATEGORIES.filter((c) => !taken.has(c)).map((c) => ({ category: c, label: categoryLabel(c) }));
 
-  const income = { typical: typicalIncome(data.all, month.key), actual: incomeForMonth(data.all, month.key) };
+  const income = budgetIncome(data.all, month.key);
   const tips = budgetTips(progress, unbudgeted, suggestions, month);
 
   const prev = shiftBudgetMonth(month.key, -1);

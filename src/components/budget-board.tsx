@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { TransactionAvatar } from "@/components/transaction-avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { BudgetMonth, BudgetProgress, BudgetTip } from "@/lib/budgets";
+import type { BudgetIncome, BudgetMonth, BudgetProgress, BudgetTip } from "@/lib/budgets";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -32,13 +32,13 @@ async function saveBudget(category: string, amount: number | null, id?: string) 
 // Category, then Budget, Actual and Remaining, the same on every row and header.
 const GRID = "grid grid-cols-[minmax(0,1fr)_6.5rem_5.5rem_5.5rem] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_8rem_7rem_7rem] sm:gap-3";
 
-function ColumnHeads({ title, first = "Budget" }: { title: string; first?: string }) {
+function ColumnHeads({ title, first = "Budget", last = "Remaining" }: { title: string; first?: string; last?: string }) {
   return (
     <div className={cn(GRID, "border-b border-border bg-muted/40 px-3 py-2 text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase sm:px-4")}>
       <span>{title}</span>
       <span className="text-right">{first}</span>
       <span className="text-right">Actual</span>
-      <span className="text-right">Remaining</span>
+      <span className="text-right">{last}</span>
     </div>
   );
 }
@@ -256,7 +256,7 @@ export function BudgetBoard({
   tips,
 }: {
   month: BudgetMonth;
-  income: { typical: number | null; actual: number };
+  income: BudgetIncome;
   rows: BudgetProgress[];
   unbudgeted: { category: string; label: string; amount: number }[];
   others: { category: string; label: string }[];
@@ -269,7 +269,7 @@ export function BudgetBoard({
   const budgeted = rows.reduce((s, p) => s + p.budget, 0);
   const spent = rows.reduce((s, p) => s + p.spent, 0);
   const unbudgetedSpent = unbudgeted.reduce((s, u) => s + u.amount, 0);
-  const leftToBudget = income.typical === null ? null : income.typical - budgeted;
+  const leftToBudget = income.expected === null ? null : income.expected - budgeted;
   const pace = month.isCurrent ? month.fraction : null;
   const expectedByNow = budgeted * month.fraction;
   const aheadBy = spent - expectedByNow;
@@ -279,24 +279,39 @@ export function BudgetBoard({
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="flex min-w-0 flex-col gap-4">
         <Card className="gap-0 overflow-hidden py-0">
-          <ColumnHeads title="Income" first="Typical" />
+          <ColumnHeads title="Income" first="Expected" last="Still expected" />
           <div className={cn(GRID, "px-3 pt-3 pb-2 sm:px-4")}>
-            <span className="text-base font-medium text-bone">Income</span>
-            <span className="text-right font-mono text-sm text-muted-foreground tabular-nums" title="The middle of your last six months' income">
-              {income.typical === null ? "—" : formatCurrency(income.typical, "USD")}
+            <span className="flex min-w-0 flex-col">
+              <span className="text-sm font-medium text-bone">Paychecks</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {income.expected === null ? "Shows once there's a full month of paychecks" : "Your usual month of pay, from your paycheck history"}
+              </span>
             </span>
-            <span className="text-right font-mono text-sm tabular-nums">{formatCurrency(income.actual, "USD")}</span>
-            {income.typical === null ? <span /> : <Remaining amount={income.typical - income.actual} income />}
+            <span className="text-right font-mono text-sm text-muted-foreground tabular-nums">
+              {income.expected === null ? "—" : formatCurrency(income.expected, "USD")}
+            </span>
+            <span className="text-right font-mono text-sm tabular-nums">{formatCurrency(income.paychecks, "USD")}</span>
+            {income.expected === null ? <span /> : <Remaining amount={income.stillExpected} income />}
           </div>
-          <div className="px-3 pb-3 sm:px-4">
-            {income.typical !== null && <UseLine used={income.typical > 0 ? income.actual / income.typical : 0} pace={null} tone="ok" />}
-            <p className="mt-2 text-xs text-muted-foreground">
-              {income.typical === null
-                ? "Your typical income shows once there's a full month of history."
-                : income.actual >= income.typical
-                  ? `You've brought in your typical month${income.actual > income.typical ? `, and ${whole(Math.round((income.actual - income.typical) * 100) / 100)} more` : ""}.`
-                  : `${whole(Math.round((income.typical - income.actual) * 100) / 100)} still to come in a typical month.`}
-            </p>
+          <div className="px-3 pb-2.5 sm:px-4">
+            {income.expected !== null && <UseLine used={income.paychecks / income.expected} pace={null} tone="ok" />}
+          </div>
+          <div className={cn(GRID, "border-t border-border px-3 py-2.5 sm:px-4")}>
+            <span className="flex min-w-0 flex-col">
+              <span className="text-sm text-bone">Extra income</span>
+              <span className="truncate text-xs text-muted-foreground">Refunds, transfers in, interest: counted when it lands, never assumed</span>
+            </span>
+            <span className="text-right font-mono text-sm text-muted-foreground">—</span>
+            <span className="text-right font-mono text-sm tabular-nums">{formatCurrency(income.extra, "USD")}</span>
+            <span />
+          </div>
+          <div className={cn(GRID, "border-t border-border bg-muted/40 px-3 py-2.5 sm:px-4")}>
+            <span className="text-sm font-semibold text-bone">Total income</span>
+            <span className="text-right font-mono text-sm font-semibold tabular-nums">{income.expected === null ? "—" : formatCurrency(income.expected, "USD")}</span>
+            <span className="text-right font-mono text-sm font-semibold tabular-nums">{formatCurrency(income.paychecks + income.extra, "USD")}</span>
+            <span className="text-right text-xs text-muted-foreground">
+              {income.expected === null ? "" : income.stillExpected > 0 ? (month.isCurrent ? "Paycheck to come" : "Paycheck missed") : "Paycheck in"}
+            </span>
           </div>
         </Card>
 
@@ -371,7 +386,7 @@ export function BudgetBoard({
         <Card className={cn("text-center", leftToBudget !== null && leftToBudget < 0 ? "border-oxblood/40" : "border-moss/30")}>
           <CardContent className="flex flex-col items-center gap-1 py-2">
             {leftToBudget === null ? (
-              <p className="text-sm text-muted-foreground">Left to budget shows once there&apos;s a full month of income history.</p>
+              <p className="text-sm text-muted-foreground">Left to budget shows once there&apos;s a full month of paychecks on record.</p>
             ) : (
               <>
                 <span className={cn("font-mono text-3xl font-semibold tabular-nums", leftToBudget < 0 ? "text-oxblood-text" : "text-moss")}>
@@ -382,7 +397,7 @@ export function BudgetBoard({
                   {leftToBudget < 0 ? "Budgeted beyond your income" : "Left to budget"}
                 </span>
                 <span className="mt-1 text-xs text-muted-foreground">
-                  {whole(Math.round(income.typical!))} typical income − {whole(Math.round(budgeted))} budgeted
+                  {whole(Math.round(income.expected!))} expected pay − {whole(Math.round(budgeted))} budgeted
                 </span>
               </>
             )}

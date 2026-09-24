@@ -15,7 +15,7 @@ export const REPORT_TABS = [
 export function ReportsTabs() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Reports" className="flex items-center gap-1 overflow-x-auto">
+    <nav aria-label="Reports" className="flex items-center gap-1 overflow-x-auto rounded-lg border border-border/70 bg-card/60 p-1">
       {REPORT_TABS.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
@@ -24,12 +24,14 @@ export function ReportsTabs() {
             href={tab.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "relative shrink-0 rounded-md px-3 py-1.5 text-sm transition-colors",
-              active ? "text-champagne" : "text-muted-foreground hover:bg-muted hover:text-bone"
+              "shrink-0 rounded-md px-3 py-1.5 text-sm transition-colors",
+              // The tab you're on is a filled champagne pill; the rest recede.
+              active
+                ? "bg-champagne/15 font-medium text-champagne ring-1 ring-champagne/35 ring-inset"
+                : "text-muted-foreground/80 hover:bg-muted hover:text-bone"
             )}
           >
             {tab.label}
-            {active && <span className="absolute inset-x-3 -bottom-0.5 h-px bg-champagne" aria-hidden />}
           </Link>
         );
       })}

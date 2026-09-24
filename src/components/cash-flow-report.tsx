@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { CalendarDays, ChartColumnStacked, LayoutDashboard } from "lucide-react";
-import { Bar, CartesianGrid, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -399,7 +399,6 @@ function truncate(text: string, width: number, perChar: number): string {
 
 // Money in wears income's green, as on the cards above (the sky blue is Travel's).
 const IN_COLOR = "var(--cat-income)";
-const KEPT_COLOR = "var(--champagne)";
 
 function OverTimeTooltip({
   active,
@@ -457,87 +456,42 @@ function Row({ label, value, className }: { label: string; value: number; classN
   );
 }
 
+const OUT_COLOR = "var(--oxblood)";
+
 /**
- * When money came in and went out: money in above the line, spending below
- * it stacked by category, and a line for what's been kept so far in the
- * period. A day at a time for up to two months, else a month at a time.
+ * When money came in and went out: a pair of bars for each day (a period up
+ * to two months) or month, money in beside money out. Hovering a pair lists
+ * each category and what's been kept so far in the period.
  */
 function OverTime({ data }: { data: CashFlowSeries }) {
-  const rows = data.buckets.map((b) => ({
-    ...b,
-    moneyIn: b.income,
-    ...Object.fromEntries(data.series.map((sr) => [sr.key, -(b.byCategory[sr.key] ?? 0)])),
-  }));
-  const bottom = data.series.at(-1)?.key;
+  const rows = data.buckets.map((b) => ({ ...b, moneyIn: b.income, moneyOut: Math.max(0, b.expenses) }));
   const daily = data.granularity === "day";
   return (
     <div className="flex flex-col gap-3">
-      <ResponsiveContainer {...CHART_RESIZE} width="100%" height={400}>
-        <ComposedChart data={rows} stackOffset="sign" margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barCategoryGap={daily ? "22%" : "28%"}>
+      <ResponsiveContainer {...CHART_RESIZE} width="100%" height={380}>
+        <BarChart data={rows} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barCategoryGap={daily ? "18%" : "24%"} barGap={2}>
           <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} minTickGap={daily ? 18 : 8} />
           <YAxis
-            yAxisId="flow"
-            tickFormatter={(v: number) => (v < 0 ? `−${formatCompactCurrency(-v, "USD")}` : formatCompactCurrency(v, "USD"))}
+            tickFormatter={(v: number) => formatCompactCurrency(v, "USD")}
             tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
             axisLine={false}
             tickLine={false}
             width={56}
           />
-          {/* What's been kept runs on its own scale, at the right, so a year's total doesn't flatten the bars. */}
-          <YAxis
-            yAxisId="kept"
-            orientation="right"
-            tickFormatter={(v: number) => (v < 0 ? `−${formatCompactCurrency(-v, "USD")}` : formatCompactCurrency(v, "USD"))}
-            tick={{ fontSize: 11, fill: KEPT_COLOR }}
-            axisLine={false}
-            tickLine={false}
-            width={56}
-          />
-          <ReferenceLine yAxisId="flow" y={0} stroke="var(--ash-grey)" strokeOpacity={0.5} />
           <Tooltip {...chartTooltipProps} cursor={{ fill: "var(--muted)", opacity: 0.45 }} content={<OverTimeTooltip data={data} />} />
-          <Bar yAxisId="flow" dataKey="moneyIn" name="Money in" stackId="flow" fill={IN_COLOR} fillOpacity={0.85} radius={[3, 3, 0, 0]} maxBarSize={daily ? 22 : 44} isAnimationActive={false} />
-          {data.series.map((sr) => (
-            <Bar
-              key={sr.key}
-              yAxisId="flow"
-              dataKey={sr.key}
-              name={sr.label}
-              stackId="flow"
-              fill={sr.color}
-              fillOpacity={0.85}
-              radius={sr.key === bottom ? [0, 0, 3, 3] : 0}
-              maxBarSize={daily ? 22 : 44}
-              isAnimationActive={false}
-            />
-          ))}
-          <Line
-            yAxisId="kept"
-            dataKey="keptSoFar"
-            name="Kept so far"
-            type={daily ? "stepAfter" : "linear"}
-            stroke={KEPT_COLOR}
-            strokeWidth={2}
-            dot={daily ? false : { r: 3, fill: "var(--card)", stroke: KEPT_COLOR, strokeWidth: 2 }}
-            activeDot={{ r: 4, fill: KEPT_COLOR }}
-            isAnimationActive={false}
-          />
-        </ComposedChart>
+          <Bar dataKey="moneyIn" name="Money in" fill={IN_COLOR} fillOpacity={0.9} radius={[3, 3, 0, 0]} maxBarSize={daily ? 14 : 36} isAnimationActive={false} />
+          <Bar dataKey="moneyOut" name="Money out" fill={OUT_COLOR} fillOpacity={0.9} radius={[3, 3, 0, 0]} maxBarSize={daily ? 14 : 36} isAnimationActive={false} />
+        </BarChart>
       </ResponsiveContainer>
       <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
         <li className="flex items-center gap-1.5">
           <span className="size-2 rounded-sm" style={{ backgroundColor: IN_COLOR }} />
           Money in
         </li>
-        {data.series.map((sr) => (
-          <li key={sr.key} className="flex items-center gap-1.5">
-            <span className="size-2 rounded-sm" style={{ backgroundColor: sr.color }} />
-            {sr.label}
-          </li>
-        ))}
         <li className="flex items-center gap-1.5">
-          <span className="h-0.5 w-4 rounded-full" style={{ backgroundColor: KEPT_COLOR }} />
-          Kept so far (right scale)
+          <span className="size-2 rounded-sm" style={{ backgroundColor: OUT_COLOR }} />
+          Money out
         </li>
       </ul>
     </div>
@@ -660,8 +614,8 @@ export function CashFlowFlows({ transactions, connectedCardIssuers }: { transact
             {chart === "flow" && " Point at a bar to follow its money."}
             {chart === "bars" &&
               (overTime?.granularity === "day"
-                ? " One bar a day: money in above the line, spending below it by category. The line is what you've kept so far this period."
-                : " One bar a month: money in above the line, spending below it by category. The line is what you've kept so far this period.")}
+                ? " A pair of bars a day: money in beside money out. Hover a day for its categories and what you've kept so far."
+                : " A pair of bars a month: money in beside money out. Hover a month for its categories and what you've kept so far.")}
           </p>
         </CardContent>
       </Card>

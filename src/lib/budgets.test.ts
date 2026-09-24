@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  budgetIncome,
   budgetMonth,
   budgetTips,
   incomeForMonth,
@@ -176,6 +177,20 @@ describe("budget months, income and tips", () => {
     expect(incomeForMonth(rows, "2026-06")).toBe(9000);
     expect(typicalIncome(rows, "2026-09")).toBe(3100);
     expect(typicalIncome([], "2026-09")).toBeNull();
+  });
+
+  it("counts on paychecks only: extras count when they land, and a paycheck in means nothing more is expected", () => {
+    const pay = (date: string) => ({ ...tx(date, -3050), pfc_detailed: "INCOME_WAGES", merchant_name: "United Mortgage Paycheck" });
+    const rows = [
+      tx("2026-05-02", -10, "INCOME"),
+      pay("2026-06-15"),
+      pay("2026-07-15"),
+      { ...tx("2026-07-20", -5095), merchant_name: "Invoice payment" }, // a one-off doesn't raise what's expected
+      pay("2026-08-15"),
+      { ...tx("2026-09-04", -99.91), merchant_name: "Zelle Transfer" },
+    ];
+    expect(budgetIncome(rows, "2026-09")).toEqual({ expected: 3050, paychecks: 0, extra: 99.91, stillExpected: 3050 });
+    expect(budgetIncome([...rows, pay("2026-09-15")], "2026-09")).toMatchObject({ paychecks: 3050, stillExpected: 0 });
   });
 
   it("puts what's over first, then what's on pace to go over, and offers budgets to set", () => {
