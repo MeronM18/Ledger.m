@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -10,16 +10,17 @@ import type { SpendingTransaction } from "@/lib/spending-aggregation";
 import { PERIOD_PRESETS, periodRange, rangeLabel } from "@/lib/spending-report";
 import { cn } from "@/lib/utils";
 
-// The diagram is laid out in a fixed box and scales to the card's width.
-const W = 1000;
-const H = 520;
-const NODE_W = 12;
-const PAD = 12; // between nodes in a column
+// The diagram is laid out at the card's own width (so text stays its real
+// size), never narrower than MIN_W, which scrolls on a phone.
+const MIN_W = 720;
+const H = 560;
+const NODE_W = 14;
+const PAD = 8; // between nodes in a column
 
 type Placed = FlowNode & { x: number; y: number; h: number };
 type Band = Flow & { sy: number; ty: number; h: number; source: string; target: string };
 
-function layout(nodes: FlowNode[], flows: Flow[]): { placed: Map<string, Placed>; bands: Band[] } {
+function layout(nodes: FlowNode[], flows: Flow[], W: number): { placed: Map<string, Placed>; bands: Band[] } {
   const columns = [0, 1, 2, 3].map((c) => nodes.filter((n) => n.column === c)).filter((c) => c.length > 0);
   const colX = (i: number) => (columns.length === 1 ? 0 : (i / (columns.length - 1)) * (W - NODE_W));
   // One scale for the columns up to the categories, so a dollar is the same
@@ -37,7 +38,7 @@ function layout(nodes: FlowNode[], flows: Flow[]): { placed: Map<string, Placed>
     if (col[0].column === 3) {
       // Finer categories sit beside their category, nudged down only to
       // clear the group above, so their flows run straight across.
-      const SUB_GAP = 3;
+      const SUB_GAP = 4;
       let bottom = -Infinity;
       let lastParent: string | undefined;
       for (const n of col) {
@@ -79,8 +80,55 @@ function bandPath(x0: number, x1: number, sy: number, ty: number, h: number): st
   return `M${x0} ${sy}C${mx} ${sy} ${mx} ${ty} ${x1} ${ty}L${x1} ${ty + h}C${mx} ${ty + h} ${mx} ${sy + h} ${x0} ${sy + h}Z`;
 }
 
+/** The width of an element, kept up to date as it resizes. */
+function useWidth(): [(el: HTMLDivElement | null) => void, number] {
+  const [width, setWidth] = useState(0);
+  const observe = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    setWidth(el.clientWidth);
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.round(entry.contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [observe, width];
+}
+
+const LINE = 17; // a label's line height
+type LabelFit = "full" | "name" | "none";
+
+/**
+ * How much of each label fits: name and amount, the name alone, or none,
+ * top to bottom down each column, so no two labels overlap. (Hovering a
+ * bar still names it.)
+ */
+function fitLabels(placed: Map<string, Placed>): Map<string, LabelFit> {
+  const fit = new Map<string, LabelFit>();
+  const byColumn = new Map<number, Placed[]>();
+  for (const n of placed.values()) byColumn.set(n.column, [...(byColumn.get(n.column) ?? []), n]);
+  for (const col of byColumn.values()) {
+    let lastBottom = -Infinity;
+    for (const n of [...col].sort((a, b) => a.y - b.y)) {
+      const cy = n.y + n.h / 2;
+      const full = { top: cy - LINE, bottom: cy + LINE };
+      const name = { top: cy - LINE / 2 - 2, bottom: cy + LINE / 2 };
+      if (full.top >= lastBottom + 2) {
+        fit.set(n.id, "full");
+        lastBottom = full.bottom;
+      } else if (name.top >= lastBottom + 2) {
+        fit.set(n.id, "name");
+        lastBottom = name.bottom;
+      } else fit.set(n.id, "none");
+    }
+  }
+  return fit;
+}
+
 function Sankey({ nodes, flows, base }: { nodes: FlowNode[]; flows: Flow[]; base: number }) {
-  const { placed, bands } = useMemo(() => layout(nodes, flows), [nodes, flows]);
+  const [measure, measured] = useWidth();
+  // The svg carries 4px of breathing room each side.
+  const W = Math.max(MIN_W, (measured || 1008) - 8);
+  const { placed, bands } = useMemo(() => layout(nodes, flows, W), [nodes, flows, W]);
+  const labels = useMemo(() => fitLabels(placed), [placed]);
   const [focus, setFocus] = useState<string | null>(null);
   const lastColumn = Math.max(...nodes.map((n) => n.column));
   const bottom = Math.max(H, ...Array.from(placed.values()).map((n) => n.y + n.h));
@@ -107,8 +155,8 @@ function Sankey({ nodes, flows, base }: { nodes: FlowNode[]; flows: Flow[]; base
   const bandLit = (b: Band) => lit === null || (lit.has(b.source) && lit.has(b.target));
 
   return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`-4 -4 ${W + 8} ${bottom + 8}`} className="h-auto w-full min-w-[720px]" role="img" aria-label="Where your money came from and went" onMouseLeave={() => setFocus(null)}>
+    <div ref={measure} className="overflow-x-auto">
+      <svg viewBox={`-4 -4 ${W + 8} ${bottom + 8}`} width={W + 8} height={bottom + 8} className="block max-w-none" role="img" aria-label="Where your money came from and went" onMouseLeave={() => setFocus(null)}>
         <defs>
           {bands.map((b, i) => (
             <linearGradient key={i} id={`flow-${i}`} x1="0" x2="1" y1="0" y2="0">
@@ -125,7 +173,7 @@ function Sankey({ nodes, flows, base }: { nodes: FlowNode[]; flows: Flow[]; base
               key={i}
               d={bandPath(s.x + NODE_W, t.x, b.sy, b.ty, b.h)}
               fill={`url(#flow-${i})`}
-              style={{ opacity: bandLit(b) ? (lit ? 0.5 : 0.28) : 0.06, transition: "opacity 200ms ease" }}
+              style={{ opacity: bandLit(b) ? (lit ? 0.62 : 0.4) : 0.07, transition: "opacity 200ms ease" }}
             />
           );
         })}
@@ -133,8 +181,9 @@ function Sankey({ nodes, flows, base }: { nodes: FlowNode[]; flows: Flow[]; base
           // Labels sit after the bar, except in the last columns, where they sit before it.
           const before = n.column >= 2 && (n.column === lastColumn || n.column === 3 || lastColumn === 3);
           const tx = before ? n.x - 8 : n.x + NODE_W + 8;
-          const showLabel = n.h >= 8;
-          const showAmount = n.h >= 24 || n.column <= 1;
+          const fit = labels.get(n.id) ?? "none";
+          const showLabel = fit !== "none";
+          const showAmount = fit === "full";
           const cy = n.y + n.h / 2;
           return (
             <g
@@ -144,15 +193,28 @@ function Sankey({ nodes, flows, base }: { nodes: FlowNode[]; flows: Flow[]; base
               style={{ opacity: isLit(n.id) ? 1 : 0.3, transition: "opacity 200ms ease" }}
             >
               <title>{`${n.label}: ${formatCurrency(n.amount, "USD")} (${((n.amount / base) * 100).toFixed(1)}%)`}</title>
-              <rect x={n.x} y={n.y} width={NODE_W} height={n.h} rx={2} fill={n.color} />
+              <rect x={n.x} y={n.y} width={NODE_W} height={n.h} rx={3} fill={n.color} />
               {/* A wider invisible target, so thin bars are easy to point at. */}
               <rect x={n.x - 6} y={n.y - 3} width={NODE_W + 12} height={n.h + 6} fill="transparent" />
               {showLabel && (
-                <text x={tx} y={showAmount ? cy - 3 : cy + 4} textAnchor={before ? "end" : "start"} className="fill-bone text-[13px]">
+                <text
+                  x={tx}
+                  y={showAmount ? cy - 4 : cy + 4}
+                  textAnchor={before ? "end" : "start"}
+                  // A halo in the card's color keeps a label readable where it crosses a flow.
+                  stroke="var(--card)"
+                  strokeOpacity={0.55}
+                  strokeWidth={2.25}
+                  strokeLinejoin="round"
+                  paintOrder="stroke"
+                  className="fill-bone/75 text-[12px]"
+                >
+                  {/* The name light, the amount bold beneath it. */}
                   {n.label}
                   {showAmount && (
-                    <tspan x={tx} dy={17} className="fill-muted-foreground font-mono text-[12px]">
-                      {formatCurrency(n.amount, "USD")} ({((n.amount / base) * 100).toFixed(1)}%)
+                    <tspan x={tx} dy={16} className="fill-bone text-[13px] font-semibold tabular-nums">
+                      {formatCurrency(n.amount, "USD")}
+                      <tspan className="fill-ash-grey font-normal"> ({((n.amount / base) * 100).toFixed(2)}%)</tspan>
                     </tspan>
                   )}
                 </text>

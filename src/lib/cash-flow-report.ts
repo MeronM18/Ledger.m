@@ -42,8 +42,9 @@ const MAX_CATEGORIES = 8;
 const MAX_SUBCATEGORIES = 4;
 
 const round = (n: number) => Math.round(n * 100) / 100;
-const INCOME_COLOR = "var(--cat-income)";
-const SAVINGS_COLOR = "var(--moss)";
+// Money coming in is teal, what's kept is green, like Monarch's.
+const INCOME_COLOR = "#2fa7c4";
+const SAVINGS_COLOR = "#5cb86a";
 
 /** "Restaurant" for FOOD_AND_DRINK_RESTAURANT: the finer category, without its parent's name. */
 export function detailedLabel(category: string, detailed: string | null | undefined): string | null {
@@ -57,6 +58,13 @@ function topWithRest(entries: [string, number][], max: number, restKey: string):
   if (sorted.length <= max) return sorted;
   const rest = sorted.slice(max - 1).reduce((s, [, v]) => s + v, 0);
   return [...sorted.slice(0, max - 1), [restKey, rest]];
+}
+
+/** Entries sharing a name (an "Other" and the rest folded into "Other") as one. */
+function mergeSame(entries: [string, number][]): [string, number][] {
+  const merged = new Map<string, number>();
+  for (const [k, v] of entries) merged.set(k, (merged.get(k) ?? 0) + v);
+  return Array.from(merged);
 }
 
 export function cashFlowReport(
@@ -83,7 +91,8 @@ export function cashFlowReport(
     const key = displayCategoryKey(t);
     const entry = byCategory.get(key) ?? { total: 0, sub: new Map<string, number>() };
     entry.total += t.amount;
-    const sub = detailedLabel(key, t.pfc_detailed) ?? (key === "OTHER" ? "Other" : humanizeCategory(key));
+    // A charge with no finer category (entered by hand, say) is its category's "Other".
+    const sub = detailedLabel(key, t.pfc_detailed) ?? "Other";
     entry.sub.set(sub, (entry.sub.get(sub) ?? 0) + t.amount);
     byCategory.set(key, entry);
   }
@@ -134,8 +143,8 @@ export function cashFlowReport(
 
     // Its finer categories, when there's more than the category itself.
     const sub = key === "__rest__" ? undefined : byCategory.get(key)?.sub;
-    const parts = sub ? topWithRest(Array.from(sub), MAX_SUBCATEGORIES, `Other ${label.toLowerCase()}`) : [];
-    if (parts.length > 1 || (parts.length === 1 && parts[0][0] !== label)) {
+    const parts = sub ? mergeSame(topWithRest(Array.from(sub), MAX_SUBCATEGORIES, "Other")) : [];
+    if (parts.length > 1 || (parts.length === 1 && parts[0][0] !== "Other")) {
       // Refunds inside the category come off its finer parts pro rata, so they add up to it.
       const partsTotal = parts.reduce((s, [, v]) => s + v, 0);
       for (const [subLabel, subAmount] of parts) {
