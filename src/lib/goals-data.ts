@@ -1,7 +1,8 @@
 import "server-only";
+import { accountName } from "@/lib/account-settings";
+import { loadAccountSettings } from "@/lib/ui-preferences";
 import type { AccountChoice, GoalRow } from "@/components/goals-manager";
 import { goalProgress } from "@/lib/goals";
-import { prettyName } from "@/lib/transaction-display";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { calendarNow } from "@/lib/time";
@@ -12,7 +13,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 export async function loadGoals(
   admin: AdminClient
 ): Promise<{ rows: GoalRow[]; accounts: AccountChoice[]; error: boolean }> {
-  const [{ data: goalRows, error: goalError }, { data: accountRows, error: accountError }, manual] = await Promise.all([
+  const [{ data: goalRows, error: goalError }, { data: accountRows, error: accountError }, manual, accountSettings] = await Promise.all([
     admin
       .from("savings_goals")
       .select("id, name, target_amount, saved_amount, target_date, account_refs")
@@ -20,11 +21,12 @@ export async function loadGoals(
     // Accounts a goal can follow: money you hold, not cards or loans.
     admin
       .from("accounts")
-      .select("id, name, mask, type, current_balance")
+      .select("id, name, official_name, mask, type, current_balance")
       .eq("is_hidden", false)
       .in("type", ["depository", "investment"])
       .order("name"),
     loadManualAccounts(admin),
+    loadAccountSettings(admin),
   ]);
 
   if (goalError) console.error("Failed to load savings goals", goalError);
@@ -44,7 +46,7 @@ export async function loadGoals(
   const accounts: AccountChoice[] = [
     ...(accountRows ?? []).map((a) => ({
       id: `plaid:${a.id}`,
-      label: `${prettyName(a.name as string)}${a.mask ? ` ••${a.mask}` : ""}`,
+      label: `${accountName({ name: a.name as string, official_name: a.official_name as string | null }, accountSettings[a.id as string])}${a.mask ? ` ••${a.mask}` : ""}`,
     })),
     ...manual.accounts
       .filter((a) => a.type === "depository")

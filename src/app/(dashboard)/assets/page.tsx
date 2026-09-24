@@ -12,7 +12,8 @@ import { computeNetWorth, isLiabilityAccount } from "@/lib/net-worth";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { prettyName } from "@/lib/transaction-display";
+import { accountName } from "@/lib/account-settings";
+import { loadAccountSettings } from "@/lib/ui-preferences";
 
 type AccountRow = {
   id: string;
@@ -36,10 +37,11 @@ export default async function AssetsPage() {
     { data: pricesData, error: pricesError },
     { data: snapshotsData, error: snapshotsError },
     { accounts: manualCards, error: manualCardsError },
+    accountSettings,
   ] = await Promise.all([
     admin
       .from("accounts")
-      .select("id, name, mask, type, subtype, current_balance, iso_currency_code")
+      .select("id, name, official_name, mask, type, subtype, current_balance, iso_currency_code")
       .eq("is_hidden", false)
       .order("name"),
     admin
@@ -53,6 +55,7 @@ export default async function AssetsPage() {
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
     loadManualAccounts(admin),
+    loadAccountSettings(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts", acctError);
@@ -165,7 +168,7 @@ export default async function AssetsPage() {
                       >
                         <div>
                           <p className="text-sm font-medium">
-                            {prettyName(a.name)}
+                            {accountName(a, accountSettings[a.id])}
                             {a.mask ? ` ••${a.mask}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -198,7 +201,7 @@ export default async function AssetsPage() {
                       >
                         <div>
                           <p className="text-sm font-medium">
-                            {prettyName(a.name)}
+                            {accountName(a, accountSettings[a.id])}
                             {a.mask ? ` ••${a.mask}` : ""}
                           </p>
                           <p className="text-xs text-muted-foreground">

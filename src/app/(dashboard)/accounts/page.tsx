@@ -17,7 +17,11 @@ import { AppleAccountCard, AppleEmptyCard, AppleImportButton, type AppleCard } f
 import { DragHandle, SortableCardList, type SortableCard } from "@/components/sortable-card-list";
 import { applyCardOrder } from "@/lib/card-order";
 import { loadManualAccounts } from "@/lib/manual-accounts";
-import { loadCardOrder } from "@/lib/ui-preferences";
+import { loadAccountSettings, loadCardOrder } from "@/lib/ui-preferences";
+import { accountName, type AccountSettings } from "@/lib/account-settings";
+import { AccountSettingsButton } from "@/components/account-settings-button";
+import { closeDayFor } from "@/lib/card-statements";
+import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prettyName } from "@/lib/transaction-display";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -57,12 +61,25 @@ function formatHistoryStart(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
-function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: string | null }) {
+type CloseDayGuess = { day: number; from: "payments" | "due-date" } | null;
+
+function InstitutionCard({
+  item,
+  earliestDate,
+  settings,
+  guesses,
+}: {
+  item: ItemRow;
+  earliestDate: string | null;
+  settings: AccountSettings;
+  // For each card with no closing day set, the day used in its place.
+  guesses: Record<string, CloseDayGuess>;
+}) {
   // Where past statements can go: checking first, then savings.
   const depository = item.accounts
     .filter((a) => a.type === "depository")
     .sort((a, b) => Number(b.subtype === "checking") - Number(a.subtype === "checking"))
-    .map((a) => ({ id: a.id, name: prettyName(a.name), mask: a.mask }));
+    .map((a) => ({ id: a.id, name: accountName(a, settings[a.id]), mask: a.mask }));
 
   return (
     <Card>
@@ -101,9 +118,9 @@ function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: 
             key={account.id}
             className="flex items-center justify-between border-t border-border pt-3 first:border-t-0 first:pt-0"
           >
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-medium">
-                {prettyName(account.name)}
+                {accountName(account, settings[account.id])}
                 {account.mask ? ` ••${account.mask}` : ""}
               </p>
               <p className="text-xs text-muted-foreground">
@@ -113,11 +130,22 @@ function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: 
                 {account.type === "credit" && account.credit_limit && account.current_balance !== null
                   ? ` · ${Math.round((Math.max(0, Number(account.current_balance)) / Number(account.credit_limit)) * 100)}% of ${formatCurrency(Number(account.credit_limit), account.iso_currency_code)} limit`
                   : ""}
+                {account.type === "credit" && statementDays(settings[account.id], guesses[account.id])}
               </p>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex shrink-0 items-center gap-1">
+              <AccountSettingsButton
+                accountId={account.id}
+                name={accountName(account, settings[account.id])}
+                bankName={prettyName(account.official_name ?? account.name)}
+                nickname={settings[account.id]?.nickname ?? null}
+                isCard={account.type === "credit"}
+                closeDay={settings[account.id]?.statementCloseDay ?? null}
+                dueDay={settings[account.id]?.paymentDueDay ?? null}
+                suggestedCloseDay={guesses[account.id] ?? null}
+              />
               {account.type === "depository" && account.subtype !== "checking" && (
-                <AccountApyButton accountId={account.id} name={prettyName(account.name)} apy={account.apy === null ? null : Number(account.apy)} />
+                <AccountApyButton accountId={account.id} name={accountName(account, settings[account.id])} apy={account.apy === null ? null : Number(account.apy)} />
               )}
               {account.current_balance === null ? (
                 <span className="font-mono text-sm text-muted-foreground">—</span>
@@ -140,11 +168,27 @@ function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: 
   );
 }
 
+function ordinal(n: number): string {
+  const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
+  return `${n}${s}`;
+}
+
+/** " · closes the 3rd · due the 28th" for a card, "about" when the closing day is a guess. */
+function statementDays(setting: AccountSettings[string] | undefined, guess: CloseDayGuess): string {
+  const close = setting?.statementCloseDay
+    ? ` · closes the ${ordinal(setting.statementCloseDay)}`
+    : guess
+      ? ` · closes about the ${ordinal(guess.day)}`
+      : "";
+  const due = setting?.paymentDueDay ? ` · due the ${ordinal(setting.paymentDueDay)}` : "";
+  return close + due;
+}
+
 export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
   const admin = createAdminClient();
-  const [{ data: items, error }, { data: txDates, error: txDatesError }, { accounts: manualCards }, savedOrder] = await Promise.all([
+  const [{ data: items, error }, { data: txDates, error: txDatesError }, { accounts: manualCards }, savedOrder, settings, ledger] = await Promise.all([
     admin
       .from("items")
       .select(
@@ -164,7 +208,17 @@ export default async function AccountsPage() {
     ),
     loadManualAccounts(admin),
     loadCardOrder(admin, "accounts"),
+    loadAccountSettings(admin),
+    loadLedger(admin),
   ]);
+
+  // The closing day each card uses when you haven't set one.
+  const guesses: Record<string, CloseDayGuess> = {};
+  for (const card of ledger.cards) {
+    if (card.closesAtMonthEnd || card.closeDay) continue;
+    const close = closeDayFor(card, ledger.transactions.filter((t) => t.account?.id === card.id));
+    if (close && (close.source === "payments" || close.source === "due-date")) guesses[card.id] = { day: close.day, from: close.source };
+  }
 
   if (error) {
     console.error("Failed to load accounts", error);
@@ -204,7 +258,7 @@ export default async function AccountsPage() {
         .filter((a) => a.type === "credit")
         .map((a) => ({
           id: a.id,
-          name: prettyName(a.name),
+          name: accountName(a, settings[a.id]),
           mask: a.mask,
           institution: item.institution_name,
           balance: a.current_balance === null ? null : Number(a.current_balance),
@@ -237,7 +291,9 @@ export default async function AccountsPage() {
       ...rows.map((item) => ({
         id: `item:${item.id}`,
         label: item.institution_name ?? "Unknown institution",
-        node: <InstitutionCard item={item} earliestDate={earliestDateByItem.get(item.id) ?? null} />,
+        node: (
+          <InstitutionCard item={item} earliestDate={earliestDateByItem.get(item.id) ?? null} settings={settings} guesses={guesses} />
+        ),
       })),
     ],
     (c) => c.id,

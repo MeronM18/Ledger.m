@@ -11,6 +11,9 @@ import {
 import { applyEditsToAll, type EditMeta, type MerchantRule } from "@/lib/transaction-edits";
 import { loadConnectedCardIssuers, loadManualAccounts, type ManualAccount } from "@/lib/manual-accounts";
 import { loadTransactionEdits, UNDEFINED_COLUMN } from "@/lib/transaction-edits-server";
+import { accountName } from "@/lib/account-settings";
+import type { Card } from "@/lib/card-statements";
+import { loadAccountSettings } from "@/lib/ui-preferences";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -34,8 +37,11 @@ export type Ledger = {
   // The spending-only view: transfers, income and pending removed, payments
   // to cards that aren't connected carved back in.
   spending: LedgerTransaction[];
-  // Connected accounts plus manual ones (Apple Card), for account filters.
+  // Connected accounts plus manual ones (Apple Card), for account filters,
+  // named as the user sees them (their own name, or the card's product name).
   accounts: LedgerAccountRef[];
+  // Credit cards, with what's known about their statements.
+  cards: Card[];
   manualAccounts: ManualAccount[];
   connectedCardIssuers: string[];
   rules: MerchantRule[];
@@ -80,7 +86,7 @@ function readManualTransactions(admin: AdminClient, withPaidBack: boolean) {
  * per component. Outside a render (a cron or webhook) it simply runs.
  */
 export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
-  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits] = await Promise.all([
+  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits, accountSettings] = await Promise.all([
     fetchAllRows((from, to) =>
       admin
         .from("transactions")
@@ -92,10 +98,11 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
         .range(from, to)
     ),
     readManualTransactions(admin, true),
-    admin.from("accounts").select("id, name, mask").order("name"),
+    admin.from("accounts").select("id, name, official_name, mask, type").order("name"),
     loadConnectedCardIssuers(admin),
     loadManualAccounts(admin),
     loadTransactionEdits(admin),
+    loadAccountSettings(admin),
   ]);
 
   // Before migration 0015 there's no paid-back column: read without it.
@@ -112,7 +119,17 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
   );
 
   // A many-to-one embed comes back as one object; the generated types say array.
-  const plaidRows = (txRes.data ?? []) as unknown as PlaidRow[];
+  const namedAccounts = (accountsRes.data ?? []).map((a) => ({
+    id: a.id as string,
+    name: accountName({ name: a.name as string, official_name: a.official_name as string | null }, accountSettings[a.id as string]),
+    mask: a.mask as string | null,
+    type: a.type as string,
+  }));
+  const accountById = new Map(namedAccounts.map((a) => [a.id, a]));
+  const plaidRows = ((txRes.data ?? []) as unknown as PlaidRow[]).map((t) => {
+    const named = t.account ? accountById.get(t.account.id) : undefined;
+    return named ? { ...t, account: { id: named.id, name: named.name, mask: named.mask } } : t;
+  });
   const plaid: LedgerTransaction[] = applyEditsToAll(plaidRows, edits.overrides, edits.rules).map((t) => ({
     ...t,
     isManual: false,
@@ -136,7 +153,21 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
   return {
     transactions,
     spending: filterSpendingTransactions(transactions, issuersRes.issuers) as LedgerTransaction[],
-    accounts: [...(accountsRes.data ?? []), ...manualAccountRefs.values()],
+    accounts: [...namedAccounts.map(({ id, name, mask }) => ({ id, name, mask })), ...manualAccountRefs.values()],
+    cards: [
+      ...namedAccounts
+        .filter((a) => a.type === "credit")
+        .map((a) => ({
+          id: a.id,
+          name: `${a.name}${a.mask ? ` ••${a.mask}` : ""}`,
+          closeDay: accountSettings[a.id]?.statementCloseDay ?? null,
+          dueDay: accountSettings[a.id]?.paymentDueDay ?? null,
+        })),
+      // Apple Card statements run from the 1st to the end of the month.
+      ...manualAccountsRes.accounts
+        .filter((a) => a.type === "credit")
+        .map((a) => ({ id: `manual:${a.id}`, name: a.name, closeDay: null, dueDay: null, closesAtMonthEnd: true })),
+    ],
     manualAccounts: manualAccountsRes.accounts,
     connectedCardIssuers: issuersRes.issuers,
     rules: edits.rules,

@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/money";
 import { formatCurrency } from "@/lib/format";
+import { CardPaymentButton, isCardPaymentRow } from "@/components/card-payment-dialog";
+import type { Card } from "@/lib/card-statements";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   accountLabel,
@@ -33,6 +35,7 @@ export type TransactionRow = {
   merchant_name: string | null;
   logo_url: string | null;
   pfc_primary: string | null;
+  pfc_detailed?: string | null;
   // Set by applyEditsToAll (src/lib/transaction-edits.ts) for Plaid rows.
   category_override?: string | null;
   notes?: string | null;
@@ -53,9 +56,12 @@ export type TransactionRow = {
 export function TransactionsExplorer({
   transactions,
   accounts,
+  cards = [],
 }: {
   transactions: TransactionRow[];
   accounts: AccountOption[];
+  // Credit cards, so a card payment can show what it paid for.
+  cards?: Card[];
 }) {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>("all");
@@ -296,6 +302,8 @@ export function TransactionsExplorer({
                     />
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center justify-end">
+                    {isCardPaymentRow(t, cards) && <CardPaymentButton payment={t} transactions={transactions} cards={cards} />}
                     {t.isManual && t.manualSource && (
                       <ManualTransactionRowActions transaction={t.manualSource} paidBack={t.paid_back ?? null} />
                     )}
@@ -319,6 +327,7 @@ export function TransactionsExplorer({
                         }}
                       />
                     )}
+                    </div>
                   </TableCell>
                 </TableRow>
               );

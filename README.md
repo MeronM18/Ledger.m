@@ -92,6 +92,7 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - Apple Card can't connect through Plaid, so its statement CSV (exported from Wallet) is imported instead: purchases are categorized and flow into spending, budgets, trends and subscriptions; the card has a balance, credit limit and utilization, and counts in net worth. Importing an overlapping statement again skips what's already there
 
 **Credit**
+- Click a card payment (from checking or on the card) to see what it paid for: the statement it went toward, every charge on it, what was paid toward it and whether it was paid in full. Payments are lined up by each card's statement closing day, which you can set (with the due day and a name like "Freedom Flex") on the Accounts page; until you do, it's worked out from past payments or the due date
 - Utilization per card and overall against each card's limit, with the amount to pay down to get under 30%; cards that report no limit are left out rather than counted as 0%
 
 **Net worth**

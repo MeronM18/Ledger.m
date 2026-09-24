@@ -16,7 +16,7 @@ export default async function TransactionsPage() {
         <QueryErrorState message="Couldn't load your transactions. Try refreshing the page." />
       ) : (
         <>
-          <TransactionsExplorer transactions={ledger.transactions} accounts={ledger.accounts} />
+          <TransactionsExplorer transactions={ledger.transactions} accounts={ledger.accounts} cards={ledger.cards} />
           <MerchantRulesManager rules={ledger.rules} />
         </>
       )}

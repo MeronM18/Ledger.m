@@ -54,7 +54,7 @@ export function buildFixtures(now = new Date()) {
 
   const accounts = [
     { id: IDS.checking, item_id: IDS.itemChase, plaid_account_id: "acc-checking", name: "Total Checking", official_name: "Chase Total Checking", mask: "1234", type: "depository", subtype: "checking", current_balance: 4210.55, available_balance: 4180.2, credit_limit: null, apy: null, iso_currency_code: "USD", is_hidden: false },
-    { id: IDS.freedom, item_id: IDS.itemChase, plaid_account_id: "acc-freedom", name: "Freedom Unlimited", official_name: null, mask: "7788", type: "credit", subtype: "credit card", current_balance: 842.13, available_balance: 7157.87, credit_limit: 8000, apy: null, iso_currency_code: "USD", is_hidden: false },
+    { id: IDS.freedom, item_id: IDS.itemChase, plaid_account_id: "acc-freedom", name: "CREDIT CARD", official_name: "Chase Freedom Flex", mask: "7788", type: "credit", subtype: "credit card", current_balance: 842.13, available_balance: 7157.87, credit_limit: 8000, apy: null, iso_currency_code: "USD", is_hidden: false },
     { id: IDS.momentum, item_id: IDS.itemFifth, plaid_account_id: "acc-momentum", name: "MOMENTUM CHECKING", official_name: null, mask: "5521", type: "depository", subtype: "checking", current_balance: 612.4, available_balance: 612.4, credit_limit: null, apy: null, iso_currency_code: "USD", is_hidden: false },
     { id: IDS.savings, item_id: IDS.itemAmex, plaid_account_id: "acc-savings", name: "High Yield Savings", official_name: null, mask: "0042", type: "depository", subtype: "savings", current_balance: 18250, available_balance: 18250, credit_limit: null, apy: 3.7, iso_currency_code: "USD", is_hidden: false },
   ];
@@ -99,7 +99,10 @@ export function buildFixtures(now = new Date()) {
     tx(at(18), IDS.freedom, 11.99, "SPOTIFY", "Spotify", "ENTERTAINMENT", "ENTERTAINMENT_MUSIC_AND_AUDIO");
     tx(at(28), IDS.checking, 19.99, "EDGE FITNESS", "Edge Fitness Club", "PERSONAL_CARE", "PERSONAL_CARE_GYMS_AND_FITNESS_CENTERS");
     tx(at(22), IDS.freedom, 9.99, "APPLE.COM/BILL", "iCloud+", "GENERAL_SERVICES", "GENERAL_SERVICES_OTHER_GENERAL_SERVICES");
-    tx(at(20), IDS.checking, 780 + between(0, 260), "CHASE CREDIT CRD AUTOPAY", "Chase", "LOAN_PAYMENTS", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT");
+    // The card payment, seen from checking and (a day later) on the card.
+    const cardPayment = 780 + between(0, 260);
+    tx(at(20), IDS.checking, cardPayment, "CHASE CREDIT CRD AUTOPAY", "Chase", "LOAN_PAYMENTS", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT");
+    tx(at(21), IDS.freedom, -cardPayment, "Payment Thank You-Mobile", null, "LOAN_PAYMENTS", "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT");
     if (m % 3 === 1) tx(at(11), IDS.freedom, between(30, 95), "CVS PHARMACY", "CVS Pharmacy", "MEDICAL", "MEDICAL_PHARMACIES_AND_SUPPLEMENTS");
     if (m % 6 === 4) tx(at(3), IDS.checking, 100, "AMERICAN RED CROSS", "American Red Cross", "GOVERNMENT_AND_NON_PROFIT", "GOVERNMENT_AND_NON_PROFIT_DONATIONS");
 

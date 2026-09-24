@@ -1,5 +1,7 @@
 import "server-only";
+import { cache } from "react";
 import { z } from "zod";
+import { resolveAccountSettings, type AccountSettings } from "@/lib/account-settings";
 import { resolveAlertSettings, type AlertSettings } from "@/lib/alert-settings";
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -34,3 +36,12 @@ export async function loadAlertSettings(admin: AdminClient): Promise<AlertSettin
   if (error) console.error("Failed to load alert settings", error);
   return resolveAlertSettings(data?.value);
 }
+
+export const ACCOUNT_SETTINGS_KEY = "account_settings";
+
+/** Names, statement closing days and due days you've set, by account id. */
+export const loadAccountSettings = cache(async function loadAccountSettings(admin: AdminClient): Promise<AccountSettings> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", ACCOUNT_SETTINGS_KEY).maybeSingle();
+  if (error) console.error("Failed to load account settings", error);
+  return resolveAccountSettings(data?.value);
+});
