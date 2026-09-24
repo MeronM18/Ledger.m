@@ -114,41 +114,57 @@ export function Sidebar({ defaultCollapsed = false }: { defaultCollapsed?: boole
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-border bg-background px-3 py-4 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:flex",
+        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-border bg-background px-3 pt-6 pb-4 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:flex",
         collapsed ? "w-16" : "w-56"
       )}
     >
-      <Link href="/" aria-label="Ledger.m" className="relative mb-6 flex h-8 items-center px-2">
-        <Wordmark
+      {/* The top row sits level with each page's title (both 24px down,
+          32px tall), so the sidebar and page read as one line across. */}
+      <div className="relative mb-6 h-8 shrink-0">
+        {/* Expanded: the wordmark, and the collapse button at the right. */}
+        <div
+          inert={collapsed}
           className={cn(
-            "text-2xl whitespace-nowrap transition-opacity",
+            "absolute inset-0 flex items-center justify-between gap-2 transition-opacity",
             collapsed ? "opacity-0 duration-100" : "opacity-100 delay-100 duration-300"
           )}
-        />
-        {/* Collapsed: the monogram, centered in the rail. */}
-        <span
-          aria-hidden
-          className={cn(
-            "absolute inset-0 flex items-center justify-center transition-opacity",
-            collapsed ? "opacity-100 delay-100 duration-300" : "pointer-events-none opacity-0 duration-100"
-          )}
         >
-          <Wordmark short className="text-xl" />
-        </span>
-      </Link>
-      <NavLinks collapsed={collapsed} />
-      <div className="mt-auto flex flex-col gap-1 border-t border-border pt-2">
+          <Link href="/" aria-label="Ledger.m" className="px-2">
+            <Wordmark className="text-2xl whitespace-nowrap" />
+          </Link>
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+            className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-ash-grey transition-colors hover:bg-muted hover:text-bone"
+          >
+            <PanelLeftClose className="size-4" aria-hidden />
+          </button>
+        </div>
+        {/* Collapsed: the monogram, which turns into the expand icon on hover. */}
         <button
           type="button"
           onClick={toggle}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          title={collapsed ? "Expand sidebar" : undefined}
-          className="flex w-full cursor-pointer items-center gap-3 overflow-hidden border-l-2 border-transparent py-2 pr-2 pl-2.5 text-sm font-medium whitespace-nowrap text-ash-grey transition-colors hover:text-bone"
+          inert={!collapsed}
+          aria-expanded={false}
+          aria-label="Expand sidebar"
+          title="Expand sidebar"
+          className={cn(
+            "group absolute inset-0 flex cursor-pointer items-center justify-center rounded-md transition-[opacity,background-color] hover:bg-muted",
+            collapsed ? "opacity-100 delay-100 duration-300" : "opacity-0 duration-100"
+          )}
         >
-          {collapsed ? <PanelLeftOpen className="size-4 shrink-0" aria-hidden /> : <PanelLeftClose className="size-4 shrink-0" aria-hidden />}
-          <RailLabel collapsed={collapsed}>Collapse</RailLabel>
+          <Wordmark short className="text-xl transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0" />
+          <PanelLeftOpen
+            className="absolute size-4 text-bone opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+            aria-hidden
+          />
         </button>
+      </div>
+      <NavLinks collapsed={collapsed} />
+      <div className="mt-auto border-t border-border pt-2">
         <SignOutButton collapsed={collapsed} />
       </div>
     </aside>
