@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Money } from "@/components/money";
+import { DragHandle } from "@/components/sortable-card-list";
 import { formatCurrency } from "@/lib/format";
 
 export type AppleCard = {
@@ -294,9 +295,8 @@ function DeleteButton({ card }: { card: AppleCard }) {
   );
 }
 
-export function AppleCardSection({ cards }: { cards: AppleCard[] }) {
-  const hasSavings = cards.some((c) => c.type === "depository");
-  const importButton = (
+export function AppleImportButton({ hasSavings }: { hasSavings: boolean }) {
+  return (
     <ImportDialog
       hasSavings={hasSavings}
       trigger={
@@ -307,95 +307,94 @@ export function AppleCardSection({ cards }: { cards: AppleCard[] }) {
       }
     />
   );
+}
 
-  if (cards.length === 0) {
-    return (
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-          <CardTitle>Apple Card and Apple Savings</CardTitle>
-          {importButton}
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Apple&apos;s accounts can&apos;t connect automatically. Import the CSV export from Wallet and they show up
-            everywhere: spending, categories, subscriptions, credit utilization and net worth.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
-
+/** Shown in place of the Apple accounts until a statement has been imported. */
+export function AppleEmptyCard() {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-medium text-muted-foreground">Apple accounts (imported from statements)</h2>
-        {importButton}
-      </div>
-      {cards.map((card) => {
-        const isCard = card.type === "credit";
-        const usedPct = isCard && card.creditLimit ? Math.round((Math.max(0, card.balance) / card.creditLimit) * 100) : null;
-        return (
-          <Card key={card.id}>
-            <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <CardTitle>{card.name}</CardTitle>
-                <p className="text-xs text-muted-foreground">
-                  {card.transactionCount} imported transactions
-                  {card.lastTransactionDate
-                    ? ` · latest ${new Date(`${card.lastTransactionDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
-                    : ""}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <EditDialog card={card} />
-                <DeleteButton card={card} />
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-wrap items-end justify-between gap-4">
-              {isCard ? (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs text-muted-foreground">Balance owed{card.hasBalanceOverride ? " (entered by you)" : ""}</p>
-                    <Money amount={Math.max(0, card.balance)} currency="USD" tone="negative" className="text-2xl font-semibold" />
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {card.creditLimit
-                      ? `${usedPct}% of ${formatCurrency(card.creditLimit, "USD")} limit`
-                      : "No credit limit set. Add one with the pencil to see utilization."}
-                  </p>
-                </>
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <DragHandle />
+          <CardTitle>Apple Card and Apple Savings</CardTitle>
+        </div>
+        <AppleImportButton hasSavings={false} />
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          Apple&apos;s accounts can&apos;t connect automatically. Import the CSV export from Wallet and they show up
+          everywhere: spending, categories, subscriptions, credit utilization and net worth.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+export function AppleAccountCard({ card }: { card: AppleCard }) {
+  const isCard = card.type === "credit";
+  const usedPct = isCard && card.creditLimit ? Math.round((Math.max(0, card.balance) / card.creditLimit) * 100) : null;
+  return (
+    <Card>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <DragHandle />
+          <div className="flex min-w-0 flex-col gap-1">
+            <CardTitle>{card.name}</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              Imported from statements · {card.transactionCount} transactions
+              {card.lastTransactionDate
+                ? ` · latest ${new Date(`${card.lastTransactionDate}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1">
+          <EditDialog card={card} />
+          <DeleteButton card={card} />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-end justify-between gap-4">
+        {isCard ? (
+          <>
+            <div className="flex flex-col gap-1">
+              <p className="text-xs text-muted-foreground">Balance owed{card.hasBalanceOverride ? " (entered by you)" : ""}</p>
+              <Money amount={Math.max(0, card.balance)} currency="USD" tone="negative" className="text-2xl font-semibold" />
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {card.creditLimit
+                ? `${usedPct}% of ${formatCurrency(card.creditLimit, "USD")} limit`
+                : "No credit limit set. Add one with the pencil to see utilization."}
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-col gap-1">
+              <p className="text-xs text-muted-foreground">Balance (entered by you)</p>
+              {card.balanceKnown ? (
+                <Money amount={card.balance} currency="USD" tone="positive" className="text-2xl font-semibold" />
               ) : (
-                <>
-                  <div className="flex flex-col gap-1">
-                    <p className="text-xs text-muted-foreground">Balance (entered by you)</p>
-                    {card.balanceKnown ? (
-                      <Money amount={card.balance} currency="USD" tone="positive" className="text-2xl font-semibold" />
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Not entered yet. Add it with the pencil so it counts in net worth.</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1 sm:items-end">
-                    {card.apy !== null && (
-                      <p className="text-sm">
-                        <span className="font-mono tabular-nums text-moss">{card.apy}% APY</span>
-                        {card.balanceKnown && card.balance > 0 && (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · about {formatCurrency((card.balance * card.apy) / 100 / 12, "USD")} a month in interest
-                          </span>
-                        )}
-                      </p>
-                    )}
-                    <p className="text-sm text-muted-foreground">
-                      {formatCurrency(card.earned, "USD")} earned in imported interest and Daily Cash
-                    </p>
-                  </div>
-                </>
+                <p className="text-sm text-muted-foreground">Not entered yet. Add it with the pencil so it counts in net worth.</p>
               )}
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+            </div>
+            <div className="flex flex-col gap-1 sm:items-end">
+              {card.apy !== null && (
+                <p className="text-sm">
+                  <span className="font-mono tabular-nums text-moss">{card.apy}% APY</span>
+                  {card.balanceKnown && card.balance > 0 && (
+                    <span className="text-muted-foreground">
+                      {" "}
+                      · about {formatCurrency((card.balance * card.apy) / 100 / 12, "USD")} a month in interest
+                    </span>
+                  )}
+                </p>
+              )}
+              <p className="text-sm text-muted-foreground">
+                {formatCurrency(card.earned, "USD")} earned in imported interest and Daily Cash
+              </p>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }

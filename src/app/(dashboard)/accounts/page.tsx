@@ -10,8 +10,11 @@ import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
 import { AccountApyButton } from "@/components/account-apy-button";
-import { AppleCardSection } from "@/components/apple-card-section";
+import { AppleAccountCard, AppleEmptyCard, AppleImportButton, type AppleCard } from "@/components/apple-account-cards";
+import { DragHandle, SortableCardList, type SortableCard } from "@/components/sortable-card-list";
+import { applyCardOrder } from "@/lib/card-order";
 import { loadManualAccounts } from "@/lib/manual-accounts";
+import { loadCardOrder } from "@/lib/ui-preferences";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { prettyName } from "@/lib/transaction-display";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
@@ -51,11 +54,74 @@ function formatHistoryStart(date: string): string {
   return new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
 }
 
+function InstitutionCard({ item, earliestDate }: { item: ItemRow; earliestDate: string | null }) {
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <DragHandle />
+          <div className="flex min-w-0 flex-col gap-1">
+            <CardTitle>{item.institution_name ?? "Unknown institution"}</CardTitle>
+            <p className="text-xs text-muted-foreground">
+              <LastSyncedLabel timestamp={item.last_synced_at} />
+              {" · "}
+              {earliestDate ? `History from ${formatHistoryStart(earliestDate)}` : "No transaction history yet"}
+              {item.error_code ? ` · ${item.error_code}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Badge variant={statusBadgeVariant(item.status)}>{item.status}</Badge>
+          <SyncNowButton itemId={item.id} />
+        </div>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {item.accounts.map((account) => (
+          <div
+            key={account.id}
+            className="flex items-center justify-between border-t border-border pt-3 first:border-t-0 first:pt-0"
+          >
+            <div>
+              <p className="text-sm font-medium">
+                {prettyName(account.name)}
+                {account.mask ? ` ••${account.mask}` : ""}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {account.type}
+                {account.subtype ? ` · ${account.subtype}` : ""}
+                {account.apy !== null ? ` · ${account.apy}% APY` : ""}
+                {account.type === "credit" && account.credit_limit && account.current_balance !== null
+                  ? ` · ${Math.round((Math.max(0, Number(account.current_balance)) / Number(account.credit_limit)) * 100)}% of ${formatCurrency(Number(account.credit_limit), account.iso_currency_code)} limit`
+                  : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              {account.type === "depository" && account.subtype !== "checking" && (
+                <AccountApyButton accountId={account.id} name={prettyName(account.name)} apy={account.apy === null ? null : Number(account.apy)} />
+              )}
+              {account.current_balance === null ? (
+                <span className="font-mono text-sm text-muted-foreground">—</span>
+              ) : (
+                <Money
+                  amount={account.current_balance}
+                  currency={account.iso_currency_code}
+                  tone={LIABILITY_TYPES.has(account.type) ? "negative" : "positive"}
+                  className="text-sm font-medium"
+                />
+              )}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
 export const metadata = { title: "Accounts" };
 
 export default async function AccountsPage() {
   const admin = createAdminClient();
-  const [{ data: items, error }, { data: txDates, error: txDatesError }, { accounts: manualCards }] = await Promise.all([
+  const [{ data: items, error }, { data: txDates, error: txDatesError }, { accounts: manualCards }, savedOrder] = await Promise.all([
     admin
       .from("items")
       .select(
@@ -74,6 +140,7 @@ export default async function AccountsPage() {
         .range(from, to)
     ),
     loadManualAccounts(admin),
+    loadCardOrder(admin, "accounts"),
   ]);
 
   if (error) {
@@ -123,12 +190,44 @@ export default async function AccountsPage() {
     ),
   ]);
 
+  const appleCards: AppleCard[] = manualCards.map((c) => ({
+    id: c.id,
+    type: c.type,
+    name: c.name,
+    balance: c.balance,
+    balanceKnown: c.balanceKnown,
+    earned: c.earned,
+    apy: c.apy,
+    creditLimit: c.credit_limit,
+    hasBalanceOverride: c.balance_override !== null,
+    balanceOverride: c.balance_override,
+    transactionCount: c.transactionCount,
+    lastTransactionDate: c.lastTransactionDate,
+  }));
+
+  // Every card below credit utilization, in the order the user dragged them into.
+  const cards: SortableCard[] = applyCardOrder(
+    [
+      ...(appleCards.length === 0
+        ? [{ id: "apple:empty", label: "Apple Card and Apple Savings", node: <AppleEmptyCard /> }]
+        : appleCards.map((card) => ({ id: `apple:${card.id}`, label: card.name, node: <AppleAccountCard card={card} /> }))),
+      ...rows.map((item) => ({
+        id: `item:${item.id}`,
+        label: item.institution_name ?? "Unknown institution",
+        node: <InstitutionCard item={item} earliestDate={earliestDateByItem.get(item.id) ?? null} />,
+      })),
+    ],
+    (c) => c.id,
+    savedOrder
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-2xl font-semibold text-bone">Accounts</h1>
         <div className="flex flex-wrap items-center gap-2">
           <SyncAllButton items={rows.map((item) => ({ id: item.id, institution_name: item.institution_name }))} />
+          {appleCards.length > 0 && <AppleImportButton hasSavings={appleCards.some((c) => c.type === "depository")} />}
           <PlaidLinkButton />
         </div>
       </div>
@@ -145,84 +244,7 @@ export default async function AccountsPage() {
 
           <CreditUtilizationCard summary={utilization} currency="USD" />
 
-          <AppleCardSection
-            cards={manualCards.map((c) => ({
-              id: c.id,
-              type: c.type,
-              name: c.name,
-              balance: c.balance,
-              balanceKnown: c.balanceKnown,
-              earned: c.earned,
-              apy: c.apy,
-              creditLimit: c.credit_limit,
-              hasBalanceOverride: c.balance_override !== null,
-              balanceOverride: c.balance_override,
-              transactionCount: c.transactionCount,
-              lastTransactionDate: c.lastTransactionDate,
-            }))}
-          />
-
-          <div className="flex flex-col gap-4">
-            {rows.map((item) => (
-              <Card key={item.id}>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div className="flex flex-col gap-1">
-                    <CardTitle>{item.institution_name ?? "Unknown institution"}</CardTitle>
-                    <p className="text-xs text-muted-foreground">
-                      <LastSyncedLabel timestamp={item.last_synced_at} />
-                      {" · "}
-                      {earliestDateByItem.has(item.id)
-                        ? `History from ${formatHistoryStart(earliestDateByItem.get(item.id)!)}`
-                        : "No transaction history yet"}
-                      {item.error_code ? ` · ${item.error_code}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={statusBadgeVariant(item.status)}>{item.status}</Badge>
-                    <SyncNowButton itemId={item.id} />
-                  </div>
-                </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  {item.accounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between border-t border-border pt-3 first:border-t-0 first:pt-0"
-                    >
-                      <div>
-                        <p className="text-sm font-medium">
-                          {prettyName(account.name)}
-                          {account.mask ? ` ••${account.mask}` : ""}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {account.type}
-                          {account.subtype ? ` · ${account.subtype}` : ""}
-                          {account.apy !== null ? ` · ${account.apy}% APY` : ""}
-                          {account.type === "credit" && account.credit_limit && account.current_balance !== null
-                            ? ` · ${Math.round((Math.max(0, Number(account.current_balance)) / Number(account.credit_limit)) * 100)}% of ${formatCurrency(Number(account.credit_limit), account.iso_currency_code)} limit`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                      {account.type === "depository" && account.subtype !== "checking" && (
-                        <AccountApyButton accountId={account.id} name={prettyName(account.name)} apy={account.apy === null ? null : Number(account.apy)} />
-                      )}
-                      {account.current_balance === null ? (
-                        <span className="font-mono text-sm text-muted-foreground">—</span>
-                      ) : (
-                        <Money
-                          amount={account.current_balance}
-                          currency={account.iso_currency_code}
-                          tone={LIABILITY_TYPES.has(account.type) ? "negative" : "positive"}
-                          className="text-sm font-medium"
-                        />
-                      )}
-                      </div>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <SortableCardList page="accounts" cards={cards} />
         </>
       )}
     </div>
