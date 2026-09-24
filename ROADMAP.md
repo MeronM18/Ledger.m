@@ -131,3 +131,17 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [x] APY can be entered for connected savings accounts (the Amex savings), shown on the Accounts page
 - [x] Migration `0013_goal_accounts_and_apy.sql` (idempotent; existing single-account goals carry over)
 - [x] 3 new tests (177 total)
+
+## Income, alerts, review and tests (branch `feat/income-and-more`)
+- [x] One shared transaction loader (`loadLedger`) for every page, request-scoped with React's cache(): the overview no longer reads every transaction twice, manual transactions are paged
+- [x] Income page for commission pay: lowest month as the baseline, this month against it, year so far, average/median, swing, kept after spending, chart, sources, paychecks, every month, recent deposits
+- [x] Reconnect a bank that needs signing in again (Plaid update mode); plain-language statuses; a disconnected bank leads Needs your attention; LOGIN_REPAIRED handled
+- [x] Unusual-charge alerts, bank sign-in alerts, a monthly summary push, and a Settings page to switch each kind of push off
+- [x] Full backup download (JSON, no secrets)
+- [x] Year in review with tax-time totals
+- [x] Welcome animation on a full load
+- [x] Browser tests against a mock Supabase, and a CI workflow
+- [x] Migration `0014_ui_preferences.sql` (from the card-order work) also holds the alert settings (**must be applied**)
+- [ ] Not verified against live data: the Plaid Link update-mode window itself (needs real Plaid), the monthly summary's first real send on the 1st
+- [ ] Noticed: Plaid logs "link-initialize.js embedded more than once" on the Accounts page in development, from the existing Connect account button (not new)
+

@@ -63,8 +63,13 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 - CSV export of exactly the currently-filtered set, not always the full history, manual entries clearly marked
 
 **Income**
-- Income-by-source breakdown (paycheck vs. everything else)
-- Monthly income-vs-spending comparison
+- Built for commission pay, so nothing is forecast. Instead: the lowest month in the last year as a baseline to budget around, this month against it, and whether a month that slow would still cover your usual spending
+- The year so far (against the same stretch of last year), the average and median month, how much income swings, and how much is kept after spending
+- A 12-month chart with spending over it, where the money came from, paycheck details (last, average, largest, how often), every month in a table and recent deposits
+- Income-by-source and income-vs-spending on the overview
+
+**Year in review**
+- A page per year: in, out and kept against the year before, best and hardest months, spending by category, top merchants, the biggest one-off purchases, and totals for tax time (income by source, interest, donations, medical spending)
 
 **Subscriptions**
 - Plaid's recurring-transaction detection plus manually-tracked subscriptions, one unified view
@@ -107,7 +112,13 @@ Visit `http://localhost:3000` and sign in with the one email address set in `ALL
 
 **Notifications**
 - Push notifications (via ntfy) fire on new transactions synced through a webhook, so a card swipe shows up on a phone before the receipt does; a debit of $250 or more is labeled as a large charge
-- Alerts for a category over (or 80% of) its budget, a subscription renewing within three days, a subscription charging more than usual, and a checking/savings balance under $100. Each fires once per situation, is kept in a recent-alerts list on the overview, and is checked after every sync and once a day
+- Alerts for a category over (or 80% of) its budget, a subscription renewing within three days, a subscription charging more than usual, a checking/savings balance under $100, an unusual charge (well above what that merchant usually costs), and a bank that needs signing in again. Each fires once per situation, is kept in a recent-alerts list on the overview, and is checked after every sync and once a day
+- A monthly summary push in the first days of each month: what came in and went out, the net worth change, and how the budgets did
+- Every kind of push can be switched off on the Settings page
+
+**Settings and backup**
+- Download everything as one JSON file: transactions with your edits, rules, manual entries, subscriptions, budgets, goals, assets, net worth history and settings. Bank access tokens are never included
+- A bank that logs out gets a Reconnect button that signs in again through Plaid without losing its accounts or history
 
 ## Security
 
@@ -130,7 +141,7 @@ Paranoid, for an app with exactly one user? Maybe. But that user's real bank acc
 
 ## Testing
 
-`npm test` runs a unit suite (Vitest) over the pure money and date logic: spending and income aggregation, net worth, subscription dates, the paginated-read helper, and the Eastern-time helpers. Every change also goes through `npm run lint` and `npm run build`, then gets verified against the real, live, connected accounts before it's considered done: real transaction history, real subscription list, real net worth. The suite covers the calculations; the live check covers everything that depends on real Plaid data.
+`npm test` runs a unit suite (Vitest) over the pure money and date logic: spending and income aggregation, net worth, subscription dates, alerts, the year in review, the paginated-read helper, and the Eastern-time helpers. `npm run test:e2e` runs browser tests (Playwright) of every page against a mock Supabase in `e2e/`, seeded with 14 months of believable data, so they need no database or secrets; `npm run e2e:serve` runs the app on that data to look around. GitHub Actions runs lint, types, unit and browser tests on every push and pull request. Every change also goes through `npm run lint` and `npm run build`, then gets verified against the real, live, connected accounts before it's considered done: real transaction history, real subscription list, real net worth. The suite covers the calculations; the live check covers everything that depends on real Plaid data.
 
 ## Contribution Guidelines
 
