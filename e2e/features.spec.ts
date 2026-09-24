@@ -36,6 +36,13 @@ test("reports: spending narrows to a category, and its totals match the list", a
   await page.getByRole("radio", { name: "Bars" }).click();
   await expect(page.getByText("Spending by merchant")).toBeVisible();
   await expect(count).toHaveText(String(all));
+
+  // Over time is one total a month, so there's no grouping to pick.
+  await page.getByRole("radio", { name: "Change over time" }).click();
+  await expect(page.getByText("Spending over time")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Group by" })).toHaveCount(0);
+  await page.getByRole("radio", { name: "Total amounts" }).click();
+  await expect(page.getByRole("combobox", { name: "Group by" })).toBeVisible();
 });
 
 test("reports: cash flow shows where the money came from and went", async ({ page }) => {

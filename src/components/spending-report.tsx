@@ -511,20 +511,23 @@ export function SpendingReport({
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-              Spending by {by}
+              {view === "total" ? `Spending by ${by}` : "Spending over time"}
             </p>
             <p className="text-base font-medium text-bone">{rangeLabel(range, today, months.length > 0 ? `${months[months.length - 1].value}-01` : null)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={by} onValueChange={(v) => changeBy(v as BreakdownBy)}>
-              <SelectTrigger size="sm" aria-label="Group by" className="min-w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" align="end">
-                <SelectItem value="category">By category</SelectItem>
-                <SelectItem value="merchant">By merchant</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* Over time is one total a month, so there's nothing to group by. */}
+            {view === "total" && (
+              <Select value={by} onValueChange={(v) => changeBy(v as BreakdownBy)}>
+                <SelectTrigger size="sm" aria-label="Group by" className="min-w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent position="popper" align="end">
+                  <SelectItem value="category">By category</SelectItem>
+                  <SelectItem value="merchant">By merchant</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Segmented
               label="Show"
               value={view}
