@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  PanelLeftClose,
-  PanelLeftOpen,
+  ChevronLeft,
   LayoutDashboard,
   ArrowLeftRight,
   RefreshCcw,
@@ -103,70 +102,80 @@ export function NavLinks({ onNavigate, collapsed = false }: { onNavigate?: () =>
  */
 export function Sidebar({ defaultCollapsed = false }: { defaultCollapsed?: boolean }) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const toggle = () => setCollapsed((c) => !c);
 
-  function toggle() {
-    const next = !collapsed;
-    setCollapsed(next);
-    document.cookie = `${SIDEBAR_COOKIE}=${next ? "collapsed" : "open"}; path=/; max-age=31536000; samesite=lax`;
-  }
+  useEffect(() => {
+    document.cookie = `${SIDEBAR_COOKIE}=${collapsed ? "collapsed" : "open"}; path=/; max-age=31536000; samesite=lax`;
+  }, [collapsed]);
+
+  // ⌘\ (Ctrl+\ elsewhere) toggles it from anywhere.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "\\") {
+        e.preventDefault();
+        setCollapsed((c) => !c);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   return (
-    <aside
-      data-collapsed={collapsed}
-      className={cn(
-        "sticky top-0 hidden h-screen shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-border bg-background px-3 pt-6 pb-4 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] md:flex",
-        collapsed ? "w-16" : "w-56"
-      )}
-    >
-      {/* The top row sits level with each page's title (both 24px down,
-          32px tall), so the sidebar and page read as one line across. */}
-      <div className="relative mb-6 h-8 shrink-0">
-        {/* Expanded: the wordmark, and the collapse button at the right. */}
-        <div
-          inert={collapsed}
-          className={cn(
-            "absolute inset-0 flex items-center justify-between gap-2 transition-opacity",
-            collapsed ? "opacity-0 duration-100" : "opacity-100 delay-100 duration-300"
-          )}
-        >
-          <Link href="/" aria-label="Ledger.m" className="px-2">
-            <Wordmark className="text-2xl whitespace-nowrap" />
-          </Link>
-          <button
-            type="button"
-            onClick={toggle}
-            aria-expanded
-            aria-label="Collapse sidebar"
-            title="Collapse sidebar"
-            className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-ash-grey transition-colors hover:bg-muted hover:text-bone"
-          >
-            <PanelLeftClose className="size-4" aria-hidden />
-          </button>
-        </div>
-        {/* Collapsed: the monogram, which turns into the expand icon on hover. */}
-        <button
-          type="button"
-          onClick={toggle}
-          inert={!collapsed}
-          aria-expanded={false}
-          aria-label="Expand sidebar"
-          title="Expand sidebar"
-          className={cn(
-            "group absolute inset-0 flex cursor-pointer items-center justify-center rounded-md transition-[opacity,background-color] hover:bg-muted",
-            collapsed ? "opacity-100 delay-100 duration-300" : "opacity-0 duration-100"
-          )}
-        >
-          <Wordmark short className="text-xl transition-opacity group-hover:opacity-0 group-focus-visible:opacity-0" />
-          <PanelLeftOpen
-            className="absolute size-4 text-bone opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-            aria-hidden
+    // The handle sits on the sidebar's edge, half outside it, so it lives
+    // in this wrapper rather than in the sidebar (which clips its overflow
+    // to hide labels while it slides).
+    <div className="sticky top-0 z-20 hidden h-screen shrink-0 md:flex">
+      <aside
+        data-collapsed={collapsed}
+        className={cn(
+          "flex h-full flex-col overflow-x-hidden overflow-y-auto border-r border-border bg-background px-3 pt-6 pb-4 transition-[width] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+          collapsed ? "w-16" : "w-56"
+        )}
+      >
+        {/* The top row sits level with each page's title (both 24px down,
+            32px tall), so the sidebar and page read as one line across. */}
+        <Link href="/" aria-label="Ledger.m" className="relative mb-6 flex h-8 shrink-0 items-center px-2">
+          <Wordmark
+            className={cn(
+              "text-2xl whitespace-nowrap transition-opacity",
+              collapsed ? "opacity-0 duration-100" : "opacity-100 delay-100 duration-300"
+            )}
           />
-        </button>
-      </div>
-      <NavLinks collapsed={collapsed} />
-      <div className="mt-auto border-t border-border pt-2">
-        <SignOutButton collapsed={collapsed} />
-      </div>
-    </aside>
+          {/* Collapsed: the monogram, centered in the rail. */}
+          <span
+            aria-hidden
+            className={cn(
+              "absolute inset-0 flex items-center justify-center transition-opacity",
+              collapsed ? "opacity-100 delay-100 duration-300" : "opacity-0 duration-100"
+            )}
+          >
+            <Wordmark short className="text-xl" />
+          </span>
+        </Link>
+        <NavLinks collapsed={collapsed} />
+        <div className="mt-auto border-t border-border pt-2">
+          <SignOutButton collapsed={collapsed} />
+        </div>
+      </aside>
+      {/* One control in one place, open or collapsed: a small round handle
+          on the sidebar's edge, in the gap under the logo (clear of the
+          monogram when collapsed). Its chevron turns as the sidebar slides. */}
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        title={`${collapsed ? "Expand" : "Collapse"} sidebar (⌘\\)`}
+        className="absolute top-14 -right-3 inline-flex size-6 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-ash-grey shadow-sm shadow-black/40 transition-colors hover:border-champagne/60 hover:text-bone focus-visible:border-champagne focus-visible:outline-none"
+      >
+        <ChevronLeft
+          className={cn(
+            "size-3.5 transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+            collapsed && "rotate-180"
+          )}
+          aria-hidden
+        />
+      </button>
+    </div>
   );
 }
