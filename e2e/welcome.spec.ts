@@ -8,8 +8,8 @@ test("the welcome animation plays on a full load, clears itself and doesn't repl
   await expect(overlay).toHaveCount(1);
   await expect(overlay).toHaveCount(0, { timeout: 6_000 });
 
-  await page.getByRole("link", { name: "Income" }).first().click();
-  await expect(page.getByRole("heading", { level: 1, name: "Income" })).toBeVisible();
+  await page.getByRole("link", { name: "Reports" }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "Reports" })).toBeVisible();
   await expect(overlay).toHaveCount(0);
 });
 
