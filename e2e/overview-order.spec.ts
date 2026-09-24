@@ -14,9 +14,13 @@ test("overview cards can be rearranged, and the order is kept", async ({ page })
   await page.getByRole("button", { name: "Move Net worth" }).first().focus();
   await page.keyboard.press("Space");
   await expect(page.locator(".border-dashed")).toHaveCount(1);
-  await page.keyboard.press("ArrowDown");
-  // The grid rearranges live, before the drop.
-  await expect.poll(async () => (await gripLabels(page)).slice(0, 2)).toEqual(["Needs your attention", "Net worth"]);
+  // The grid rearranges live, before the drop. dnd-kit starts listening for
+  // arrows a tick after the lift, and one that lands before then only
+  // scrolls the page, so press again, but only while the card hasn't moved.
+  await expect(async () => {
+    if ((await gripLabels(page))[0] === "Net worth") await page.keyboard.press("ArrowDown");
+    expect((await gripLabels(page)).slice(0, 2)).toEqual(["Needs your attention", "Net worth"]);
+  }).toPass({ intervals: [250, 500, 1000] });
   await page.keyboard.press("Space");
   await expect(page.locator(".border-dashed")).toHaveCount(0);
   await expect.poll(async () => (await gripLabels(page)).slice(0, 2)).toEqual(["Needs your attention", "Net worth"]);
