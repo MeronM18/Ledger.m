@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bankSigninAlerts, unusualChargeAlerts } from "@/lib/alerts-logic";
+import { highUtilizationAlerts } from "@/lib/alerts-logic";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 
@@ -82,5 +83,37 @@ describe("monthlySummary", () => {
     expect(monthlySummary(all, spending, budgets, snaps, "2027-01-02")).toBeNull();
     const dec = [{ ...charge("2026-12-05", 20) }];
     expect(monthlySummary(dec, dec, [], [], "2027-01-02")?.month).toBe("2026-12");
+  });
+});
+
+describe("highUtilizationAlerts", () => {
+  const card = (utilization: number) => ({
+    id: "c1",
+    label: "Sapphire Preferred ••4657",
+    balance: 8000 * utilization,
+    limit: 8000,
+    utilization,
+    band: "fair" as const,
+    payDownToGood: Math.max(0, 8000 * utilization - 2400),
+    payDownToExcellent: 0,
+  });
+
+  it("says nothing under 30%", () => {
+    expect(highUtilizationAlerts([card(0.29)], "2026-09", "USD")).toEqual([]);
+  });
+
+  it("names the card, the share used, and what to pay to get under 30%", () => {
+    const [a] = highUtilizationAlerts([card(0.34)], "2026-09", "USD");
+    expect(a).toMatchObject({
+      kind: "high-utilization",
+      key: "high-utilization:c1:2026-09:30",
+      title: "Sapphire Preferred ••4657 is at 34% of its limit",
+      body: "$2,720.00 of $8,000.00 used. Paying $320.00 brings it under 30%.",
+    });
+  });
+
+  it("alerts again at 50%, once a month at each level", () => {
+    expect(highUtilizationAlerts([card(0.55)], "2026-09", "USD")[0].key).toBe("high-utilization:c1:2026-09:50");
+    expect(highUtilizationAlerts([card(0.55)], "2026-10", "USD")[0].key).toBe("high-utilization:c1:2026-10:50");
   });
 });

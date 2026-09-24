@@ -8,6 +8,7 @@ import {
   Bell,
   CalendarClock,
   CalendarRange,
+  CreditCard,
   FileUp,
   Landmark,
   Receipt,
@@ -31,6 +32,7 @@ const KIND: Record<string, { Icon: LucideIcon; className: string }> = {
   "price-increase": { Icon: TrendingUp, className: "text-champagne" },
   "unusual-charge": { Icon: Receipt, className: "text-champagne" },
   "large-charge": { Icon: Receipt, className: "text-champagne" },
+  "high-utilization": { Icon: CreditCard, className: "text-champagne" },
   transaction: { Icon: ArrowLeftRight, className: "text-muted-foreground" },
   "monthly-summary": { Icon: CalendarRange, className: "text-moss" },
 };

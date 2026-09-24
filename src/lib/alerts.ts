@@ -3,6 +3,7 @@ import { ALERT_THRESHOLDS } from "@/lib/config";
 import {
   bankSigninAlerts,
   budgetAlerts,
+  highUtilizationAlerts,
   lowBalanceAlerts,
   priceIncreaseAlerts,
   renewalAlerts,
@@ -11,11 +12,13 @@ import {
   type RenewalCandidate,
 } from "@/lib/alerts-logic";
 import type { AlertSettings } from "@/lib/alert-settings";
+import { accountName } from "@/lib/account-settings";
+import { summarizeUtilization } from "@/lib/credit-utilization";
 import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
-import { loadAlertSettings } from "@/lib/ui-preferences";
+import { loadAccountSettings, loadAlertSettings } from "@/lib/ui-preferences";
 import { budgetProgress } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
 import { effectiveNextDate } from "@/lib/subscription-insights";
@@ -95,7 +98,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts] = await Promise.all([
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings] = await Promise.all([
     loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
@@ -110,12 +113,13 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       .eq("is_active", true),
     admin
       .from("accounts")
-      .select("id, name, mask, type, available_balance, current_balance")
+      .select("id, name, official_name, mask, type, available_balance, current_balance, credit_limit, item:items(institution_name)")
       .eq("is_hidden", false),
     admin.from("items").select("id, institution_name, status, error_code"),
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
     loadAlertSettings(admin),
     loadManualAccounts(admin),
+    loadAccountSettings(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -224,6 +228,27 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
         currency
       )
     );
+  }
+
+  if (accountsRes.error || manualAccounts.error) {
+    console.error("Skipping card utilization alerts: load failed");
+  } else {
+    const utilization = summarizeUtilization([
+      ...manualAccounts.accounts
+        .filter((c) => c.type === "credit")
+        .map((c) => ({ id: `manual:${c.id}`, name: c.name, mask: c.mask, institution: c.institution_name, balance: c.balance, limit: c.credit_limit })),
+      ...(accountsRes.data ?? [])
+        .filter((a) => a.type === "credit")
+        .map((a) => ({
+          id: a.id as string,
+          name: accountName({ name: a.name as string, official_name: a.official_name as string | null }, accountSettings[a.id as string]),
+          mask: a.mask as string | null,
+          institution: (a.item as unknown as { institution_name: string | null } | null)?.institution_name ?? null,
+          balance: a.current_balance === null ? null : Number(a.current_balance),
+          limit: a.credit_limit === null ? null : Number(a.credit_limit),
+        })),
+    ]);
+    alerts.push(...highUtilizationAlerts(utilization.cards, now.isoDate.slice(0, 7), currency));
   }
 
   if (manualAccounts.error) {

@@ -1,4 +1,5 @@
 import type { BudgetProgress } from "@/lib/budgets";
+import { GOOD_UTILIZATION, type CardUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 import { hasLapsed, hasPriceIncrease, isWithinNextDays, projectNextOccurrence } from "@/lib/subscriptions-aggregation";
@@ -17,7 +18,8 @@ export type AlertKind =
   | "unusual-charge"
   | "bank-signin"
   | "monthly-summary"
-  | "import-reminder";
+  | "import-reminder"
+  | "high-utilization";
 
 export type Alert = { key: string; kind: AlertKind; title: string; body: string };
 
@@ -154,6 +156,28 @@ export function lowBalanceAlerts(
         },
       ];
     });
+}
+
+/**
+ * A card using 30% or more of its limit (the common guideline for credit
+ * scores), and again at 50%. Once per card per month at each level, so a
+ * card that stays high isn't a daily nag; paying it down and running it up
+ * again next month tells you again.
+ */
+export function highUtilizationAlerts(cards: CardUtilization[], monthKey: string, currency: string): Alert[] {
+  return cards.flatMap((c) => {
+    if (c.utilization < GOOD_UTILIZATION) return [];
+    const level = c.utilization >= 0.5 ? 50 : 30;
+    const pct = Math.round(c.utilization * 100);
+    return [
+      {
+        key: `high-utilization:${c.id}:${monthKey}:${level}`,
+        kind: "high-utilization" as const,
+        title: `${c.label} is at ${pct}% of its limit`,
+        body: `${formatCurrency(c.balance, currency)} of ${formatCurrency(c.limit, currency)} used. Paying ${formatCurrency(c.payDownToGood, currency)} brings it under 30%.`,
+      },
+    ];
+  });
 }
 
 // An unusual charge: well above what that merchant normally costs you, with
