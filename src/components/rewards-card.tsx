@@ -27,11 +27,13 @@ function BalanceDialog({ card, trigger }: { card: CardRewards; trigger: React.Re
   const [pending, setPending] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const cash = card.unit === "cash";
+
   async function save() {
-    const a = Number(available.replace(/,/g, ""));
+    const a = Number(available.replace(/[$,]/g, ""));
     const p = pending.trim() === "" ? 0 : Number(pending.replace(/,/g, ""));
     if (!Number.isFinite(a) || a < 0 || !Number.isFinite(p) || p < 0) {
-      toast.error("Enter the available and pending points as numbers");
+      toast.error(cash ? "Enter this year's Daily Cash as a number" : "Enter the available and pending points as numbers");
       return;
     }
     setSaving(true);
@@ -42,11 +44,11 @@ function BalanceDialog({ card, trigger }: { card: CardRewards; trigger: React.Re
         body: JSON.stringify({ rewards_balance: { available: a, pending: p } }),
       });
       if (!res.ok) throw new Error();
-      toast.success(`${card.name}'s points are updated`);
+      toast.success(cash ? `${card.name}'s Daily Cash is updated` : `${card.name}'s points are updated`);
       setOpen(false);
       router.refresh();
     } catch {
-      toast.error("Couldn't save the points");
+      toast.error(cash ? "Couldn't save the Daily Cash" : "Couldn't save the points");
     } finally {
       setSaving(false);
     }
@@ -66,12 +68,20 @@ function BalanceDialog({ card, trigger }: { card: CardRewards; trigger: React.Re
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>{card.name} points</DialogTitle>
+          <DialogTitle>{cash ? `${card.name} Daily Cash` : `${card.name} points`}</DialogTitle>
           <DialogDescription>
-            Banks don&apos;t share points balances, so copy them from the Chase app (Ultimate Rewards). Purchases after today are added as
-            estimates until you update it again.
+            {cash
+              ? "Statements don't show every bit of Daily Cash (promotions, partner merchants), so copy this year's total from Wallet: Apple Card → Daily Cash."
+              : "Banks don't share points balances, so copy them from the Chase app (Ultimate Rewards)."}{" "}
+            Purchases after today are added as estimates until you update it again.
           </DialogDescription>
         </DialogHeader>
+        {cash ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor={`avail-${card.accountId}`}>Daily Cash this year</Label>
+            <Input id={`avail-${card.accountId}`} inputMode="decimal" value={available} onChange={(e) => setAvailable(e.target.value)} placeholder="155.28" />
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor={`avail-${card.accountId}`}>Available</Label>
@@ -82,9 +92,10 @@ function BalanceDialog({ card, trigger }: { card: CardRewards; trigger: React.Re
             <Input id={`pending-${card.accountId}`} inputMode="numeric" value={pending} onChange={(e) => setPending(e.target.value)} placeholder="2,030" />
           </div>
         </div>
+        )}
         <DialogFooter>
           <Button onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save points"}
+            {saving ? "Saving…" : cash ? "Save Daily Cash" : "Save points"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -129,10 +140,17 @@ function RewardsRow({ card }: { card: CardRewards }) {
               <span className="font-mono text-xl font-semibold text-bone tabular-nums">+{pts(card.thisYear)}</span>
               <span className="text-xs text-muted-foreground">points earned this year</span>
             </>
+          ) : b ? (
+            <>
+              <span className="font-mono text-xl font-semibold text-bone tabular-nums">{formatCurrency(b.total, "USD")}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                Daily Cash{b.since > 0 ? ` · incl. ~${formatCurrency(b.since, "USD")} since ${shortDate(b.asOf)}` : ` · as of ${shortDate(b.asOf)}`}
+              </span>
+            </>
           ) : (
             <>
-              <span className="font-mono text-xl font-semibold text-bone tabular-nums">{formatCurrency(card.thisYear, "USD")}</span>
-              <span className="text-xs text-muted-foreground">Daily Cash this year</span>
+              <span className="font-mono text-xl font-semibold text-bone tabular-nums">~{formatCurrency(card.thisYear, "USD")}</span>
+              <span className="text-xs text-muted-foreground">Daily Cash this year, estimated</span>
             </>
           )}
         </div>
@@ -145,7 +163,7 @@ function RewardsRow({ card }: { card: CardRewards }) {
           <Stat value={`$${Math.round(b.total / 100).toLocaleString("en-US")}`} label="As cash" />
         </div>
       )}
-      {points && !b && (
+      {!b && (
         <BalanceDialog
           card={card}
           trigger={
@@ -154,7 +172,7 @@ function RewardsRow({ card }: { card: CardRewards }) {
               className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-champagne/35 px-3 py-2 text-xs text-champagne transition-colors hover:border-champagne/60 hover:bg-champagne/[0.06]"
             >
               <Plus className="size-3.5" aria-hidden />
-              Add your balance from the Chase app
+              {points ? "Add your balance from the Chase app" : "Add this year's Daily Cash from Wallet"}
             </button>
           }
         />
@@ -164,13 +182,13 @@ function RewardsRow({ card }: { card: CardRewards }) {
         <span className="whitespace-nowrap text-muted-foreground">
           <span className="font-mono text-champagne tabular-nums">+{points ? pts(card.thisMonth) : formatCurrency(card.thisMonth, "USD")}</span> this month
         </span>
-        {points && b && (
+        {b && (
           <BalanceDialog
             card={card}
             trigger={
               <button type="button" className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-bone">
                 <Pencil className="size-3" aria-hidden />
-                Update balance
+                {points ? "Update balance" : "Update"}
               </button>
             }
           />
@@ -215,11 +233,11 @@ function RewardsRow({ card }: { card: CardRewards }) {
           {card.quarter && (
             <p className="text-muted-foreground">5% categories run until {shortDate(card.quarter.ends)}. Activate each quarter in the Chase app.</p>
           )}
-          {points && (
-            <p className="text-muted-foreground">
-              Estimates go by each purchase&apos;s category at the card&apos;s rates; your balance also counts bonuses, transfers and redemptions.
-            </p>
-          )}
+          <p className="text-muted-foreground">
+            {points
+              ? "Estimates go by each purchase's category at the card's rates; your balance also counts bonuses, transfers and redemptions."
+              : "Estimated from imported statements: 3% at Apple and its partners, 2% for the rest (as Apple Pay). Wallet's total also counts promotions and months not imported."}
+          </p>
         </div>
       )}
     </li>
@@ -233,6 +251,12 @@ function Stat({ value, label }: { value: string; label: string }) {
       <span className="text-[10px] tracking-[0.08em] text-muted-foreground uppercase">{label}</span>
     </div>
   );
+}
+
+/** What a card's rewards are worth in dollars (points at 1¢), so points and Daily Cash can be ranked together. */
+function worth(card: CardRewards): number {
+  const amount = card.balance ? card.balance.total : card.thisYear;
+  return card.unit === "points" ? amount / 100 : amount;
 }
 
 /**
@@ -249,7 +273,7 @@ export function RewardsCard({ cards }: { cards: CardRewards[] }) {
       </CardHeader>
       <CardContent>
         <ul className="flex flex-col gap-4">
-          {cards.map((c) => (
+          {[...cards].sort((a, b) => worth(b) - worth(a)).map((c) => (
             <RewardsRow key={c.accountId} card={c} />
           ))}
         </ul>

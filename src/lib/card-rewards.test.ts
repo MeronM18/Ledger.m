@@ -167,6 +167,22 @@ describe("rewardsSummary", () => {
     // Only the Sep 20 dinner (3x on $50) came after Sep 15.
     expect(csp.balance).toEqual({ available: 125045, pending: 2030, asOf: "2026-09-15", since: 150, total: 127225 });
   });
+
+  it("counts Daily Cash entered this year, and drops last year's", () => {
+    const txs = [tx("apple", "2026-09-20", 100, "Apple Store", "GENERAL_MERCHANDISE", "GENERAL_MERCHANDISE_ELECTRONICS")];
+    const programs = new Map([["apple", "apple-card" as ProgramId]]);
+    const { rewards, bonusSpend } = rewardsFor(txs, programs);
+    const summary = (asOf: string) =>
+      rewardsSummary(
+        [{ accountId: "apple", name: "Apple Card", program: "apple-card", balance: { available: 155.28, pending: 0, asOf } }],
+        txs.map((t) => ({ accountId: t.accountId, date: t.date, reward: rewards.get(t.id) })),
+        Object.fromEntries(bonusSpend),
+        "2026-09-24"
+      )[0];
+    // $3 back on $100 at Apple, after the Sep 15 entry.
+    expect(summary("2026-09-15").balance).toEqual({ available: 155.28, pending: 0, asOf: "2026-09-15", since: 3, total: 158.28 });
+    expect(summary("2025-12-20").balance).toBeNull();
+  });
 });
 
 describe("programForAccount", () => {

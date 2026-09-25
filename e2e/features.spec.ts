@@ -276,6 +276,12 @@ test("rewards: card purchases show what they earned, and Accounts adds it up", a
   await expect(rewards.getByText("125,045", { exact: true })).toBeVisible();
   await rewards.getByRole("button", { name: "Details" }).first().click();
   await expect(rewards.getByText(/^5% categories run until /)).toBeVisible();
+
+  // Apple Card's Daily Cash comes from Wallet the same way, to the cent.
+  await rewards.getByRole("button", { name: /Daily Cash from Wallet/ }).click();
+  await page.getByRole("dialog").getByLabel("Daily Cash this year").fill("155.28");
+  await page.getByRole("dialog").getByRole("button", { name: "Save Daily Cash" }).click();
+  await expect(rewards.getByText("$155.28")).toBeVisible();
 });
 
 test("assets: a vehicle counts from the date it's given, and a new value keeps the old one as history", async ({ page }) => {

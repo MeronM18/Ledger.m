@@ -365,9 +365,11 @@ export function rewardsSummary(
     let thisYear = 0;
     // Purchases after the day the balance was read aren't in it yet.
     let since = 0;
-    if (c.balance) {
+    // Daily Cash is entered as this year's total, so last year's entry no longer applies.
+    const entered = c.balance && (unit === "points" || c.balance.asOf.slice(0, 4) === year) ? c.balance : null;
+    if (entered) {
       for (const t of transactions) {
-        if (t.accountId === c.accountId && t.reward && t.date > c.balance.asOf && t.date <= todayIso) since += t.reward.earned;
+        if (t.accountId === c.accountId && t.reward && t.date > entered.asOf && t.date <= todayIso) since += t.reward.earned;
       }
     }
     const byWhy = new Map<string, number>();
@@ -381,9 +383,11 @@ export function rewardsSummary(
     const q = quarterOf(todayIso);
     const qEndMonth = Number(q.slice(-1)) * 3;
     const ends = new Date(Date.UTC(Number(year), qEndMonth, 0)).toISOString().slice(0, 10);
-    const { balance: entered, ...card } = c;
     return {
-      ...card,
+      accountId: c.accountId,
+      name: c.name,
+      mask: c.mask,
+      program: c.program,
       unit,
       balance: entered
         ? {

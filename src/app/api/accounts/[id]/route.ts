@@ -37,8 +37,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const admin = createAdminClient();
-  const { data: account } = await admin.from("accounts").select("id").eq("id", id).maybeSingle();
-  if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  // A card you import statements for (Apple Card) is "manual:<id>": only its
+  // own settings, like its rewards, apply; the rest are a connected account's.
+  const manualId = id.startsWith("manual:") ? id.slice(7) : null;
+  if (manualId) {
+    if (parsed.data.is_hidden !== undefined || parsed.data.apy !== undefined) {
+      return NextResponse.json({ error: "Not for an imported card" }, { status: 400 });
+    }
+    const { data: manual } = await admin.from("manual_accounts").select("id").eq("id", manualId).maybeSingle();
+    if (!manual) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  } else {
+    const { data: account } = await admin.from("accounts").select("id").eq("id", id).maybeSingle();
+    if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+  }
 
   if (parsed.data.is_hidden !== undefined) {
     const { error } = await admin.from("accounts").update({ is_hidden: parsed.data.is_hidden }).eq("id", id);
@@ -74,7 +85,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       rewardsBalance:
         rewards_balance === undefined
           ? (current.rewardsBalance ?? null)
-          : rewards_balance && { available: Math.round(rewards_balance.available), pending: Math.round(rewards_balance.pending), asOf: calendarNow().isoDate },
+          : rewards_balance && {
+              // To the cent: points come in whole, Daily Cash in dollars and cents.
+              available: Math.round(rewards_balance.available * 100) / 100,
+              pending: Math.round(rewards_balance.pending * 100) / 100,
+              asOf: calendarNow().isoDate,
+            },
     };
     const { error } = await admin.from("ui_preferences").upsert({ key: ACCOUNT_SETTINGS_KEY, value: all }, { onConflict: "key" });
     if (error) {
