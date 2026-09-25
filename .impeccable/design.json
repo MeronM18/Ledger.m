@@ -1,0 +1,593 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-25T14:42:39.473Z",
+  "title": "Design System: Ledger.m",
+  "extensions": {
+    "colorMeta": {
+      "onyx": {
+        "role": "neutral",
+        "displayName": "Onyx",
+        "canonical": "#0a0a0b",
+        "tonalRamp": [
+          "oklch(15.0% 0.002 286.1)",
+          "oklch(27.0% 0.002 286.1)",
+          "oklch(39.0% 0.002 286.1)",
+          "oklch(51.0% 0.002 286.1)",
+          "oklch(63.0% 0.002 286.1)",
+          "oklch(75.0% 0.002 286.1)",
+          "oklch(86.0% 0.002 286.1)",
+          "oklch(95.0% 0.002 286.1)"
+        ]
+      },
+      "smoke": {
+        "role": "neutral",
+        "displayName": "Smoke",
+        "canonical": "#141416",
+        "tonalRamp": [
+          "oklch(15.0% 0.004 286.0)",
+          "oklch(27.0% 0.004 286.0)",
+          "oklch(39.0% 0.004 286.0)",
+          "oklch(51.0% 0.004 286.0)",
+          "oklch(63.0% 0.004 286.0)",
+          "oklch(75.0% 0.004 286.0)",
+          "oklch(86.0% 0.004 286.0)",
+          "oklch(95.0% 0.004 286.0)"
+        ]
+      },
+      "charcoal": {
+        "role": "neutral",
+        "displayName": "Charcoal",
+        "canonical": "#1c1c1f",
+        "tonalRamp": [
+          "oklch(15.0% 0.006 285.9)",
+          "oklch(27.0% 0.006 285.9)",
+          "oklch(39.0% 0.006 285.9)",
+          "oklch(51.0% 0.006 285.9)",
+          "oklch(63.0% 0.006 285.9)",
+          "oklch(75.0% 0.006 285.9)",
+          "oklch(86.0% 0.006 285.9)",
+          "oklch(95.0% 0.006 285.9)"
+        ]
+      },
+      "slate-ash": {
+        "role": "neutral",
+        "displayName": "Slate Ash",
+        "canonical": "#2a2a2e",
+        "tonalRamp": [
+          "oklch(15.0% 0.007 285.9)",
+          "oklch(27.0% 0.007 285.9)",
+          "oklch(39.0% 0.007 285.9)",
+          "oklch(51.0% 0.007 285.9)",
+          "oklch(63.0% 0.007 285.9)",
+          "oklch(75.0% 0.007 285.9)",
+          "oklch(86.0% 0.007 285.9)",
+          "oklch(95.0% 0.007 285.9)"
+        ]
+      },
+      "bone": {
+        "role": "neutral",
+        "displayName": "Bone",
+        "canonical": "#edebe6",
+        "tonalRamp": [
+          "oklch(15.0% 0.007 88.6)",
+          "oklch(27.0% 0.007 88.6)",
+          "oklch(39.0% 0.007 88.6)",
+          "oklch(51.0% 0.007 88.6)",
+          "oklch(63.0% 0.007 88.6)",
+          "oklch(75.0% 0.007 88.6)",
+          "oklch(86.0% 0.007 88.6)",
+          "oklch(95.0% 0.007 88.6)"
+        ]
+      },
+      "ash-grey": {
+        "role": "neutral",
+        "displayName": "Ash Grey",
+        "canonical": "#9a9690",
+        "tonalRamp": [
+          "oklch(15.0% 0.010 78.3)",
+          "oklch(27.0% 0.010 78.3)",
+          "oklch(39.0% 0.010 78.3)",
+          "oklch(51.0% 0.010 78.3)",
+          "oklch(63.0% 0.010 78.3)",
+          "oklch(75.0% 0.010 78.3)",
+          "oklch(86.0% 0.010 78.3)",
+          "oklch(95.0% 0.010 78.3)"
+        ]
+      },
+      "champagne": {
+        "role": "primary",
+        "displayName": "Champagne",
+        "canonical": "#c9bfa8",
+        "tonalRamp": [
+          "oklch(15.0% 0.033 87.3)",
+          "oklch(27.0% 0.033 87.3)",
+          "oklch(39.0% 0.033 87.3)",
+          "oklch(51.0% 0.033 87.3)",
+          "oklch(63.0% 0.033 87.3)",
+          "oklch(75.0% 0.033 87.3)",
+          "oklch(86.0% 0.033 87.3)",
+          "oklch(95.0% 0.033 87.3)"
+        ]
+      },
+      "moss": {
+        "role": "secondary",
+        "displayName": "Moss",
+        "canonical": "#8c9b7a",
+        "tonalRamp": [
+          "oklch(15.0% 0.050 127.6)",
+          "oklch(27.0% 0.050 127.6)",
+          "oklch(39.0% 0.050 127.6)",
+          "oklch(51.0% 0.050 127.6)",
+          "oklch(63.0% 0.050 127.6)",
+          "oklch(75.0% 0.050 127.6)",
+          "oklch(86.0% 0.050 127.6)",
+          "oklch(95.0% 0.050 127.6)"
+        ]
+      },
+      "oxblood": {
+        "role": "tertiary",
+        "displayName": "Oxblood",
+        "canonical": "#9b5548",
+        "tonalRamp": [
+          "oklch(15.0% 0.096 31.6)",
+          "oklch(27.0% 0.096 31.6)",
+          "oklch(39.0% 0.096 31.6)",
+          "oklch(51.0% 0.096 31.6)",
+          "oklch(63.0% 0.096 31.6)",
+          "oklch(75.0% 0.096 31.6)",
+          "oklch(86.0% 0.096 31.6)",
+          "oklch(95.0% 0.096 31.6)"
+        ]
+      },
+      "oxblood-text": {
+        "role": "tertiary",
+        "displayName": "Oxblood Text",
+        "canonical": "#c47a6b",
+        "tonalRamp": [
+          "oklch(15.0% 0.096 32.2)",
+          "oklch(27.0% 0.096 32.2)",
+          "oklch(39.0% 0.096 32.2)",
+          "oklch(51.0% 0.096 32.2)",
+          "oklch(63.0% 0.096 32.2)",
+          "oklch(75.0% 0.096 32.2)",
+          "oklch(86.0% 0.096 32.2)",
+          "oklch(95.0% 0.096 32.2)"
+        ]
+      },
+      "cat-food": {
+        "role": "category",
+        "displayName": "Food",
+        "canonical": "#d6955e",
+        "tonalRamp": [
+          "oklch(15.0% 0.106 60.2)",
+          "oklch(27.0% 0.106 60.2)",
+          "oklch(39.0% 0.106 60.2)",
+          "oklch(51.0% 0.106 60.2)",
+          "oklch(63.0% 0.106 60.2)",
+          "oklch(75.0% 0.106 60.2)",
+          "oklch(86.0% 0.106 60.2)",
+          "oklch(95.0% 0.106 60.2)"
+        ]
+      },
+      "cat-shopping": {
+        "role": "category",
+        "displayName": "Shopping",
+        "canonical": "#8fa6dc",
+        "tonalRamp": [
+          "oklch(15.0% 0.083 266.5)",
+          "oklch(27.0% 0.083 266.5)",
+          "oklch(39.0% 0.083 266.5)",
+          "oklch(51.0% 0.083 266.5)",
+          "oklch(63.0% 0.083 266.5)",
+          "oklch(75.0% 0.083 266.5)",
+          "oklch(86.0% 0.083 266.5)",
+          "oklch(95.0% 0.083 266.5)"
+        ]
+      },
+      "cat-transport": {
+        "role": "category",
+        "displayName": "Transport",
+        "canonical": "#6fb3a4",
+        "tonalRamp": [
+          "oklch(15.0% 0.073 178.5)",
+          "oklch(27.0% 0.073 178.5)",
+          "oklch(39.0% 0.073 178.5)",
+          "oklch(51.0% 0.073 178.5)",
+          "oklch(63.0% 0.073 178.5)",
+          "oklch(75.0% 0.073 178.5)",
+          "oklch(86.0% 0.073 178.5)",
+          "oklch(95.0% 0.073 178.5)"
+        ]
+      },
+      "cat-travel": {
+        "role": "category",
+        "displayName": "Travel",
+        "canonical": "#7fbcd6",
+        "tonalRamp": [
+          "oklch(15.0% 0.073 226.6)",
+          "oklch(27.0% 0.073 226.6)",
+          "oklch(39.0% 0.073 226.6)",
+          "oklch(51.0% 0.073 226.6)",
+          "oklch(63.0% 0.073 226.6)",
+          "oklch(75.0% 0.073 226.6)",
+          "oklch(86.0% 0.073 226.6)",
+          "oklch(95.0% 0.073 226.6)"
+        ]
+      },
+      "cat-entertainment": {
+        "role": "category",
+        "displayName": "Entertainment",
+        "canonical": "#ab93d6",
+        "tonalRamp": [
+          "oklch(15.0% 0.099 300.3)",
+          "oklch(27.0% 0.099 300.3)",
+          "oklch(39.0% 0.099 300.3)",
+          "oklch(51.0% 0.099 300.3)",
+          "oklch(63.0% 0.099 300.3)",
+          "oklch(75.0% 0.099 300.3)",
+          "oklch(86.0% 0.099 300.3)",
+          "oklch(95.0% 0.099 300.3)"
+        ]
+      },
+      "cat-personal-care": {
+        "role": "category",
+        "displayName": "Personal Care",
+        "canonical": "#d196bf",
+        "tonalRamp": [
+          "oklch(15.0% 0.089 338.2)",
+          "oklch(27.0% 0.089 338.2)",
+          "oklch(39.0% 0.089 338.2)",
+          "oklch(51.0% 0.089 338.2)",
+          "oklch(63.0% 0.089 338.2)",
+          "oklch(75.0% 0.089 338.2)",
+          "oklch(86.0% 0.089 338.2)",
+          "oklch(95.0% 0.089 338.2)"
+        ]
+      },
+      "cat-medical": {
+        "role": "category",
+        "displayName": "Medical",
+        "canonical": "#db8a8f",
+        "tonalRamp": [
+          "oklch(15.0% 0.099 15.8)",
+          "oklch(27.0% 0.099 15.8)",
+          "oklch(39.0% 0.099 15.8)",
+          "oklch(51.0% 0.099 15.8)",
+          "oklch(63.0% 0.099 15.8)",
+          "oklch(75.0% 0.099 15.8)",
+          "oklch(86.0% 0.099 15.8)",
+          "oklch(95.0% 0.099 15.8)"
+        ]
+      },
+      "cat-services": {
+        "role": "category",
+        "displayName": "Services",
+        "canonical": "#93a1b3",
+        "tonalRamp": [
+          "oklch(15.0% 0.031 254.7)",
+          "oklch(27.0% 0.031 254.7)",
+          "oklch(39.0% 0.031 254.7)",
+          "oklch(51.0% 0.031 254.7)",
+          "oklch(63.0% 0.031 254.7)",
+          "oklch(75.0% 0.031 254.7)",
+          "oklch(86.0% 0.031 254.7)",
+          "oklch(95.0% 0.031 254.7)"
+        ]
+      },
+      "cat-government": {
+        "role": "category",
+        "displayName": "Government",
+        "canonical": "#a7ab8c",
+        "tonalRamp": [
+          "oklch(15.0% 0.043 113.5)",
+          "oklch(27.0% 0.043 113.5)",
+          "oklch(39.0% 0.043 113.5)",
+          "oklch(51.0% 0.043 113.5)",
+          "oklch(63.0% 0.043 113.5)",
+          "oklch(75.0% 0.043 113.5)",
+          "oklch(86.0% 0.043 113.5)",
+          "oklch(95.0% 0.043 113.5)"
+        ]
+      },
+      "cat-home": {
+        "role": "category",
+        "displayName": "Home",
+        "canonical": "#d2b36c",
+        "tonalRamp": [
+          "oklch(15.0% 0.097 86.6)",
+          "oklch(27.0% 0.097 86.6)",
+          "oklch(39.0% 0.097 86.6)",
+          "oklch(51.0% 0.097 86.6)",
+          "oklch(63.0% 0.097 86.6)",
+          "oklch(75.0% 0.097 86.6)",
+          "oklch(86.0% 0.097 86.6)",
+          "oklch(95.0% 0.097 86.6)"
+        ]
+      },
+      "cat-home-improvement": {
+        "role": "category",
+        "displayName": "Home Improvement",
+        "canonical": "#b39a78",
+        "tonalRamp": [
+          "oklch(15.0% 0.056 75.2)",
+          "oklch(27.0% 0.056 75.2)",
+          "oklch(39.0% 0.056 75.2)",
+          "oklch(51.0% 0.056 75.2)",
+          "oklch(63.0% 0.056 75.2)",
+          "oklch(75.0% 0.056 75.2)",
+          "oklch(86.0% 0.056 75.2)",
+          "oklch(95.0% 0.056 75.2)"
+        ]
+      },
+      "cat-income": {
+        "role": "category",
+        "displayName": "Income",
+        "canonical": "#9dbb7f",
+        "tonalRamp": [
+          "oklch(15.0% 0.088 129.9)",
+          "oklch(27.0% 0.088 129.9)",
+          "oklch(39.0% 0.088 129.9)",
+          "oklch(51.0% 0.088 129.9)",
+          "oklch(63.0% 0.088 129.9)",
+          "oklch(75.0% 0.088 129.9)",
+          "oklch(86.0% 0.088 129.9)",
+          "oklch(95.0% 0.088 129.9)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The one headline reading on a chart card, such as the pace against the budget."
+      },
+      "headline": {
+        "displayName": "Headline Figure",
+        "purpose": "Stat tile and panel lead figures; cents at 0.55em in bone 60%."
+      },
+      "title": {
+        "displayName": "Page Title",
+        "purpose": "Page titles and the Overview greeting."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Row names, card titles in ash grey, sentences."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Context lines under figures and rows, segmented controls, see-all links."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Kind chips, pending marks, legends, axis ticks."
+      },
+      "table-head": {
+        "displayName": "Table Head",
+        "purpose": "Uppercase column headers in tables only."
+      },
+      "amount": {
+        "displayName": "Amount",
+        "purpose": "Every amount in a row, table, tooltip, field or chip; tabular numerals."
+      }
+    },
+    "shadows": [
+      {
+        "name": "carried",
+        "value": "0 22px 45px -18px rgb(0 0 0 / 0.75)",
+        "purpose": "Only on a card lifted by its grip, with a champagne 35% ring and a 1.012 scale."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-settle",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Things arriving and settling: entrances, card moves, drops."
+      },
+      {
+        "name": "ease-exit",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Things leaving: the welcome overlay dissolving."
+      },
+      {
+        "name": "page-in",
+        "value": "200ms ease-out, opacity only",
+        "purpose": "Every navigation; no movement, so it reads as settling, not sliding."
+      },
+      {
+        "name": "entrance",
+        "value": "500ms ease-settle, 10px rise and fade",
+        "purpose": "The once-per-session entrance."
+      },
+      {
+        "name": "card-move",
+        "value": "380ms ease-settle",
+        "purpose": "Cards reflowing while one is carried."
+      },
+      {
+        "name": "card-drop",
+        "value": "260ms ease-settle",
+        "purpose": "A carried card landing."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "durations to 0.01ms",
+        "purpose": "prefers-reduced-motion: animations and eased transitions become instant."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "touch",
+        "value": "(pointer: coarse)"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled action on a surface: champagne with onyx text.",
+      "html": "<button class=\"ds-btn-primary\">Save budget</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 10px; font: 500 14px/1 'Switzer', ui-sans-serif, sans-serif; white-space: nowrap; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms, transform 150ms; background: var(--champagne); color: var(--onyx); } .ds-btn-primary:hover { background: color-mix(in oklab, var(--champagne) 80%, transparent); } .ds-btn-primary:focus-visible { outline: none; border-color: var(--champagne); box-shadow: 0 0 0 3px color-mix(in oklab, var(--champagne) 50%, transparent); } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary actions: a slate-ash hairline on the ground, washing to charcoal on hover.",
+      "html": "<button class=\"ds-btn-outline\">Import statement</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 10px; font: 500 14px/1 'Switzer', ui-sans-serif, sans-serif; white-space: nowrap; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms, transform 150ms; background: transparent; color: var(--bone); border-color: var(--slate-ash); } .ds-btn-outline:hover { background: var(--charcoal); } .ds-btn-outline:focus-visible { outline: none; border-color: var(--champagne); box-shadow: 0 0 0 3px color-mix(in oklab, var(--champagne) 50%, transparent); } .ds-btn-outline:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis actions in toolbars and rows; no border until hovered.",
+      "html": "<button class=\"ds-btn-ghost\">Filters</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: 10px; font: 500 14px/1 'Switzer', ui-sans-serif, sans-serif; white-space: nowrap; cursor: pointer; transition: background-color 150ms, border-color 150ms, color 150ms, transform 150ms; background: transparent; color: var(--bone); } .ds-btn-ghost:hover { background: var(--charcoal); } .ds-btn-ghost:focus-visible { outline: none; border-color: var(--champagne); box-shadow: 0 0 0 3px color-mix(in oklab, var(--champagne) 50%, transparent); } .ds-btn-ghost:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Money Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A hairline field; money fields right-align Plex Mono with a muted dollar sign inset.",
+      "html": "<label class=\"ds-money\"><span class=\"ds-money-sign\" aria-hidden=\"true\">$</span><input class=\"ds-input\" inputmode=\"decimal\" value=\"450.00\" aria-label=\"Monthly budget for Food\"></label>",
+      "css": ".ds-money { position: relative; display: inline-block; width: 160px; } .ds-money-sign { position: absolute; top: 50%; left: 10px; transform: translateY(-50%); font: 12px var(--font-ibm-plex-mono), 'IBM Plex Mono', ui-monospace, monospace; color: var(--ash-grey); pointer-events: none; } .ds-input { width: 100%; height: 32px; padding: 0 10px 0 20px; border: 1px solid var(--slate-ash); border-radius: 10px; background: transparent; color: var(--bone); font: 14px var(--font-ibm-plex-mono), 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; text-align: right; caret-color: var(--champagne); outline: none; transition: border-color 150ms, box-shadow 150ms; } .ds-input:hover { border-color: color-mix(in oklab, var(--bone) 25%, transparent); } .ds-input:focus-visible { border-color: var(--champagne); box-shadow: 0 0 0 3px color-mix(in oklab, var(--champagne) 50%, transparent); }"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sidebar items: ash grey at rest, bone on a faint wash on hover, champagne on a champagne wash when current.",
+      "html": "<nav class=\"ds-nav\" aria-label=\"Main\"><a class=\"ds-nav-item\" href=\"#\" aria-current=\"page\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z\"/></svg>Overview</a><a class=\"ds-nav-item\" href=\"#\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><rect x=\"3\" y=\"6\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M16 13h2\"/><path d=\"M3 10h18\"/></svg>Budgets</a></nav>",
+      "css": ".ds-nav { display: flex; flex-direction: column; gap: 4px; width: 200px; padding: 8px; background: var(--onyx); } .ds-nav-item { display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 10px; border-radius: 8px; font: 500 14px/1.43 'Switzer', ui-sans-serif, sans-serif; color: var(--ash-grey); text-decoration: none; transition: background-color 150ms, color 150ms; } .ds-nav-item:hover { background: color-mix(in oklab, var(--bone) 6%, transparent); color: var(--bone); } .ds-nav-item[aria-current=\"page\"] { background: color-mix(in oklab, var(--champagne) 10%, transparent); color: var(--champagne); } .ds-nav-item[aria-current=\"page\"]:hover { background: color-mix(in oklab, var(--champagne) 15%, transparent); } .ds-nav-item:focus-visible { outline: 2px solid var(--champagne); outline-offset: 2px; }"
+    },
+    {
+      "name": "Kind Chips",
+      "kind": "chip",
+      "refersTo": "chip-spending",
+      "description": "What a transaction is. Money moving between your own accounts is greyed, never green or red.",
+      "html": "<span class=\"ds-chips\"><span class=\"ds-chip ds-chip-spending\">Spending</span><span class=\"ds-chip ds-chip-income\">Income</span><span class=\"ds-chip ds-chip-moving\">Card payment</span><span class=\"ds-chip ds-chip-moving\">Transfer</span><span class=\"ds-chip ds-chip-goal\">Toward Emergency fund</span></span>",
+      "css": ".ds-chips { display: inline-flex; flex-wrap: wrap; gap: 8px; } .ds-chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px; font: 11px/1.45 'Switzer', ui-sans-serif, sans-serif; white-space: nowrap; } .ds-chip-spending { background: color-mix(in oklab, var(--bone) 7%, transparent); color: color-mix(in oklab, var(--bone) 80%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bone) 10%, transparent); } .ds-chip-income { background: color-mix(in oklab, var(--moss) 12%, transparent); color: var(--moss); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--moss) 25%, transparent); } .ds-chip-moving { background: color-mix(in oklab, var(--bone) 4%, transparent); color: var(--ash-grey); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bone) 10%, transparent); } .ds-chip-goal { background: color-mix(in oklab, var(--champagne) 10%, transparent); color: var(--champagne); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--champagne) 25%, transparent); }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The one container: smoke, a hairline, 14px corners; ash-grey title, a see-all link, the grip, then content with mono amounts.",
+      "html": "<section class=\"ds-card ds-hover-grip\" aria-label=\"Upcoming\"><div class=\"ds-card-head\"><h2 class=\"ds-card-title\">Upcoming</h2><div class=\"ds-card-tools\"><a class=\"ds-card-link\" href=\"#\">Recurring <svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"m12 5 7 7-7 7\"/></svg></a><button class=\"ds-grip\" aria-label=\"Move Upcoming\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"9\" cy=\"6\" r=\"1.5\"/><circle cx=\"15\" cy=\"6\" r=\"1.5\"/><circle cx=\"9\" cy=\"12\" r=\"1.5\"/><circle cx=\"15\" cy=\"12\" r=\"1.5\"/><circle cx=\"9\" cy=\"18\" r=\"1.5\"/><circle cx=\"15\" cy=\"18\" r=\"1.5\"/></svg></button></div></div><p class=\"ds-card-lead\"><span class=\"ds-card-figure\">$1,284<span class=\"ds-cents\">.50</span></span><span class=\"ds-card-note\">due in the next 14 days</span></p><ul class=\"ds-rows\"><li><span>Spotify<small>Sep 28</small></span><span class=\"ds-amt\">$11.99</span></li><li><span>Sapphire Preferred<small>Oct 2</small></span><span class=\"ds-amt\">$1,272.51</span></li></ul></section>",
+      "css": ".ds-card { display: flex; flex-direction: column; gap: 16px; width: 340px; padding: 16px 20px 20px; border: 1px solid var(--slate-ash); border-radius: 14px; background: var(--smoke); color: var(--bone); font-family: 'Switzer', ui-sans-serif, sans-serif; } .ds-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; } .ds-card-title { margin: 0; font: 400 14px/1.43 'Switzer', ui-sans-serif, sans-serif; color: var(--ash-grey); } .ds-card-tools { display: flex; align-items: center; gap: 8px; } .ds-card-link { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--ash-grey); text-decoration: none; transition: color 150ms; } .ds-card-link:hover { color: var(--champagne); } .ds-card-link:focus-visible { outline: 2px solid var(--champagne); outline-offset: 2px; border-radius: 4px; } .ds-grip { display: inline-flex; padding: 2px; margin-right: -6px; border: 0; border-radius: 6px; background: none; color: var(--ash-grey); cursor: grab; transition: opacity 150ms, color 150ms; } .ds-grip:hover { color: var(--bone); } .ds-grip:focus-visible { outline: 2px solid var(--champagne); outline-offset: 2px; opacity: 1; } @media (hover: hover) { .ds-hover-grip .ds-grip { opacity: 0; } .ds-hover-grip:hover .ds-grip, .ds-grip:focus-visible { opacity: 1; } } .ds-card-lead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; margin: 0; } .ds-card-figure { font: 500 28px/1 var(--font-bodoni), 'Bodoni Moda', serif; letter-spacing: -0.01em; color: var(--bone); } .ds-cents { font-size: 0.55em; color: color-mix(in oklab, var(--bone) 60%, transparent); } .ds-card-note { font-size: 14px; color: var(--ash-grey); } .ds-rows { list-style: none; margin: 0; padding: 0; } .ds-rows li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--slate-ash); font-size: 14px; } .ds-rows li:first-child { border-top: 0; padding-top: 0; } .ds-rows small { display: block; font-size: 12px; color: var(--ash-grey); } .ds-amt { font-family: var(--font-ibm-plex-mono), 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Stat Tile",
+      "kind": "custom",
+      "refersTo": "stat-tile",
+      "description": "Signature: a Bodoni headline figure with small cents, a quiet chip, a context line and a pill strip in the tile's tone; the whole tile links to its page.",
+      "html": "<section class=\"ds-tile ds-hover-grip\" aria-label=\"Left to spend\"><div class=\"ds-tile-head\"><h2 class=\"ds-tile-title\"><a href=\"#\">Left to spend</a></h2><button class=\"ds-grip\" aria-label=\"Move Left to spend\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"currentColor\" aria-hidden=\"true\"><circle cx=\"9\" cy=\"6\" r=\"1.5\"/><circle cx=\"15\" cy=\"6\" r=\"1.5\"/><circle cx=\"9\" cy=\"12\" r=\"1.5\"/><circle cx=\"15\" cy=\"12\" r=\"1.5\"/><circle cx=\"9\" cy=\"18\" r=\"1.5\"/><circle cx=\"15\" cy=\"18\" r=\"1.5\"/></svg></button></div><div class=\"ds-tile-body\"><p class=\"ds-tile-line\"><span class=\"ds-tile-figure\">$3,586<span class=\"ds-cents\">.43</span></span><span class=\"ds-tile-chip\">62% left</span></p><p class=\"ds-tile-note\">of $5,800 · about $143 a day for 25 days</p></div><div class=\"ds-pills\" aria-hidden=\"true\"><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"><span class=\"ds-pill-fill\"></span></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span><span class=\"ds-pill\"></span></div></section>",
+      "css": ".ds-tile { position: relative; display: flex; flex-direction: column; gap: 12px; width: 280px; min-height: 176px; padding: 16px 20px 20px; border: 1px solid var(--slate-ash); border-radius: 14px; background: var(--smoke); font-family: 'Switzer', ui-sans-serif, sans-serif; transition: border-color 150ms; } .ds-tile:hover { border-color: color-mix(in oklab, var(--bone) 20%, transparent); } .ds-tile-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; } .ds-tile-title { margin: 0; font: 400 14px/1.43 'Switzer', ui-sans-serif, sans-serif; color: var(--ash-grey); } .ds-tile-title a { color: inherit; text-decoration: none; } .ds-tile-title a::after { content: \"\"; position: absolute; inset: 0; border-radius: 14px; } .ds-tile-title a:focus-visible { outline: none; } .ds-tile-title a:focus-visible::after { box-shadow: 0 0 0 2px color-mix(in oklab, var(--champagne) 60%, transparent); } .ds-tile .ds-grip { position: relative; z-index: 1; display: inline-flex; padding: 2px; margin-right: -6px; border: 0; border-radius: 6px; background: none; color: var(--ash-grey); cursor: grab; transition: opacity 150ms; } .ds-tile .ds-grip:focus-visible { outline: 2px solid var(--champagne); outline-offset: 2px; opacity: 1; } @media (hover: hover) { .ds-hover-grip .ds-grip { opacity: 0; } .ds-hover-grip:hover .ds-grip { opacity: 1; } } .ds-tile-body { display: flex; flex-direction: column; gap: 4px; } .ds-tile-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin: 0; } .ds-tile-figure { font: 500 32px/1 var(--font-bodoni), 'Bodoni Moda', serif; letter-spacing: -0.01em; color: var(--bone); } .ds-cents { font-size: 0.55em; color: color-mix(in oklab, var(--bone) 60%, transparent); } .ds-tile-chip { font: 500 14px 'Switzer', ui-sans-serif, sans-serif; font-variant-numeric: tabular-nums; color: var(--ash-grey); } .ds-tile-note { margin: 0; font-size: 12px; color: var(--ash-grey); } .ds-pills { display: flex; align-items: stretch; justify-content: space-between; gap: 3px; height: 44px; margin-top: auto; } .ds-pill { position: relative; flex: 1; min-width: 0; max-width: 10px; overflow: hidden; border-radius: 9999px; background: color-mix(in oklab, var(--bone) 6%, transparent); } .ds-pill-fill { position: absolute; inset: 0; border-radius: 9999px; background: var(--moss); }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented-option",
+      "description": "A small either-or switch: hairline group, the selected option on a bone 12% wash.",
+      "html": "<div class=\"ds-seg\" role=\"radiogroup\" aria-label=\"Show spending\"><button class=\"ds-seg-opt\" role=\"radio\" aria-checked=\"true\">Day by day</button><button class=\"ds-seg-opt\" role=\"radio\" aria-checked=\"false\">Month by month</button></div>",
+      "css": ".ds-seg { display: inline-flex; padding: 2px; border: 1px solid var(--slate-ash); border-radius: 8px; font: 12px 'Switzer', ui-sans-serif, sans-serif; } .ds-seg-opt { padding: 4px 10px; border: 0; border-radius: 5px; background: transparent; color: var(--ash-grey); font: inherit; white-space: nowrap; cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-seg-opt:hover { background: color-mix(in oklab, var(--bone) 6%, transparent); color: var(--bone); } .ds-seg-opt[aria-checked=\"true\"] { background: color-mix(in oklab, var(--bone) 12%, transparent); color: var(--bone); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bone) 10%, transparent); } .ds-seg-opt[aria-checked=\"true\"]:hover { background: color-mix(in oklab, var(--bone) 16%, transparent); } .ds-seg-opt:focus-visible { outline: 2px solid var(--champagne); outline-offset: 2px; }"
+    },
+    {
+      "name": "Chart Tooltip",
+      "kind": "custom",
+      "refersTo": "tooltip",
+      "description": "The day readout on a chart: charcoal, hairline, swatch rows with mono amounts.",
+      "html": "<div class=\"ds-tip\" role=\"tooltip\"><p class=\"ds-tip-title\">September 18</p><p class=\"ds-tip-row\"><span><i class=\"ds-sw\" style=\"background: var(--champagne)\"></i>Spent so far</span><b>$2,213.57</b></p><p class=\"ds-tip-row\"><span><i class=\"ds-sw\" style=\"background: var(--moss)\"></i>Even pace</span><b>$2,770.00</b></p><p class=\"ds-tip-row\"><span><i class=\"ds-sw\" style=\"background: color-mix(in oklab, var(--ash-grey) 70%, transparent)\"></i>August, same day</span><b>$2,508.12</b></p></div>",
+      "css": ".ds-tip { display: flex; flex-direction: column; gap: 4px; min-width: 190px; padding: 8px 10px; border: 1px solid var(--slate-ash); border-radius: 8px; background: var(--charcoal); color: var(--bone); font: 12px/1.4 'Switzer', ui-sans-serif, sans-serif; } .ds-tip p { margin: 0; } .ds-tip-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; } .ds-tip-row span { display: inline-flex; align-items: center; gap: 6px; color: var(--ash-grey); } .ds-tip-row b { font: 400 12px var(--font-ibm-plex-mono), 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; color: var(--bone); } .ds-sw { display: inline-block; width: 12px; height: 2px; border-radius: 9999px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Lamplit Ledger",
+    "overview": "Ledger.m is a private book kept at night: an onyx ground, smoke pages ruled with hairlines, bone ink, and one warm champagne light that marks what matters. It is dark only, with no light variant and no toggle. The world's signature is the thin champagne rule on onyx that opens the app and the login, and the same restraint carries into every page: surfaces stay flat, color is spent on meaning, and nothing moves unless it is settling into place.\n\nDensity is a working ledger's, not a dashboard's: enough on each screen and no more, figures first, context in a quiet line beneath them, detail one click away. Every tone and every typeface holds a single meaning across the whole app, so a green, a serif or a grey amount says the same thing on Overview, Budgets, Spending and Transactions. Accuracy is the aesthetic; decoration that doesn't carry a figure or a state is absent.\n\nThe Overview is the freshest expression of the world: four headline tiles, each a serif figure with a quiet chip and a strip of rounded pills; a wide chart beside two stacked cards; and a full-width transactions table, all in cards the owner can lift and reorder.",
+    "keyCharacteristics": [
+      "Dark only: onyx ground, smoke cards, charcoal overlays, 1px slate-ash hairlines.",
+      "Tones with fixed meanings: moss for money in and on budget, champagne for spending and net worth lines and near-limit states, oxblood for being over.",
+      "Three typefaces, three jobs: Bodoni Moda for titles and headline figures, IBM Plex Mono for amounts, Switzer for everything else.",
+      "Category colors belong to their category and nothing else.",
+      "Flat at rest; a card casts a shadow only while it is being carried.",
+      "Rounded pills and full-round chips as the recurring data mark."
+    ],
+    "rules": [
+      {
+        "name": "The Fixed Meaning Rule",
+        "body": "A tone means the same thing on every page. Moss is money in or on budget; champagne is a spending line, the net worth line, or near the limit; oxblood is over. Bone is primary text, ash grey is secondary. A new surface borrows these meanings; it never assigns a tone a new one.",
+        "section": "colors"
+      },
+      {
+        "name": "The Comparison Is Not an Alarm Rule",
+        "body": "A month-over-month or 30-day change is shown as a quiet ash-grey chip with an arrow and a percentage, never in moss or oxblood. Pay varies; being over budget is the only thing that turns red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Money Moving Is Grey Rule",
+        "body": "Card payments, transfers and loan payments between the owner's own accounts are neither spending nor income: their amounts are ash grey and their kind chip is a bone 4% wash with ash-grey text. Never green, never red.",
+        "section": "colors"
+      },
+      {
+        "name": "The Category Owns Its Color Rule",
+        "body": "A `--cat-*` or `--viz-*` color only ever means its category, in the same slot on the donut, trends, budgets, year in review and transaction icons. It is never a status, an accent or a decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Legible Red Rule",
+        "body": "Oxblood (#9b5548) is for fills; any oxblood text uses Oxblood Text (#c47a6b).",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Voices Rule",
+        "body": "Bodoni Moda sets page titles and headline figures only. IBM Plex Mono with tabular numerals sets every amount that sits in a row, column, tooltip or field. Switzer sets everything else, including chips, labels, buttons and navigation.",
+        "section": "typography"
+      },
+      {
+        "name": "The Small Cents Rule",
+        "body": "A headline figure shows whole dollars at full size and its cents at 0.55em in bone at 60%, so the dollars read at a glance and the cents stay honest.",
+        "section": "typography"
+      },
+      {
+        "name": "The Lift Only When Carried Rule",
+        "body": "Surfaces are flat at rest and on hover. A shadow appears only on something the owner is physically moving.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do give every card the smoke surface, a 1px slate-ash hairline and 14px corners, and brighten the hairline to bone at 20% on hover when the whole card is a link.",
+      "Do set every amount in a row, table, tooltip or field in IBM Plex Mono with tabular numerals.",
+      "Do set page titles and headline figures in Bodoni Moda, with a headline figure's cents at 0.55em in bone at 60%.",
+      "Do keep each tone's one meaning: moss for money in and on budget, champagne for spending lines, the net worth line and near-limit states, oxblood for being over.",
+      "Do grey money that only moves between the owner's own accounts: ash-grey amounts and a bone 4% chip.",
+      "Do draw a category only in its own `--cat-*` / `--viz-*` color, in the same slot everywhere.",
+      "Do hide a card's grip until hover or focus on pointer devices, and always show it on touch.",
+      "Do give buttons, fields and selects a 40px minimum and 16px field text on touch screens.",
+      "Do keep keyboard focus visible: a 2px champagne outline with a 2px offset on links and buttons.",
+      "Do honor reduced motion: page crossfades and entrances collapse to instant, and transitions lose their eased ramp."
+    ],
+    "donts": [
+      "Don't place a card inside a card; group inside a card with hairline dividers or a charcoal 30% tint.",
+      "Don't color a comparison chip moss or oxblood; a change against last month is quiet ash grey.",
+      "Don't paint card payments, transfers or loan payments green or red.",
+      "Don't use a category color as a status, an accent or decoration.",
+      "Don't set Bodoni Moda on labels, chips, buttons, table text or body copy.",
+      "Don't set oxblood (#9b5548) as text; use Oxblood Text (#c47a6b).",
+      "Don't give a resting or hovered card a shadow; only a carried card lifts.",
+      "Don't add a light theme or a light surface; Ledger.m is dark only."
+    ]
+  }
+}
