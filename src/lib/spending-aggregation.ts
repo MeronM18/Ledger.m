@@ -171,13 +171,18 @@ export function filterSpendingTransactions(
   transactions: SpendingTransaction[],
   connectedCardIssuers: string[] = []
 ): SpendingTransaction[] {
-  return applyPaidBack(
-    transactions.filter((t) => {
-      if (isPaymentToUnconnectedCard(t, connectedCardIssuers)) return true;
-      if (t.pending) return false;
-      return isSpendingCategory(effectiveCategory(t));
-    })
-  );
+  return applyPaidBack(transactions.filter((t) => countsAsSpending(t, connectedCardIssuers)));
+}
+
+/**
+ * Whether a transaction is part of spending (before any paid-back share
+ * comes off it): the one test behind every spending total, and behind what
+ * Transactions says a row counts as.
+ */
+export function countsAsSpending(t: SpendingTransaction, connectedCardIssuers: string[] = []): boolean {
+  if (isPaymentToUnconnectedCard(t, connectedCardIssuers)) return true;
+  if (t.pending) return false;
+  return isSpendingCategory(effectiveCategory(t));
 }
 
 /**

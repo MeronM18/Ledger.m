@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { CalendarDays, ChevronRight, Download, Search, StickyNote } from "lucide-react";
+import { createContext, useContext, useMemo, useState } from "react";
+import { ArrowLeftRight, CalendarDays, ChevronRight, CreditCard, Download, PiggyBank, Search, StickyNote } from "lucide-react";
 import { InstitutionAvatar } from "@/components/institution-avatar";
 import { TransactionAvatar } from "@/components/transaction-avatar";
 import { TransactionFiltersMenu } from "@/components/transaction-filters-menu";
@@ -25,7 +25,9 @@ import { humanizeCategory } from "@/lib/plaid-categories";
 import type { MerchantRule } from "@/lib/transaction-edits";
 import { effectiveCategory, humanizeTransaction, humanizeTransactionName } from "@/lib/transaction-display";
 import { transactionIconColor } from "@/lib/transaction-icons";
+import { describeTransactions, inCategory, kindSummary, matchesKind, type Described, type KindFilter } from "@/lib/transaction-kind";
 import { applyListOptions, DEFAULT_LIST_OPTIONS, groupByDay, listSummary, type ListOptions } from "@/lib/transaction-list";
+import { Segmented } from "@/components/segmented";
 import { cn } from "@/lib/utils";
 
 export type TransactionRow = {
@@ -56,6 +58,63 @@ export type TransactionRow = {
   reward?: Reward;
 };
 
+/**
+ * What each row is (spending, a card payment, a transfer...), the names of
+ * the accounts on the other side of a card payment, and which accounts hold
+ * a savings goal. Lists that don't provide it show rows plainly.
+ */
+export type TransactionLabels = {
+  described: Map<string, Described>;
+  // Account names by ledger account id.
+  names: Map<string, string>;
+  // Goals saved in each account, by ledger account id.
+  goals: Record<string, string[]>;
+};
+
+const LabelsContext = createContext<TransactionLabels | null>(null);
+
+/** Works out the labels for a list's transactions, once. */
+export function useTransactionLabels(
+  transactions: TransactionRow[],
+  accounts: AccountOption[],
+  cards: StatementCard[],
+  connectedCardIssuers: string[],
+  goals: Record<string, string[]> = {}
+): TransactionLabels {
+  return useMemo(
+    () => ({
+      described: describeTransactions(transactions, new Set(cards.map((c) => c.id)), connectedCardIssuers),
+      names: new Map(accounts.map((a) => [a.id, accountLabel(a)])),
+      goals,
+    }),
+    [transactions, accounts, cards, connectedCardIssuers, goals]
+  );
+}
+
+export function TransactionLabelsProvider({ labels, children }: { labels: TransactionLabels; children: React.ReactNode }) {
+  return <LabelsContext.Provider value={labels}>{children}</LabelsContext.Provider>;
+}
+
+// Money that only moves between your own accounts, or pays down a card or loan: not spending, not income.
+const MOVEMENT = new Set(["card-payment", "transfer", "loan-payment"]);
+const isMovement = (d: Described | undefined) => Boolean(d && MOVEMENT.has(d.kind) && !d.counts);
+
+/** The category column: what the row is, in the words Spending and Budgets use. */
+function kindLabel(d: Described | undefined, category: string): string {
+  if (!d) return category;
+  if (d.kind === "card-payment") return "Card payment";
+  if (d.kind === "transfer") return "Transfer";
+  if (d.kind === "loan-payment") return "Loan payment";
+  return category;
+}
+
+/** The goals a row's money goes toward: money into an account a goal follows. */
+function goalsOf(t: TransactionRow, labels: TransactionLabels | null, d: Described | undefined): string[] {
+  if (!labels || !d || !t.account || t.amount >= 0) return [];
+  if (d.kind !== "transfer" && d.kind !== "income") return [];
+  return labels.goals[t.account.id] ?? [];
+}
+
 const longDay = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 const shortDay = (iso: string) =>
@@ -65,9 +124,23 @@ function accountText(t: TransactionRow): string {
   return t.account ? accountLabel(t.account) : t.isManual ? "Cash / Manual" : accountLabel(t.account);
 }
 
-/** Money in in green with a plus; money out plain, as spending is the usual case. */
+/**
+ * Money in in green with a plus; spending plain, as it's the usual case;
+ * money only moving between your accounts (a card payment, a transfer)
+ * greyed, since it's neither.
+ */
 function Amount({ t, className }: { t: TransactionRow; className?: string }) {
+  const labels = useContext(LabelsContext);
   const incoming = t.amount < 0; // Plaid: positive = money out
+  const moving = isMovement(labels?.described.get(t.id));
+  if (moving) {
+    return (
+      <span className={cn("font-mono text-muted-foreground tabular-nums", className)}>
+        {incoming ? "+" : ""}
+        {formatCurrency(Math.abs(t.amount), t.iso_currency_code ?? "USD")}
+      </span>
+    );
+  }
   return (
     <Money
       amount={t.amount}
@@ -77,6 +150,45 @@ function Amount({ t, className }: { t: TransactionRow; className?: string }) {
       className={cn(!incoming && "text-bone", className)}
     />
   );
+}
+
+/**
+ * Beside the name: a card payment's other side ("To Sapphire Preferred
+ * ••4321"), a payment standing in for a card that isn't connected, and
+ * money going toward a savings goal.
+ */
+function KindTags({ t }: { t: TransactionRow }) {
+  const labels = useContext(LabelsContext);
+  const d = labels?.described.get(t.id);
+  if (!labels || !d) return null;
+  const tags: React.ReactNode[] = [];
+  if (d.kind === "card-payment") {
+    const other = d.counterpart ? labels.names.get(d.counterpart) : null;
+    tags.push(
+      <span key="card" className="inline-flex max-w-full items-center gap-1 rounded-full bg-bone/6 px-2 py-0.5 text-[11px] text-muted-foreground ring-1 ring-bone/10 ring-inset">
+        <CreditCard className="size-3 shrink-0" aria-hidden />
+        <span className="truncate">{other ? `${t.amount > 0 ? "To" : "From"} ${other}` : "Card payment"}</span>
+      </span>
+    );
+    if (d.counts) {
+      tags.push(
+        <span key="counts" className="text-[11px] text-champagne" title="This card isn't connected, so its payment stands in for what was bought on it">
+          Counts as spending
+        </span>
+      );
+    }
+  } else if (d.kind === "transfer" && !goalsOf(t, labels, d).length) {
+    tags.push(<ArrowLeftRight key="move" className="size-3.5 shrink-0 text-muted-foreground" aria-label="Transfer between your accounts" />);
+  }
+  for (const goal of goalsOf(t, labels, d)) {
+    tags.push(
+      <span key={`goal:${goal}`} className="inline-flex max-w-full items-center gap-1 rounded-full bg-champagne/10 px-2 py-0.5 text-[11px] text-champagne ring-1 ring-champagne/25 ring-inset">
+        <PiggyBank className="size-3 shrink-0" aria-hidden />
+        <span className="truncate">{goal}</span>
+      </span>
+    );
+  }
+  return <>{tags}</>;
 }
 
 function Badges({ t }: { t: TransactionRow }) {
@@ -133,6 +245,9 @@ function AccountLabel({ t, institutions }: { t: TransactionRow; institutions: Re
   );
 }
 
+// Name, category, account, amount and the chevron, on every row and the header above them.
+const ROW_GRID = "grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_7.5rem_1rem]";
+
 /** One transaction in the list; opens its panel. */
 function Row({
   t,
@@ -145,7 +260,9 @@ function Row({
   institutions: Record<string, string>;
   onOpen: (id: string) => void;
 }) {
-  const { displayName, displayCategoryLabel } = humanizeTransaction(t);
+  const { displayName, displayCategoryLabel: category } = humanizeTransaction(t);
+  const labels = useContext(LabelsContext);
+  const displayCategoryLabel = kindLabel(labels?.described.get(t.id), category);
   return (
     // Off-screen rows skip layout, so the sidebar sliding (which resizes
     // the list every frame) only lays out what you can see.
@@ -154,7 +271,7 @@ function Row({
         type="button"
         onClick={() => onOpen(t.id)}
         data-transaction={t.id}
-        className="grid w-full cursor-pointer grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1.2fr)_7.5rem_1rem]"
+        className={cn(ROW_GRID, "w-full cursor-pointer py-3 text-left transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:outline-none")}
       >
         <span className="flex min-w-0 items-center gap-3">
           <TransactionAvatar transaction={t} className="size-7" />
@@ -162,6 +279,7 @@ function Row({
             <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
               <span className="truncate font-medium">{displayName}</span>
               <Badges t={t} />
+              <KindTags t={t} />
               {t.reward && <RewardBadge reward={t.reward} />}
             </span>
             {/* The date when the list isn't grouped by day; on a phone, the columns that don't fit. */}
@@ -197,10 +315,15 @@ export function SummaryLine({ label, children }: { label: string; children: Reac
 }
 
 function Summary({ rows, onExport }: { rows: TransactionRow[]; onExport: () => void }) {
+  const labels = useContext(LabelsContext);
   const s = listSummary(rows);
+  const k = labels ? kindSummary(rows, labels.described) : null;
   // What the listed purchases earned on rewards cards.
   const points = rows.reduce((sum, t) => sum + (t.reward?.unit === "points" ? t.reward.earned : 0), 0);
   const cash = Math.round(rows.reduce((sum, t) => sum + (t.reward?.unit === "cash" ? t.reward.earned : 0), 0) * 100) / 100;
+  // Purchases only, not card payments or transfers, when each row's kind is known.
+  const largest = k ? k.largestExpense : (s.largestExpense?.amount ?? null);
+  const average = k ? k.averageExpense : s.averageExpense;
   return (
     <Card aria-label="Summary">
       <CardHeader>
@@ -211,20 +334,47 @@ function Summary({ rows, onExport }: { rows: TransactionRow[]; onExport: () => v
           <SummaryLine label="Total transactions">
             <span data-testid="summary-count">{s.count}</span>
           </SummaryLine>
-          <SummaryLine label="Money in">
-            <span className="text-moss">{s.moneyIn > 0 ? `+${formatCurrency(s.moneyIn, "USD")}` : formatCurrency(0, "USD")}</span>
-          </SummaryLine>
-          <SummaryLine label="Money out">{formatCurrency(s.moneyOut, "USD")}</SummaryLine>
+          {k ? (
+            <>
+              <SummaryLine label="Spending">
+                <span data-testid="summary-spending" className="text-bone">
+                  {formatCurrency(k.spending, "USD")}
+                </span>
+              </SummaryLine>
+              {k.refunds > 0 && (
+                <SummaryLine label="Refunds in it">
+                  <span className="text-moss">−{formatCurrency(k.refunds, "USD")}</span>
+                </SummaryLine>
+              )}
+              <SummaryLine label="Income">
+                <span className="text-moss">{k.income > 0 ? `+${formatCurrency(k.income, "USD")}` : formatCurrency(0, "USD")}</span>
+              </SummaryLine>
+              {k.cardPayments.count > 0 && (
+                <SummaryLine label={`Paid to cards (${k.cardPayments.count})`}>
+                  <span className="text-muted-foreground">{formatCurrency(k.cardPayments.amount, "USD")}</span>
+                </SummaryLine>
+              )}
+              {k.transfers > 0 && (
+                <SummaryLine label="Transfers">
+                  <span className="font-sans text-muted-foreground">{k.transfers}</span>
+                </SummaryLine>
+              )}
+            </>
+          ) : (
+            <>
+              <SummaryLine label="Money in">
+                <span className="text-moss">{s.moneyIn > 0 ? `+${formatCurrency(s.moneyIn, "USD")}` : formatCurrency(0, "USD")}</span>
+              </SummaryLine>
+              <SummaryLine label="Money out">{formatCurrency(s.moneyOut, "USD")}</SummaryLine>
+            </>
+          )}
           {s.pending.count > 0 && (
             <SummaryLine label={`Pending (${s.pending.count})`}>
               <span className="text-muted-foreground">{formatCurrency(Math.abs(s.pending.amount), "USD")}</span>
             </SummaryLine>
           )}
-          <SummaryLine label="Largest expense">{s.largestExpense ? formatCurrency(s.largestExpense.amount, "USD") : "—"}</SummaryLine>
-          <SummaryLine label="Largest deposit">
-            {s.largestDeposit ? <span className="text-moss">+{formatCurrency(s.largestDeposit.amount, "USD")}</span> : "—"}
-          </SummaryLine>
-          <SummaryLine label="Average expense">{s.averageExpense !== null ? formatCurrency(s.averageExpense, "USD") : "—"}</SummaryLine>
+          <SummaryLine label="Largest purchase">{largest !== null ? formatCurrency(largest, "USD") : "—"}</SummaryLine>
+          <SummaryLine label="Average purchase">{average !== null ? formatCurrency(average, "USD") : "—"}</SummaryLine>
           {points !== 0 && (
             <SummaryLine label="Points earned">
               <span className="text-champagne">{points.toLocaleString("en-US")}</span>
@@ -242,9 +392,11 @@ function Summary({ rows, onExport }: { rows: TransactionRow[]; onExport: () => v
             <span className="font-sans">{s.last ? shortDay(s.last) : "—"}</span>
           </SummaryLine>
         </dl>
-        {s.pending.count > 0 && (
-          <p className="text-xs text-muted-foreground">Pending charges count here, but not in Spending or Budgets until they post.</p>
-        )}
+        <p className="text-xs text-muted-foreground">
+          {k
+            ? "Spending is counted the way Spending and Budgets count it: posted purchases less refunds, your share of anything paid back. Card payments and transfers only move money between your accounts, so they aren't spending."
+            : "Pending charges count here, but not in Spending or Budgets until they post."}
+        </p>
         <Button variant="ghost" size="sm" className="text-champagne hover:text-champagne" onClick={onExport} disabled={s.count === 0}>
           <Download className="size-3.5" />
           Download CSV
@@ -299,6 +451,36 @@ function rewardWhy(r: Reward): string {
   return `${rateLabel(r)} ${what} · ${card}${cap}`;
 }
 
+/** What a row adds up to in the rest of the app, in a few words. */
+function countsAs(t: TransactionRow, d: Described, category: string, goals: string[]): React.ReactNode {
+  const quiet = (text: string) => <span className="block text-xs text-muted-foreground">{text}</span>;
+  switch (d.kind) {
+    case "spending":
+      if (t.pending) return <>Spending in {category}{quiet("once it posts; pending charges aren't counted yet")}</>;
+      if (t.paid_back && t.paid_back >= t.amount - 0.005) return <>Nothing{quiet("paid back in full, so it isn't your spending")}</>;
+      return (
+        <>
+          Spending in {category}
+          {t.paid_back ? quiet(`your ${formatCurrency(t.amount - t.paid_back, t.iso_currency_code)} share, in Spending and Budgets`) : quiet("in Spending and Budgets")}
+        </>
+      );
+    case "refund":
+      return <>A refund{quiet(`comes off ${category} spending`)}</>;
+    case "income":
+      return <>Income{goals.length > 0 ? quiet(`toward ${goals.join(" and ")}`) : quiet("in Reports → Income")}</>;
+    case "card-payment":
+      return d.counts ? (
+        <>Spending, under Other{quiet("this card isn't connected, so its payment stands in for what was bought on it")}</>
+      ) : (
+        <>Not spending{quiet("the purchases on the card already count, so paying it off isn't counted again")}</>
+      );
+    case "transfer":
+      return <>Not spending{quiet(goals.length > 0 ? `money moved to savings, toward ${goals.join(" and ")}` : "money moving between your accounts")}</>;
+    case "loan-payment":
+      return <>Not spending{quiet("a loan payment")}</>;
+  }
+}
+
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2">
@@ -322,7 +504,12 @@ function TransactionPanel({
   institutions: Record<string, string>;
   onClose: () => void;
 }) {
-  const { displayName, displayCategoryLabel } = humanizeTransaction(t);
+  const { displayName, displayCategoryLabel: category } = humanizeTransaction(t);
+  const labels = useContext(LabelsContext);
+  const d = labels?.described.get(t.id);
+  const displayCategoryLabel = kindLabel(d, category);
+  const other = d?.counterpart ? labels?.names.get(d.counterpart) : null;
+  const onCard = t.account ? cards.some((c) => c.id === t.account!.id) : false;
   const posted = t.posted_date && t.posted_date !== t.date ? t.posted_date : null;
   const original = humanizeTransactionName({ ...t, merchant_name: t.original_merchant_name ?? t.merchant_name });
 
@@ -347,11 +534,12 @@ function TransactionPanel({
         <dl className="flex flex-col divide-y divide-border rounded-lg border border-border px-3 text-sm">
           <Detail label="Date">{longDay(t.date)}</Detail>
           {posted && <Detail label="Posted">{longDay(posted)}</Detail>}
-          <Detail label="Account">
+          <Detail label={onCard && t.amount > 0 && d?.kind !== "card-payment" ? "Paid with" : "Account"}>
             <span className="inline-flex max-w-full justify-end">
               <AccountLabel t={t} institutions={institutions} />
             </span>
           </Detail>
+          {d?.kind === "card-payment" && other && <Detail label={t.amount > 0 ? "Paid to" : "Paid from"}>{other}</Detail>}
           <Detail label="Category">
             <span className="inline-flex max-w-full justify-end">
               <CategoryLabel t={t} label={displayCategoryLabel} />
@@ -368,6 +556,7 @@ function TransactionPanel({
               </span>
             </Detail>
           )}
+          {d && <Detail label="Counts as">{countsAs(t, d, category, goalsOf(t, labels, d))}</Detail>}
           <Detail label="Status">{t.pending ? "Pending" : "Posted"}</Detail>
           <Detail label="Source">{t.isManual ? (t.account ? "Imported from a statement" : "Added by you") : "From your bank"}</Detail>
           {!t.isManual && original !== displayName && <Detail label="Bank's name">{original}</Detail>}
@@ -430,6 +619,15 @@ export function TransactionDayList({
   );
   return (
     <Card className="gap-0 py-0" aria-label={label}>
+      {rows.length > 0 && (
+        <div className={cn(ROW_GRID, "hidden border-b border-border py-2 text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase md:grid")} aria-hidden>
+          <span>Transaction</span>
+          <span>Category</span>
+          <span>Account</span>
+          <span className="text-right">Amount</span>
+          <span />
+        </div>
+      )}
       {rows.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">{empty}</p>
       ) : days ? (
@@ -514,46 +712,63 @@ export function TransactionsExplorer({
   transactions,
   accounts,
   cards = [],
+  connectedCardIssuers = [],
+  goals = {},
   rules,
   institutions,
   initialAccount = "all",
+  initialMonth = "all",
+  initialCategory = "all",
+  initialKind = "all",
 }: {
   transactions: TransactionRow[];
   accounts: AccountOption[];
   // Credit cards, so a card payment can show what it paid for.
   cards?: StatementCard[];
+  // Card issuers that are connected: a payment to any other card counts as spending.
+  connectedCardIssuers?: string[];
+  // Goals saved in each account, by ledger account id.
+  goals?: Record<string, string[]>;
   rules: MerchantRule[];
   // The bank each account is at, by account id, for its mark.
   institutions: Record<string, string>;
-  // An account to start filtered to (from a link on Accounts).
+  // Filters to start with (from a link on Accounts or Budgets).
   initialAccount?: string;
+  initialMonth?: string;
+  initialCategory?: string;
+  initialKind?: KindFilter;
 }) {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>(initialAccount);
-  const [categoryFilter, setCategoryFilter] = useState<string>("all");
-  const [monthFilter, setMonthFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>(initialCategory);
+  const [monthFilter, setMonthFilter] = useState<string>(initialMonth);
+  const [kindFilter, setKindFilter] = useState<KindFilter>(initialKind);
   const [listOptions, setListOptions] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
   const panel = useTransactionPanel();
+  const labels = useTransactionLabels(transactions, accounts, cards, connectedCardIssuers, goals);
 
   const categories = useMemo(() => {
     const present = new Set<string>();
     for (const t of transactions) present.add(effectiveCategory(t) ?? "(uncategorized)");
+    // One asked for by a link (Budgets' "Other") is always offered.
+    if (initialCategory !== "all") present.add(initialCategory);
     return Array.from(present)
       .sort()
-      .map((c) => ({ value: c, label: c === "(uncategorized)" ? "Uncategorized" : humanizeCategory(c) }));
-  }, [transactions]);
+      .map((c) => ({ value: c, label: c === "(uncategorized)" ? "Uncategorized" : c === "OTHER" ? "Other" : humanizeCategory(c) }));
+  }, [transactions, initialCategory]);
 
   // Distinct months actually present in the data, newest first.
   const months = useMemo(() => {
     const present = new Set<string>();
     for (const t of transactions) present.add(t.date.slice(0, 7));
+    if (/^\d{4}-\d{2}$/.test(initialMonth)) present.add(initialMonth);
     return Array.from(present)
       .sort((a, b) => b.localeCompare(a))
       .map((m) => ({
         value: m,
         label: new Date(`${m}-01T00:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" }),
       }));
-  }, [transactions]);
+  }, [transactions, initialMonth]);
 
   // Filtering happens client-side, which is fine at this volume.
   const filtered = useMemo(() => {
@@ -564,7 +779,9 @@ export function TransactionsExplorer({
       } else if (accountFilter !== "all" && t.account?.id !== accountFilter) {
         return false;
       }
-      if (categoryFilter !== "all" && (effectiveCategory(t) ?? "(uncategorized)") !== categoryFilter) return false;
+      const d = labels.described.get(t.id);
+      if (!matchesKind(d, kindFilter)) return false;
+      if (categoryFilter !== "all" && !inCategory(t, categoryFilter, d)) return false;
       if (monthFilter !== "all" && t.date.slice(0, 7) !== monthFilter) return false;
       if (q) {
         const haystack = `${humanizeTransaction(t).displayName} ${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase();
@@ -572,7 +789,7 @@ export function TransactionsExplorer({
       }
       return true;
     });
-  }, [transactions, accountFilter, categoryFilter, monthFilter, search]);
+  }, [transactions, labels, kindFilter, accountFilter, categoryFilter, monthFilter, search]);
 
   // The Filters menu (sort, money in/out, amount, status, transfers, notes)
   // applies on top. Sorting always happens here: `transactions` merges
@@ -589,12 +806,14 @@ export function TransactionsExplorer({
 
   // Exports exactly what's on screen, every filter and the sort applied.
   function exportCsv() {
-    const headers = ["Date", "Merchant", "Category", "Account", "Amount", "Paid back in cash", "Pending", "Source", "Notes"];
+    const headers = ["Date", "Merchant", "Type", "Category", "Account", "Amount", "Paid back in cash", "Pending", "Source", "Notes"];
     const rows = sorted.map((t) => {
       const { displayName, displayCategoryLabel } = humanizeTransaction(t);
+      const d = labels.described.get(t.id);
       return [
         t.date,
         displayName,
+        d ? KIND_NAMES[d.kind] : "",
         displayCategoryLabel,
         accountText(t),
         t.amount.toFixed(2),
@@ -608,63 +827,113 @@ export function TransactionsExplorer({
     downloadCsv(`ledger-transactions-${today}.csv`, toCsv(headers, rows));
   }
 
+  // How many rows of each kind the other filters leave, for the tabs.
+  const kindCounts = useMemo(() => {
+    const counts: Record<KindFilter, number> = { all: 0, spending: 0, income: 0, "card-payment": 0, transfer: 0 };
+    const q = search.trim().toLowerCase();
+    for (const t of transactions) {
+      if (accountFilter === MANUAL_ACCOUNT_ID ? t.account !== null : accountFilter !== "all" && t.account?.id !== accountFilter) continue;
+      if (monthFilter !== "all" && t.date.slice(0, 7) !== monthFilter) continue;
+      if (q && !`${humanizeTransaction(t).displayName} ${t.merchant_name ?? ""} ${t.name ?? ""}`.toLowerCase().includes(q)) continue;
+      const d = labels.described.get(t.id);
+      for (const k of KIND_TABS) if (matchesKind(d, k)) counts[k]++;
+    }
+    return counts;
+  }, [transactions, labels, accountFilter, monthFilter, search]);
+
   return (
-    <div className="flex flex-col gap-6">
-      {/* Room at the right for the alerts bell. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Transactions</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-56">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              aria-label="Search"
-              placeholder="Search transactions"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 pl-8"
+    <TransactionLabelsProvider labels={labels}>
+      <div className="flex flex-col gap-6">
+        {/* Room at the right for the alerts bell. */}
+        <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
+          <h1 className="font-serif text-2xl font-semibold text-bone">Transactions</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-full sm:w-56">
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+              <Input
+                aria-label="Search"
+                placeholder="Search transactions"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="h-8 pl-8"
+              />
+            </div>
+            <Select value={monthFilter} onValueChange={setMonthFilter}>
+              <SelectTrigger aria-label="Date" className="min-w-36">
+                <CalendarDays className="size-3.5 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper" align="end">
+                <SelectItem value="all">All time</SelectItem>
+                {months.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <TransactionFiltersMenu
+              options={listOptions}
+              onChange={setListOptions}
+              account={{ options: accountOptions, value: accountFilter, onChange: setAccountFilter }}
+              category={{ options: categories, value: categoryFilter, onChange: setCategoryFilter }}
             />
+            <MerchantRulesButton rules={rules} />
+            <AddManualTransactionButton />
           </div>
-          <Select value={monthFilter} onValueChange={setMonthFilter}>
-            <SelectTrigger aria-label="Date" className="min-w-36">
-              <CalendarDays className="size-3.5 text-muted-foreground" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent position="popper" align="end">
-              <SelectItem value="all">All time</SelectItem>
-              {months.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <TransactionFiltersMenu
-            options={listOptions}
-            onChange={setListOptions}
-            account={{ options: accountOptions, value: accountFilter, onChange: setAccountFilter }}
-            category={{ options: categories, value: categoryFilter, onChange: setCategoryFilter }}
+        </div>
+
+        <div className="-mt-2 overflow-x-auto">
+          <Segmented
+            label="Show"
+            value={kindFilter}
+            onChange={setKindFilter}
+            options={KIND_TABS.map((k) => ({
+              value: k,
+              label: (
+                <>
+                  {KIND_TAB_LABELS[k]}
+                  <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{kindCounts[k]}</span>
+                </>
+              ),
+            }))}
           />
-          <MerchantRulesButton rules={rules} />
-          <AddManualTransactionButton />
         </div>
-      </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <TransactionDayList rows={sorted} byDate={byDate} institutions={institutions} onOpen={panel.open} />
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <TransactionDayList rows={sorted} byDate={byDate} institutions={institutions} onOpen={panel.open} />
 
-        <div className="lg:sticky lg:top-6">
-          <Summary rows={sorted} onExport={exportCsv} />
+          <div className="lg:sticky lg:top-6">
+            <Summary rows={sorted} onExport={exportCsv} />
+          </div>
         </div>
-      </div>
 
-      <TransactionSheet
-        transaction={open}
-        openKey={panel.openKey}
-        onClose={panel.close}
-        transactions={transactions}
-        cards={cards}
-        institutions={institutions}
-      />
-    </div>
+        <TransactionSheet
+          transaction={open}
+          openKey={panel.openKey}
+          onClose={panel.close}
+          transactions={transactions}
+          cards={cards}
+          institutions={institutions}
+        />
+      </div>
+    </TransactionLabelsProvider>
   );
 }
+
+const KIND_TABS: KindFilter[] = ["all", "spending", "income", "card-payment", "transfer"];
+const KIND_TAB_LABELS: Record<KindFilter, string> = {
+  all: "All",
+  spending: "Spending",
+  income: "Income",
+  "card-payment": "Card payments",
+  transfer: "Transfers",
+};
+const KIND_NAMES: Record<Described["kind"], string> = {
+  spending: "Spending",
+  refund: "Refund",
+  income: "Income",
+  "card-payment": "Card payment",
+  transfer: "Transfer",
+  "loan-payment": "Loan payment",
+};

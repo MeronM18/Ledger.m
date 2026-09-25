@@ -8,7 +8,9 @@ import { SpendingTrends } from "@/components/spending-trends";
 import {
   SummaryLine,
   TransactionDayList,
+  TransactionLabelsProvider,
   TransactionSheet,
+  useTransactionLabels,
   useTransactionPanel,
   type TransactionRow,
 } from "@/components/transactions-explorer";
@@ -41,6 +43,7 @@ import {
 import { categoryChanges, paceComparison, previousMonth, typicalMonth, type MonthRef } from "@/lib/trends";
 import { humanizeTransaction, humanizeTransactionName } from "@/lib/transaction-display";
 import { cn } from "@/lib/utils";
+import { Segmented } from "@/components/segmented";
 
 const vizColor = (slot: number) => `var(--viz-${slot})`;
 const LEGEND_LIMIT = 12;
@@ -58,41 +61,6 @@ function todayIso(): string {
 }
 
 const pct = (amount: number, total: number) => (total > 0 ? `${((amount / total) * 100).toFixed(1)}%` : "0%");
-
-/** A pair (or more) of buttons where one is on, like a small segmented control. */
-export function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: React.ReactNode; title?: string }[];
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div role="radiogroup" aria-label={label} className="flex rounded-md border border-border p-0.5 text-xs">
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          role="radio"
-          aria-checked={value === o.value}
-          aria-label={o.title}
-          title={o.title}
-          onClick={() => onChange(o.value)}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-[5px] px-2.5 py-1 transition-colors",
-            value === o.value ? "bg-bone/12 text-bone ring-1 ring-bone/10 ring-inset hover:bg-bone/16" : "text-muted-foreground hover:bg-bone/6 hover:text-bone"
-          )}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // The donut, drawn directly so a slice can pop out smoothly: 240px square,
 // a ring between these radii, with a hair of space between slices.
@@ -387,6 +355,7 @@ export function SpendingReport({
   const [account, setAccount] = useState("all");
   const [search, setSearch] = useState("");
   const panel = useTransactionPanel();
+  const labels = useTransactionLabels(transactions, accounts, cards, connectedCardIssuers);
 
   const byId = useMemo(() => new Map(transactions.map((t) => [t.id, t])), [transactions]);
   // Spending as Budgets counts it; each row's amount is your share.
@@ -465,262 +434,264 @@ export function SpendingReport({
   const filtersOn = Number(account !== "all") + Number(search.trim() !== "");
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <Select
-          value={period}
-          onValueChange={(v) => {
-            setPeriod(v);
-            setSelected(null);
-          }}
-        >
-          <SelectTrigger aria-label="Period" className="min-w-40">
-            <CalendarDays className="size-3.5 text-muted-foreground" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent position="popper" align="end" className="max-h-80">
-            <SelectGroup>
-              {PERIOD_PRESETS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-            <SelectSeparator />
-            <SelectGroup>
-              <SelectLabel>A month</SelectLabel>
-              {months.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button size="sm" variant="outline" aria-label={filtersOn > 0 ? `Filters (${filtersOn} on)` : "Filters"}>
-              <SlidersHorizontal className="size-3.5" />
-              Filters
-              {filtersOn > 0 && <span className="ml-0.5 rounded-full bg-champagne px-1.5 font-mono text-[10px] leading-4 text-onyx tabular-nums">{filtersOn}</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="spending-search" className="text-xs font-normal text-muted-foreground">
-                Search
-              </Label>
-              <Input id="spending-search" placeholder="Merchant or description" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="spending-account" className="text-xs font-normal text-muted-foreground">
-                Account
-              </Label>
-              <Select value={account} onValueChange={setAccount}>
-                <SelectTrigger id="spending-account" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper">
-                  <SelectItem value="all">All accounts</SelectItem>
-                  {[...accounts, MANUAL_ACCOUNT_OPTION].map((a) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {accountLabel(a)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="self-end"
-              disabled={filtersOn === 0}
-              onClick={() => {
-                setAccount("all");
-                setSearch("");
-              }}
-            >
-              Reset
-            </Button>
-          </PopoverContent>
-        </Popover>
-      </div>
+    <TransactionLabelsProvider labels={labels}>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Select
+            value={period}
+            onValueChange={(v) => {
+              setPeriod(v);
+              setSelected(null);
+            }}
+          >
+            <SelectTrigger aria-label="Period" className="min-w-40">
+              <CalendarDays className="size-3.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" align="end" className="max-h-80">
+              <SelectGroup>
+                {PERIOD_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+              <SelectSeparator />
+              <SelectGroup>
+                <SelectLabel>A month</SelectLabel>
+                {months.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button size="sm" variant="outline" aria-label={filtersOn > 0 ? `Filters (${filtersOn} on)` : "Filters"}>
+                <SlidersHorizontal className="size-3.5" />
+                Filters
+                {filtersOn > 0 && <span className="ml-0.5 rounded-full bg-champagne px-1.5 font-mono text-[10px] leading-4 text-onyx tabular-nums">{filtersOn}</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="spending-search" className="text-xs font-normal text-muted-foreground">
+                  Search
+                </Label>
+                <Input id="spending-search" placeholder="Merchant or description" value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="spending-account" className="text-xs font-normal text-muted-foreground">
+                  Account
+                </Label>
+                <Select value={account} onValueChange={setAccount}>
+                  <SelectTrigger id="spending-account" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="all">All accounts</SelectItem>
+                    {[...accounts, MANUAL_ACCOUNT_OPTION].map((a) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {accountLabel(a)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="self-end"
+                disabled={filtersOn === 0}
+                onClick={() => {
+                  setAccount("all");
+                  setSearch("");
+                }}
+              >
+                Reset
+              </Button>
+            </PopoverContent>
+          </Popover>
+        </div>
 
-      <Card>
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
-              {view === "total" ? `Spending by ${by}` : "Spending over time"}
-            </p>
-            <p className="text-base font-medium text-bone">
-              {view === "total"
-                ? rangeLabel(range, today, months.length > 0 ? `${months[months.length - 1].value}-01` : null)
-                : monthSpanLabel(overTimeSpan.months)}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Over time is one total a month, so there's nothing to group by. */}
-            {view === "total" && (
-              <Select value={by} onValueChange={(v) => changeBy(v as BreakdownBy)}>
-                <SelectTrigger size="sm" aria-label="Group by" className="min-w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent position="popper" align="end">
-                  <SelectItem value="category">By category</SelectItem>
-                  <SelectItem value="merchant">By merchant</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
-            <Segmented
-              label="Show"
-              value={view}
-              onChange={setView}
-              options={[
-                { value: "total", label: "Total amounts" },
-                { value: "change", label: "Change over time" },
-              ]}
-            />
-            {view === "total" && (
+        <Card>
+          <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col gap-1">
+              <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
+                {view === "total" ? `Spending by ${by}` : "Spending over time"}
+              </p>
+              <p className="text-base font-medium text-bone">
+                {view === "total"
+                  ? rangeLabel(range, today, months.length > 0 ? `${months[months.length - 1].value}-01` : null)
+                  : monthSpanLabel(overTimeSpan.months)}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Over time is one total a month, so there's nothing to group by. */}
+              {view === "total" && (
+                <Select value={by} onValueChange={(v) => changeBy(v as BreakdownBy)}>
+                  <SelectTrigger size="sm" aria-label="Group by" className="min-w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper" align="end">
+                    <SelectItem value="category">By category</SelectItem>
+                    <SelectItem value="merchant">By merchant</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <Segmented
-                label="Chart"
-                value={chart}
-                onChange={setChart}
+                label="Show"
+                value={view}
+                onChange={setView}
                 options={[
-                  { value: "donut", label: <ChartPie className="size-3.5" />, title: "Donut" },
-                  { value: "bars", label: <ChartBarBig className="size-3.5" />, title: "Bars" },
+                  { value: "total", label: "Total amounts" },
+                  { value: "change", label: "Change over time" },
                 ]}
               />
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          {view === "total" ? (
-            items.length === 0 ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">No spending in this period.</p>
-            ) : chart === "donut" ? (
-              <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center">
-                <Donut slices={slices} total={total} gross={gross} focus={inDonut(focus)} onHover={setHovered} onSelect={select} />
-                <div className="flex w-full min-w-0 flex-col gap-2">
-                  <Legend items={legend} total={gross} selected={selected} focus={focus} onHover={setHovered} onSelect={select} />
+              {view === "total" && (
+                <Segmented
+                  label="Chart"
+                  value={chart}
+                  onChange={setChart}
+                  options={[
+                    { value: "donut", label: <ChartPie className="size-3.5" />, title: "Donut" },
+                    { value: "bars", label: <ChartBarBig className="size-3.5" />, title: "Bars" },
+                  ]}
+                />
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {view === "total" ? (
+              items.length === 0 ? (
+                <p className="py-16 text-center text-sm text-muted-foreground">No spending in this period.</p>
+              ) : chart === "donut" ? (
+                <div className="flex flex-col items-center gap-6 lg:flex-row lg:items-center">
+                  <Donut slices={slices} total={total} gross={gross} focus={inDonut(focus)} onHover={setHovered} onSelect={select} />
+                  <div className="flex w-full min-w-0 flex-col gap-2">
+                    <Legend items={legend} total={gross} selected={selected} focus={focus} onHover={setHovered} onSelect={select} />
+                    <Credits credits={credits} />
+                    {items.length > LEGEND_LIMIT && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAll((s) => !s)}
+                        className="inline-flex items-center gap-1 self-center text-xs text-champagne hover:underline"
+                      >
+                        {showAll ? "Show fewer" : `Show all ${items.length} ${by === "category" ? "categories" : "merchants"}`}
+                        <ChevronDown className={cn("size-3.5 transition-transform", showAll && "rotate-180")} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Bars items={legend} selected={selected} focus={focus} onHover={setHovered} onSelect={select} total={gross} />
                   <Credits credits={credits} />
                   {items.length > LEGEND_LIMIT && (
-                    <button
-                      type="button"
-                      onClick={() => setShowAll((s) => !s)}
-                      className="inline-flex items-center gap-1 self-center text-xs text-champagne hover:underline"
-                    >
+                    <button type="button" onClick={() => setShowAll((s) => !s)} className="inline-flex items-center gap-1 self-center text-xs text-champagne hover:underline">
                       {showAll ? "Show fewer" : `Show all ${items.length} ${by === "category" ? "categories" : "merchants"}`}
                       <ChevronDown className={cn("size-3.5 transition-transform", showAll && "rotate-180")} />
                     </button>
                   )}
                 </div>
-              </div>
+              )
             ) : (
               <div className="flex flex-col gap-2">
-                <Bars items={legend} selected={selected} focus={focus} onHover={setHovered} onSelect={select} total={gross} />
-                <Credits credits={credits} />
-                {items.length > LEGEND_LIMIT && (
-                  <button type="button" onClick={() => setShowAll((s) => !s)} className="inline-flex items-center gap-1 self-center text-xs text-champagne hover:underline">
-                    {showAll ? "Show fewer" : `Show all ${items.length} ${by === "category" ? "categories" : "merchants"}`}
-                    <ChevronDown className={cn("size-3.5 transition-transform", showAll && "rotate-180")} />
-                  </button>
-                )}
+                <p className="text-sm text-muted-foreground">
+                  {overTimeSpan.months.length > 1
+                    ? `Each month${selectedItem ? ` for ${selectedItem.label}` : ""}; ${monthName(monthRef)} is the one compared below.`
+                    : `${monthName(monthRef)}${selectedItem ? ` for ${selectedItem.label}` : ""}.`}
+                </p>
+                <MonthlyBars transactions={overTime} months={overTimeSpan.months} highlight={overTimeSpan.highlight} thisMonth={today.slice(0, 7)} />
               </div>
-            )
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm text-muted-foreground">
-                {overTimeSpan.months.length > 1
-                  ? `Each month${selectedItem ? ` for ${selectedItem.label}` : ""}; ${monthName(monthRef)} is the one compared below.`
-                  : `${monthName(monthRef)}${selectedItem ? ` for ${selectedItem.label}` : ""}.`}
-              </p>
-              <MonthlyBars transactions={overTime} months={overTimeSpan.months} highlight={overTimeSpan.highlight} thisMonth={today.slice(0, 7)} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {view === "change" && (
-        <SpendingTrends
-          pace={paceComparison(trendScope, monthRef, { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() })}
-          monthRef={monthRef}
-          changes={categoryChanges(scoped, monthRef)}
-          typical={typicalMonth(trendScope, monthRef)}
-          monthLabel={monthName(monthRef)}
-          previousMonthLabel={monthName(previousMonth(monthRef))}
-          currency="USD"
-          activeCategory={by === "category" && selected ? selected : "all"}
-          onSelectCategory={(c) => {
-            setBy("category");
-            setSelected(c === "all" ? null : c);
-          }}
-        />
-      )}
-
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="flex min-w-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-medium text-bone">Transactions</h2>
-            {selectedItem && (
-              <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>
-                {selectedItem.label}
-                <X className="size-3.5" aria-label="Clear" />
-              </Button>
             )}
-          </div>
-          <TransactionDayList
-            rows={listRows}
-            byDate
-            institutions={institutions}
-            onOpen={panel.open}
-            empty="No spending in this period."
-            label="Spending transactions"
+          </CardContent>
+        </Card>
+
+        {view === "change" && (
+          <SpendingTrends
+            pace={paceComparison(trendScope, monthRef, { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() })}
+            monthRef={monthRef}
+            changes={categoryChanges(scoped, monthRef)}
+            typical={typicalMonth(trendScope, monthRef)}
+            monthLabel={monthName(monthRef)}
+            previousMonthLabel={monthName(previousMonth(monthRef))}
+            currency="USD"
+            activeCategory={by === "category" && selected ? selected : "all"}
+            onSelectCategory={(c) => {
+              setBy("category");
+              setSelected(c === "all" ? null : c);
+            }}
           />
-        </div>
+        )}
 
-        {/* Level with the list, below its heading. */}
-        <div className="lg:sticky lg:top-6 lg:mt-10">
-          <Card aria-label="Summary">
-            <CardHeader>
-              <CardTitle>Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <dl className="flex flex-col text-sm">
-                <SummaryLine label="Total transactions">
-                  <span data-testid="summary-count">{listed.length}</span>
-                </SummaryLine>
-                <SummaryLine label="Largest transaction">{largest !== null ? formatCurrency(largest, "USD") : "—"}</SummaryLine>
-                <SummaryLine label="Average transaction">{charges.length > 0 ? formatCurrency(listTotal / charges.length, "USD") : "—"}</SummaryLine>
-                {refunds > 0 && (
-                  <SummaryLine label="Refunds">
-                    <span className="text-moss">+{formatCurrency(refunds, "USD")}</span>
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-medium text-bone">Transactions</h2>
+              {selectedItem && (
+                <Button size="sm" variant="ghost" onClick={() => setSelected(null)}>
+                  {selectedItem.label}
+                  <X className="size-3.5" aria-label="Clear" />
+                </Button>
+              )}
+            </div>
+            <TransactionDayList
+              rows={listRows}
+              byDate
+              institutions={institutions}
+              onOpen={panel.open}
+              empty="No spending in this period."
+              label="Spending transactions"
+            />
+          </div>
+
+          {/* Level with the list, below its heading. */}
+          <div className="lg:sticky lg:top-6 lg:mt-10">
+            <Card aria-label="Summary">
+              <CardHeader>
+                <CardTitle>Summary</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <dl className="flex flex-col text-sm">
+                  <SummaryLine label="Total transactions">
+                    <span data-testid="summary-count">{listed.length}</span>
                   </SummaryLine>
-                )}
-                <SummaryLine label="Total spending">
-                  <span data-testid="summary-total">{formatCurrency(listTotal, "USD")}</span>
-                </SummaryLine>
-              </dl>
-              <p className="text-xs text-muted-foreground">
-                Posted charges, net of refunds, counting only your share of anything paid back. Transfers and card
-                payments aren&apos;t spending.
-              </p>
-              <Button variant="ghost" size="sm" className="text-champagne hover:text-champagne" onClick={exportCsv} disabled={listed.length === 0}>
-                <Download className="size-3.5" />
-                Download CSV
-              </Button>
-            </CardContent>
-          </Card>
+                  <SummaryLine label="Largest transaction">{largest !== null ? formatCurrency(largest, "USD") : "—"}</SummaryLine>
+                  <SummaryLine label="Average transaction">{charges.length > 0 ? formatCurrency(listTotal / charges.length, "USD") : "—"}</SummaryLine>
+                  {refunds > 0 && (
+                    <SummaryLine label="Refunds">
+                      <span className="text-moss">+{formatCurrency(refunds, "USD")}</span>
+                    </SummaryLine>
+                  )}
+                  <SummaryLine label="Total spending">
+                    <span data-testid="summary-total">{formatCurrency(listTotal, "USD")}</span>
+                  </SummaryLine>
+                </dl>
+                <p className="text-xs text-muted-foreground">
+                  Posted charges, net of refunds, counting only your share of anything paid back. Transfers and card
+                  payments aren&apos;t spending.
+                </p>
+                <Button variant="ghost" size="sm" className="text-champagne hover:text-champagne" onClick={exportCsv} disabled={listed.length === 0}>
+                  <Download className="size-3.5" />
+                  Download CSV
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
 
-      <TransactionSheet
-        transaction={panel.openId ? (byId.get(panel.openId) ?? null) : null}
-        openKey={panel.openKey}
-        onClose={panel.close}
-        transactions={transactions}
-        cards={cards}
-        institutions={institutions}
-      />
-    </div>
+        <TransactionSheet
+          transaction={panel.openId ? (byId.get(panel.openId) ?? null) : null}
+          openKey={panel.openKey}
+          onClose={panel.close}
+          transactions={transactions}
+          cards={cards}
+          institutions={institutions}
+        />
+      </div>
+    </TransactionLabelsProvider>
   );
 }

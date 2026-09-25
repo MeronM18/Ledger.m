@@ -4,7 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, Download, SlidersHorizontal, X } from "lucide-react";
 import { Bar, CartesianGrid, Cell, ComposedChart, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/money";
-import { Segmented } from "@/components/spending-report";
+import { Segmented } from "@/components/segmented";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
