@@ -5,6 +5,8 @@ import { QueryErrorState } from "@/components/query-error";
 import { occurrencesBetween } from "@/lib/forecast";
 import { effectiveNextDate, subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
 import { loadFirstChargeAmounts } from "@/lib/subscription-data";
+import { loadManualAccounts } from "@/lib/manual-accounts";
+import { subscriptionAccount } from "@/lib/subscription-accounts";
 import { detectRecurring, newDetections } from "@/lib/recurring-detection";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -111,16 +113,29 @@ export default async function SubscriptionsPage() {
 
   // Recurring charges hiding in imported Apple Card transactions, minus
   // anything already tracked. A failed read just means no suggestions.
-  const importedRes = await fetchAllRows<{ date: string; name: string; amount: number; pfc_primary: string }>((from, to) =>
-    admin
-      .from("manual_transactions")
-      .select("date, name, amount, pfc_primary")
-      .eq("source", "apple_card_csv")
-      .order("date")
-      .order("id")
-      .range(from, to)
-  );
+  const [importedRes, manualAccounts] = await Promise.all([
+    fetchAllRows<{ date: string; name: string; amount: number; pfc_primary: string; manual_account_id: string | null }>((from, to) =>
+      admin
+        .from("manual_transactions")
+        .select("date, name, amount, pfc_primary, manual_account_id")
+        .eq("source", "apple_card_csv")
+        .order("date")
+        .order("id")
+        .range(from, to)
+    ),
+    loadManualAccounts(admin),
+  ]);
   if (importedRes.error) console.error("Failed to load imported card transactions", importedRes.error);
+
+  // A subscription you added that's charged to an imported card (Apple Card)
+  // belongs to that card: found by its name among the card's charges, or by
+  // the note left when it was added from them.
+  const importedCards = manualAccounts.accounts.filter((a) => a.type === "credit").map((a) => ({ id: `manual:${a.id}`, name: a.name }));
+  const importedCharges = (importedRes.data ?? []).map((t) => ({ name: t.name, accountId: t.manual_account_id ? `manual:${t.manual_account_id}` : null }));
+  const manualWithCards: ManualSubscription[] = manualSubscriptions.map((m) => ({
+    ...m,
+    foundOn: subscriptionAccount({ name: m.name, notes: m.notes }, importedCharges, importedCards),
+  }));
   const suggestions = newDetections(
     detectRecurring(
       (importedRes.data ?? [])
@@ -166,7 +181,7 @@ export default async function SubscriptionsPage() {
   return (
     <RecurringBoard
       streams={streams}
-      manualSubscriptions={manualSubscriptions}
+      manualSubscriptions={manualWithCards}
       accounts={accountRows.map((a) => ({ id: a.id, name: a.name, mask: a.mask }))}
       insights={insights}
       suggestions={suggestions}

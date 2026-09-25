@@ -132,9 +132,9 @@ function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: s
     storedNext: m.next_billing_date,
     next: projectNextOccurrence(m.next_billing_date, m.frequency),
     firstDate: null,
-    accountId: null,
-    account: "Added by you",
-    institution: null,
+    accountId: m.foundOn?.id ?? null,
+    account: m.foundOn?.name ?? "Added by you",
+    institution: m.foundOn?.name ?? null,
     logoUrl: null,
     pfcPrimary: null,
     pfcDetailed: null,
@@ -181,7 +181,7 @@ function Avatar({ item, className }: { item: Item; className?: string }) {
 }
 
 function AccountMark({ item }: { item: Item }) {
-  if (item.source === "manual") return <InstitutionAvatar icon="wallet" size="sm" />;
+  if (item.source === "manual" && !item.institution) return <InstitutionAvatar icon="wallet" size="sm" />;
   return <InstitutionAvatar institution={item.institution ?? item.account} size="sm" />;
 }
 
@@ -460,7 +460,9 @@ function Panel({ item, todayIso, onClose }: { item: Item; todayIso: string; onCl
               <span className="truncate">{item.account}</span>
             </span>
           </Detail>
-          <Detail label="Source">{item.source === "plaid" ? "Found by your bank" : "Added by you"}</Detail>
+          <Detail label="Source">
+            {item.source === "plaid" ? "Found by your bank" : item.manual?.foundOn ? `Added by you, charged to ${item.manual.foundOn.name}` : "Added by you"}
+          </Detail>
           {item.notes && <Detail label="Notes">{item.notes}</Detail>}
         </dl>
 
@@ -674,7 +676,7 @@ export function RecurringBoard({
     const list = all.filter(
       (i) =>
         (status === "active" ? i.active : !i.active) &&
-        (accountFilter === "all" || (accountFilter === "manual" ? i.source === "manual" : i.accountId === accountFilter)) &&
+        (accountFilter === "all" || (accountFilter === "manual" ? i.source === "manual" && i.accountId === null : i.accountId === accountFilter)) &&
         (!q || i.name.toLowerCase().includes(q))
     );
     const byName = (a: Item, b: Item) => a.name.localeCompare(b.name);
@@ -694,7 +696,11 @@ export function RecurringBoard({
     setOpenKey(key);
   };
   const openItem = openKey ? (all.find((i) => i.key === openKey) ?? null) : null;
-  const usedAccounts = accounts.filter((a) => streams.some((s) => s.account?.id === a.id));
+  // Accounts something is charged to: the bank's, and imported cards subscriptions you added are on.
+  const usedAccounts = [
+    ...accounts.filter((a) => streams.some((s) => s.account?.id === a.id)),
+    ...Array.from(new Map(manualSubscriptions.flatMap((m) => (m.foundOn ? [[m.foundOn.id, { id: m.foundOn.id, name: m.foundOn.name, mask: null }] as const] : []))).values()),
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -755,7 +761,7 @@ export function RecurringBoard({
                         {accountLabel(a)}
                       </SelectItem>
                     ))}
-                    {manualSubscriptions.length > 0 && <SelectItem value="manual">Added by you</SelectItem>}
+                    {manualSubscriptions.some((m) => !m.foundOn) && <SelectItem value="manual">Added by you</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>

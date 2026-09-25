@@ -32,6 +32,8 @@ export type ManualSubscription = {
   next_billing_date: string | null;
   notes: string | null;
   is_active: boolean;
+  // The imported card it's charged to (Apple Card), when that's known.
+  foundOn?: { id: string; name: string } | null;
 };
 
 const FREQUENCIES: ManualSubscription["frequency"][] = [
