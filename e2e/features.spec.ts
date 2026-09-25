@@ -286,7 +286,7 @@ test("recurring: a subscription found on the Apple Card is shown under it", asyn
 });
 
 test("settings: switching an alert off sticks and stops that alert", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?tab=alerts");
   await afterWelcome(page);
   const unusual = page.getByRole("switch", { name: /Unusual charges/ });
   await expect(unusual).toBeChecked();
@@ -314,6 +314,7 @@ test("settings: your name, alert thresholds, a test push and hiding an account a
   await expect(page.getByText("Name saved")).toBeVisible();
 
   // A new large-charge threshold changes what the alert says it does.
+  await page.getByRole("link", { name: "Alerts", exact: true }).click();
   await page.getByRole("spinbutton", { name: /^Large charge/ }).fill("400");
   await page.getByRole("button", { name: "Save thresholds" }).click();
   await expect(page.getByText("Any single charge of $400 or more, even with the one above off.")).toBeVisible();
@@ -323,6 +324,7 @@ test("settings: your name, alert thresholds, a test push and hiding an account a
   await expect.poll(async () => (await mockPushes(page)).some((p) => p.title.endsWith("Test notification"))).toBe(true);
 
   // Hiding an account keeps it hidden after a reload.
+  await page.getByRole("link", { name: "Connections", exact: true }).click();
   const savings = page.getByRole("switch", { name: "Show High Yield Savings" });
   await expect(savings).toBeChecked();
   await savings.click();
@@ -330,6 +332,7 @@ test("settings: your name, alert thresholds, a test push and hiding an account a
   await expect(page.getByText("High Yield Savings is hidden")).toBeVisible();
   await page.reload();
   await expect(page.getByRole("switch", { name: "Show High Yield Savings" })).not.toBeChecked();
+  await page.goto("/settings?tab=alerts");
   await expect(page.getByRole("spinbutton", { name: /^Large charge/ })).toHaveValue("400");
 
   await page.goto("/");
@@ -345,7 +348,7 @@ test("alerts: an unusually large charge is pushed", async ({ page }) => {
 });
 
 test("settings: the backup downloads every table and no secrets", async ({ page }) => {
-  await page.goto("/settings");
+  await page.goto("/settings?tab=data");
   await afterWelcome(page);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: /Download backup/ }).click()]);
   expect(download.suggestedFilename()).toMatch(/^ledger-m-backup-\d{4}-\d{2}-\d{2}\.json$/);

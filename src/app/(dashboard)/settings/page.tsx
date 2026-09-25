@@ -23,6 +23,7 @@ import { DISPLAY_NAME } from "@/lib/config";
 import { env } from "@/lib/env";
 import { formatCurrency } from "@/lib/format";
 import { needsReconnect, statusLabel } from "@/lib/item-status";
+import { cn } from "@/lib/utils";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { MerchantRule } from "@/lib/transaction-edits";
 import {
@@ -43,6 +44,7 @@ const SECTIONS = [
   { id: "layout", label: "Layout" },
   { id: "data", label: "Data" },
 ] as const;
+type SectionId = (typeof SECTIONS)[number]["id"];
 
 type ItemRow = {
   id: string;
@@ -61,7 +63,7 @@ function when(iso: string): string {
 
 function Section({ id, title, description, children }: { id: string; title: string; description?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <Card id={id} className="scroll-mt-6">
+    <Card id={id}>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description && <p className="max-w-[65ch] text-sm text-muted-foreground">{description}</p>}
@@ -71,8 +73,10 @@ function Section({ id, title, description, children }: { id: string; title: stri
   );
 }
 
-export default async function SettingsPage() {
+export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string | string[] }> }) {
   const admin = createAdminClient();
+  const { tab: tabParam } = await searchParams;
+  const tab: SectionId = SECTIONS.find((sec) => sec.id === tabParam)?.id ?? "profile";
   const [user, alertSettings, thresholds, displayName, accountSettings, { log: importLog }, itemsRes, rulesRes, orderRes] = await Promise.all([
     requireUser(),
     loadAlertSettings(admin),
@@ -119,20 +123,29 @@ export default async function SettingsPage() {
     <div className="flex flex-col gap-6">
       <h1 className="font-serif text-2xl font-semibold text-bone">Settings</h1>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[11rem_minmax(0,1fr)]">
-        <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto lg:sticky lg:top-6 lg:flex-col">
-          {SECTIONS.map((s) => (
-            <a
-              key={s.id}
-              href={`#${s.id}`}
-              className="shrink-0 rounded-md px-3 py-1.5 text-sm whitespace-nowrap text-muted-foreground transition-colors hover:bg-bone/6 hover:text-bone"
+      {/* One section at a time, picked from tabs like Reports'. */}
+      <nav aria-label="Settings sections" className="-mt-2 flex items-center gap-1 overflow-x-auto">
+        {SECTIONS.map((sec) => {
+          const active = sec.id === tab;
+          return (
+            <Link
+              key={sec.id}
+              href={sec.id === "profile" ? "/settings" : `/settings?tab=${sec.id}`}
+              aria-current={active ? "page" : undefined}
+              className={cn(
+                "relative mb-1.5 shrink-0 rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors hover:bg-bone/6",
+                "after:absolute after:inset-x-2 after:-bottom-1.5 after:h-0.5 after:rounded-full after:transition-colors",
+                active ? "font-medium text-bone after:bg-champagne" : "text-muted-foreground/80 after:bg-transparent hover:text-bone"
+              )}
             >
-              {s.label}
-            </a>
-          ))}
-        </nav>
+              {sec.label}
+            </Link>
+          );
+        })}
+      </nav>
 
-        <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex w-full max-w-3xl flex-col gap-6">
+        {tab === "profile" && (
           <Section id="profile" title="Profile">
             <SettingRow htmlFor="display-name" label="Your name" description="How the Overview greets you.">
               <DisplayNameForm initial={displayName} fallback={DISPLAY_NAME} />
@@ -150,33 +163,41 @@ export default async function SettingsPage() {
               <SignOutButtons />
             </SettingRow>
           </Section>
+        )}
 
-          <Section
-            id="alerts"
-            title="Alerts"
-            description={
-              <>
-                Pushed to your phone through ntfy (topic <span className="font-mono text-bone">{maskTopic(env.NTFY_TOPIC)}</span> on{" "}
-                {new URL(env.NTFY_SERVER).host}). Switching one off stops it being sent or listed under Recent alerts.
-              </>
-            }
-          >
-            <SettingRow label="Check delivery" description="Sends one push now, so you know alerts reach your phone.">
-              <TestAlertButton />
-            </SettingRow>
-            <h3 className="mt-6 mb-3 text-xs font-medium tracking-[0.1em] text-muted-foreground uppercase">Thresholds</h3>
-            <ThresholdsForm initial={thresholds} defaults={DEFAULT_THRESHOLDS} />
-            <h3 className="mt-6 mb-3 text-xs font-medium tracking-[0.1em] text-muted-foreground uppercase">Which alerts</h3>
-            <AlertSettingsForm
-              initial={alertSettings}
-              descriptions={{
-                "large-charge": `Any single charge of ${usd(thresholds.largeCharge)} or more, even with the one above off.`,
-                renewal: `A subscription charging within ${thresholds.renewalDaysAhead} day${thresholds.renewalDaysAhead === 1 ? "" : "s"}.`,
-                "low-balance": `A checking or savings account under ${usd(thresholds.lowBalance)}, at most weekly.`,
-              }}
-            />
-          </Section>
+        {tab === "alerts" && (
+          <>
+            <Section
+              id="alerts"
+              title="Delivery"
+              description={
+                <>
+                  Alerts are pushed to your phone through ntfy (topic <span className="font-mono text-bone">{maskTopic(env.NTFY_TOPIC)}</span>{" "}
+                  on {new URL(env.NTFY_SERVER).host}).
+                </>
+              }
+            >
+              <SettingRow label="Check delivery" description="Sends one push now, so you know alerts reach your phone.">
+                <TestAlertButton />
+              </SettingRow>
+            </Section>
+            <Section id="thresholds" title="Thresholds" description="The amounts and days alerts go by.">
+              <ThresholdsForm initial={thresholds} defaults={DEFAULT_THRESHOLDS} />
+            </Section>
+            <Section id="which-alerts" title="Which alerts" description="Switching one off stops it being sent or listed under Recent alerts.">
+              <AlertSettingsForm
+                initial={alertSettings}
+                descriptions={{
+                  "large-charge": `Any single charge of ${usd(thresholds.largeCharge)} or more, even with the one above off.`,
+                  renewal: `A subscription charging within ${thresholds.renewalDaysAhead} day${thresholds.renewalDaysAhead === 1 ? "" : "s"}.`,
+                  "low-balance": `A checking or savings account under ${usd(thresholds.lowBalance)}, at most weekly.`,
+                }}
+              />
+            </Section>
+          </>
+        )}
 
+        {tab === "connections" && (
           <Section
             id="connections"
             title="Connections"
@@ -202,7 +223,9 @@ export default async function SettingsPage() {
               </Button>
             </div>
           </Section>
+        )}
 
+        {tab === "rules" && (
           <Section id="rules" title="Rules & imports">
             <SettingRow
               label="Merchant rules"
@@ -230,7 +253,9 @@ export default async function SettingsPage() {
               </Button>
             </SettingRow>
           </Section>
+        )}
 
+        {tab === "layout" && (
           <Section id="layout" title="Layout">
             <SettingRow
               label="Card order"
@@ -243,7 +268,9 @@ export default async function SettingsPage() {
               <ResetLayoutButton customized={customizedLayout} />
             </SettingRow>
           </Section>
+        )}
 
+        {tab === "data" && (
           <Section
             id="data"
             title="Data"
@@ -264,7 +291,7 @@ export default async function SettingsPage() {
               <RestoreBackupButton />
             </SettingRow>
           </Section>
-        </div>
+        )}
       </div>
     </div>
   );

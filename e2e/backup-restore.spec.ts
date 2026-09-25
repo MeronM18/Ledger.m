@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { afterWelcome, expect, mockWrites, test } from "./test";
 
 test("a downloaded backup restores, after a preview of what comes back", async ({ page }, testInfo) => {
-  await page.goto("/settings");
+  await page.goto("/settings?tab=data");
   await afterWelcome(page);
   const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("link", { name: /Download backup/ }).click()]);
   const file = testInfo.outputPath("backup.json");
@@ -27,7 +27,7 @@ test("a downloaded backup restores, after a preview of what comes back", async (
 });
 
 test("a file that isn't a backup is turned away without changing anything", async ({ page }, testInfo) => {
-  await page.goto("/settings");
+  await page.goto("/settings?tab=data");
   await afterWelcome(page);
   const file = testInfo.outputPath("not-a-backup.json");
   fs.writeFileSync(file, JSON.stringify({ hello: "world" }));

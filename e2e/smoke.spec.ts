@@ -13,7 +13,7 @@ const PAGES = [
   { path: "/goals", heading: "Goals", shows: "Emergency fund" },
   { path: "/reports/year", heading: "Reports", shows: "Where it went" },
   { path: "/accounts", heading: "Accounts", shows: "Honda Civic" },
-  { path: "/settings", heading: "Settings", shows: "Download backup" },
+  { path: "/settings", heading: "Settings", shows: "Your name" },
 ];
 
 for (const { path, heading, shows } of PAGES) {
