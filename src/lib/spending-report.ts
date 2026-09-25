@@ -78,6 +78,41 @@ export function rangeLabel(range: DateRange, todayIso: string, earliest: string 
   return `${shortDate(start, !sameYear)} – ${shortDate(end, true)}`;
 }
 
+function shiftMonth(month: string, by: number): string {
+  const y = Number(month.slice(0, 4));
+  const m = Number(month.slice(5, 7)) - 1 + by;
+  return `${y + Math.floor(m / 12)}-${String(((m % 12) + 12) % 12 + 1).padStart(2, "0")}`;
+}
+
+/**
+ * The months "Change over time" draws, oldest first, and the one it
+ * compares (the month the period ends in, up to this one). A period of
+ * several months draws those months (the last 24 at most); a single month
+ * draws the year up to it, since one bar alone says nothing about change.
+ * Nothing before `earliestMonth`, when the history starts.
+ */
+export function overTimeMonths(range: DateRange, todayIso: string, earliestMonth: string | null): { months: string[]; highlight: string } {
+  const thisMonth = todayIso.slice(0, 7);
+  const end = range.end !== null && range.end.slice(0, 7) < thisMonth ? range.end.slice(0, 7) : thisMonth;
+  let start = range.start?.slice(0, 7) ?? earliestMonth ?? end;
+  if (start >= end) start = shiftMonth(end, -11);
+  if (earliestMonth && start < earliestMonth) start = earliestMonth;
+  if (start > end) start = end;
+  const months: string[] = [];
+  for (let m = start; m <= end; m = shiftMonth(m, 1)) months.push(m);
+  return { months: months.slice(-24), highlight: end };
+}
+
+/** "Sep 2026 – Aug 2026"-style span of a run of months. */
+export function monthSpanLabel(months: string[]): string {
+  if (months.length === 0) return "";
+  const label = (m: string) =>
+    new Date(`${m}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+  const first = label(months[0]);
+  const last = label(months[months.length - 1]);
+  return first === last ? first : `${first} – ${last}`;
+}
+
 export type BreakdownBy = "category" | "merchant";
 
 export type BreakdownItem = {

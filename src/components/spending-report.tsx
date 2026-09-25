@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import { CalendarDays, ChartBarBig, ChartPie, ChevronDown, Download, SlidersHorizontal, X } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/money";
 import { SpendingTrends } from "@/components/spending-trends";
 import {
@@ -30,6 +30,8 @@ import {
   donutSlices,
   EVERYTHING_ELSE,
   inRange,
+  monthSpanLabel,
+  overTimeMonths,
   PERIOD_PRESETS,
   periodRange,
   rangeLabel,
@@ -289,14 +291,39 @@ function Bars({
   );
 }
 
-function MonthlyBars({ transactions }: { transactions: SpendingTransaction[] }) {
-  const months = monthlyTotals(transactions).slice(-24);
-  if (months.length === 0) return <p className="py-12 text-center text-sm text-muted-foreground">No spending in this view yet.</p>;
+const barMonth = (month: string, withYear: boolean) =>
+  new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }) +
+  (withYear ? ` ’${month.slice(2, 4)}` : "");
+
+/**
+ * One bar a month for exactly the months given (a month with nothing spent
+ * is a $0 bar, not a gap), the compared month in full color and the rest
+ * quieter. The axis names the year on the first bar and every January, so
+ * "Sep ’24" can't be read as a day.
+ */
+function MonthlyBars({
+  transactions,
+  months,
+  highlight,
+  thisMonth,
+}: {
+  transactions: SpendingTransaction[];
+  months: string[];
+  highlight: string;
+  thisMonth: string;
+}) {
+  const totals = new Map(monthlyTotals(transactions).map((m) => [m.month, m.amount]));
+  const data = months.map((month, i) => ({
+    month,
+    label: barMonth(month, i === 0 || month.endsWith("-01")),
+    amount: Math.max(0, Math.round((totals.get(month) ?? 0) * 100) / 100),
+  }));
+  if (data.every((d) => d.amount === 0)) return <p className="py-12 text-center text-sm text-muted-foreground">No spending in these months.</p>;
   return (
     <ResponsiveContainer {...CHART_RESIZE} width="100%" height={260}>
-      <BarChart data={months}>
+      <BarChart data={data}>
         <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
-        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} minTickGap={12} />
+        <XAxis dataKey="label" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} axisLine={false} tickLine={false} minTickGap={12} interval="preserveStartEnd" />
         <YAxis
           tickFormatter={(v: number) => formatCompactCurrency(v, "USD")}
           tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
@@ -307,12 +334,22 @@ function MonthlyBars({ transactions }: { transactions: SpendingTransaction[] }) 
         <Tooltip
           {...chartTooltipProps}
           formatter={(v) => [formatCurrency(Number(v), "USD"), "Spent"]}
+          labelFormatter={(_, payload) => {
+            const month = (payload?.[0]?.payload as { month?: string } | undefined)?.month;
+            if (!month) return "";
+            const name = new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+            return month === thisMonth ? `${name} (so far)` : name;
+          }}
           cursor={{ fill: "var(--muted)" }}
           contentStyle={tooltipContentStyle}
           labelStyle={{ color: "var(--bone)" }}
           itemStyle={{ color: "var(--popover-foreground)" }}
         />
-        <Bar dataKey="amount" fill="var(--oxblood)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+        <Bar dataKey="amount" fill="var(--oxblood)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+          {data.map((d) => (
+            <Cell key={d.month} fill="var(--oxblood)" fillOpacity={d.month === highlight ? 1 : 0.45} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
@@ -404,6 +441,8 @@ export function SpendingReport({
     new Date(m.year, m.month, 1).toLocaleDateString("en-US", { month: "long", ...(m.year === monthRef.year ? {} : { year: "numeric" as const }) });
   const trendScope = selected && by === "category" ? scoped.filter((t) => breakdownKey(t, "category") === selected) : scoped;
   const overTime = selected ? scoped.filter((t) => breakdownKey(t, by) === selected) : scoped;
+  // The months the chart draws; the header names the same span.
+  const overTimeSpan = overTimeMonths(range, today, months.length > 0 ? months[months.length - 1].value : null);
 
   function select(key: string) {
     setSelected((s) => (s === key ? null : key));
@@ -513,7 +552,11 @@ export function SpendingReport({
             <p className="text-[11px] font-medium tracking-[0.12em] text-muted-foreground uppercase">
               {view === "total" ? `Spending by ${by}` : "Spending over time"}
             </p>
-            <p className="text-base font-medium text-bone">{rangeLabel(range, today, months.length > 0 ? `${months[months.length - 1].value}-01` : null)}</p>
+            <p className="text-base font-medium text-bone">
+              {view === "total"
+                ? rangeLabel(range, today, months.length > 0 ? `${months[months.length - 1].value}-01` : null)
+                : monthSpanLabel(overTimeSpan.months)}
+            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Over time is one total a month, so there's nothing to group by. */}
@@ -587,9 +630,11 @@ export function SpendingReport({
           ) : (
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
-                Every month{selectedItem ? ` for ${selectedItem.label}` : ""}, up to the last two years.
+                {overTimeSpan.months.length > 1
+                  ? `Each month${selectedItem ? ` for ${selectedItem.label}` : ""}; ${monthName(monthRef)} is the one compared below.`
+                  : `${monthName(monthRef)}${selectedItem ? ` for ${selectedItem.label}` : ""}.`}
               </p>
-              <MonthlyBars transactions={overTime} />
+              <MonthlyBars transactions={overTime} months={overTimeSpan.months} highlight={overTimeSpan.highlight} thisMonth={today.slice(0, 7)} />
             </div>
           )}
         </CardContent>

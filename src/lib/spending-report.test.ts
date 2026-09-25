@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { breakdown, donutSlices, EVERYTHING_ELSE, inRange, periodRange, rangeLabel } from "@/lib/spending-report";
+import { breakdown, donutSlices, EVERYTHING_ELSE, inRange, monthSpanLabel, overTimeMonths, periodRange, rangeLabel } from "@/lib/spending-report";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 
 const tx = (o: Partial<SpendingTransaction>): SpendingTransaction => ({
@@ -72,5 +72,41 @@ describe("breakdown", () => {
     const slices = donutSlices(items, 12);
     expect(slices).toHaveLength(12);
     expect(slices.at(-1)).toMatchObject({ key: EVERYTHING_ELSE, amount: 4 + 3 + 2 + 1 });
+  });
+});
+
+describe("overTimeMonths", () => {
+  const today = "2026-09-24";
+  const at = (period: string, earliest: string | null = "2024-10") => overTimeMonths(periodRange(period, today), today, earliest);
+
+  it("puts a single month in the year leading up to it, and compares that month", () => {
+    const { months, highlight } = at("this-month");
+    expect(months).toHaveLength(12);
+    expect(months[0]).toBe("2025-10");
+    expect(months.at(-1)).toBe("2026-09");
+    expect(highlight).toBe("2026-09");
+    expect(at("2026-05")).toMatchObject({ highlight: "2026-05" });
+    expect(at("2026-05").months.at(-1)).toBe("2026-05");
+    expect(at("last-month").highlight).toBe("2026-08");
+  });
+
+  it("draws exactly the months of a longer period, up to this one", () => {
+    expect(at("last-3-months").months).toEqual(["2026-07", "2026-08", "2026-09"]);
+    const year = at("this-year");
+    expect(year.months[0]).toBe("2026-01");
+    expect(year.months.at(-1)).toBe("2026-09");
+    expect(at("last-year")).toMatchObject({ highlight: "2025-12" });
+    expect(at("last-year").months).toHaveLength(12);
+  });
+
+  it("goes back no further than the history, and no more than two years", () => {
+    expect(at("this-month", "2026-06").months).toEqual(["2026-06", "2026-07", "2026-08", "2026-09"]);
+    expect(at("all", "2020-01").months).toHaveLength(24);
+    expect(at("all", "2020-01").months.at(-1)).toBe("2026-09");
+  });
+
+  it("names the span it draws", () => {
+    expect(monthSpanLabel(at("this-month").months)).toBe("Oct 2025 – Sep 2026");
+    expect(monthSpanLabel(["2026-09"])).toBe("Sep 2026");
   });
 });
