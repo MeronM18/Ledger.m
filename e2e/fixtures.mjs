@@ -134,7 +134,7 @@ export function buildFixtures(now = new Date()) {
   const manual_transactions = [];
   const mtx = (date, name, amount, primary, accountId = null, extra = {}) => {
     if (date > today) return;
-    manual_transactions.push({ id: uuid("mtx"), date: iso(date), name, amount: money(amount), pfc_primary: primary, payment_method: accountId ? null : "cash", notes: null, manual_account_id: accountId, source: accountId ? "apple" : "manual", external_id: accountId ? `ext-${seq}` : null,
+    manual_transactions.push({ id: uuid("mtx"), date: iso(date), name, amount: money(amount), pfc_primary: primary, payment_method: accountId ? null : "cash", notes: null, manual_account_id: accountId, source: accountId === IDS.appleCard ? "apple_card_csv" : accountId === IDS.appleSavings ? "apple_savings_csv" : "manual", external_id: accountId ? `ext-${seq}` : null,
       // Apple Card statements were imported 3 days ago; Apple Savings 20 days ago, so it's due for another.
       created_at: accountId === IDS.appleSavings ? hoursAgo(20 * 24) : hoursAgo(3 * 24),
       ...extra });
@@ -186,13 +186,16 @@ export function buildFixtures(now = new Date()) {
     net_worth_snapshots,
     manual_subscriptions: [
       { id: uuid("ms"), name: "Snapchat+", amount: 1.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 29)), notes: null, is_active: true },
+      // Added from the Apple Card statements' suggestions.
+      { id: uuid("ms"), name: "Uber One", amount: 9.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 12)), notes: "Found on your Apple Card", is_active: true },
     ],
     manual_assets: [
-      { id: uuid("ma"), name: "Cash", category: "cash", value: 620, is_liability: false, notes: null },
-      { id: uuid("ma"), name: "2019 Honda Civic", category: "vehicle", value: 14500, is_liability: false, notes: null },
-      { id: uuid("ma"), name: "Student loan", category: "other", value: 8200, is_liability: true, notes: null },
+      // Entered on different days, so the net worth line picks each up from then.
+      { id: uuid("ma"), name: "Cash", category: "cash", value: 620, is_liability: false, notes: null, created_at: hoursAgo(200 * 24), updated_at: hoursAgo(3 * 24) },
+      { id: uuid("ma"), name: "2019 Honda Civic", category: "vehicle", value: 14500, is_liability: false, notes: null, created_at: hoursAgo(300 * 24), updated_at: hoursAgo(300 * 24) },
+      { id: uuid("ma"), name: "Student loan", category: "other", value: 8200, is_liability: true, notes: null, created_at: hoursAgo(400 * 24), updated_at: hoursAgo(400 * 24) },
     ],
-    precious_metal_holdings: [{ id: uuid("pm"), metal: "gold", weight: 2, weight_unit: "oz", purity: 0.9167, notes: null }],
+    precious_metal_holdings: [{ id: uuid("pm"), metal: "gold", weight: 2, weight_unit: "oz", purity: 0.9167, notes: null, created_at: hoursAgo(90 * 24) }],
     metal_prices: [
       { metal: "gold", price_per_troy_oz_usd: 2650, fetched_at: hoursAgo(5), source: "test" },
       { metal: "silver", price_per_troy_oz_usd: 31, fetched_at: hoursAgo(5), source: "test" },

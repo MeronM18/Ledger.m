@@ -247,6 +247,44 @@ test("rewards: card purchases show what they earned, and Accounts adds it up", a
   await expect(rewards.getByRole("progressbar", { name: /5% categories used this quarter/ })).toBeVisible();
 });
 
+test("assets: a vehicle counts from the date it's given, and a new value keeps the old one as history", async ({ page }) => {
+  await page.goto("/accounts");
+  await afterWelcome(page);
+  const manager = page.locator("#manual-assets");
+  await manager.getByRole("button", { name: "Add asset" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: "Vehicle" }).click();
+  await expect(dialog.getByRole("radio", { name: "Vehicle" })).toHaveAttribute("aria-checked", "true");
+  await dialog.getByLabel("Name").fill("Ram Truck");
+  await dialog.getByLabel("Worth").fill("26000");
+  await dialog.getByLabel("As of").fill("2025-06-01");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(manager.getByText("Vehicle · since Jun 1, 2025")).toBeVisible();
+  const saved = (await mockWrites(page)).filter((w) => w.table === "ui_preferences" && (w.body as { key?: string }).key === "asset_values");
+  expect(JSON.stringify(saved.at(-1)?.body)).toContain('"date":"2025-06-01","value":26000');
+
+  // Worth less today: today's value changes, and what it was worth before stays.
+  await manager.getByRole("button", { name: "Edit Ram Truck" }).click();
+  await dialog.getByLabel("Worth").fill("24000");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(manager.locator("li").filter({ hasText: "Ram Truck" }).first()).toContainText("$24,000.00");
+  await manager.getByRole("button", { name: "Edit Ram Truck" }).click();
+  const history = dialog.getByRole("list", { name: "Values over time" });
+  await expect(history.getByText("Since Jun 1, 2025")).toBeVisible();
+  await expect(history.getByRole("listitem")).toHaveCount(2);
+});
+
+test("recurring: a subscription found on the Apple Card is shown under it", async ({ page }) => {
+  await page.goto("/recurring");
+  await afterWelcome(page);
+  await expect(page.getByRole("button", { name: /^Uber One,/ })).toContainText("Apple Card");
+  await expect(page.getByRole("button", { name: /^Snapchat\+,/ })).toContainText("Added by you");
+  await page.getByRole("combobox", { name: "Account" }).click();
+  await page.getByRole("option", { name: "Apple Card" }).click();
+  await expect(page.getByRole("button", { name: /^Uber One,/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Snapchat\+,/ })).toHaveCount(0);
+});
+
 test("settings: switching an alert off sticks and stops that alert", async ({ page }) => {
   await page.goto("/settings");
   await afterWelcome(page);
