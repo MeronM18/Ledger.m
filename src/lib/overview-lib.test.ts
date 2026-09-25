@@ -82,6 +82,14 @@ const progress = (o: Partial<BudgetProgress>): BudgetProgress => ({
 });
 
 describe("attentionItems", () => {
+  it("puts the monthly budget ahead of the categories when it's over or nearly used", () => {
+    const month = { budget: 2500, spent: 2600, remaining: -100, percentUsed: 1.04, status: "over" as const, projected: null, projectedOver: false };
+    const items = attentionItems([progress({ category: "B", label: "B", status: "over", spent: 130, remaining: -30, percentUsed: 1.3 })], [], today, "USD", [], [], month);
+    expect(items.map((i) => i.title)).toEqual(["You're over your monthly budget", "B is over budget"]);
+    expect(items[0].detail).toBe("$100.00 over your $2,500.00 budget");
+    expect(attentionItems([], [], today, "USD", [], [], { ...month, spent: 900, remaining: 1600, percentUsed: 0.36, status: "ok" })).toEqual([]);
+  });
+
   it("lists over-budget first, then warnings, then near renewals", () => {
     const items = attentionItems(
       [

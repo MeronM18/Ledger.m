@@ -3,6 +3,7 @@ import { cache } from "react";
 import { z } from "zod";
 import { resolveAccountSettings, type AccountSettings } from "@/lib/account-settings";
 import { resolveAlertSettings, type AlertSettings } from "@/lib/alert-settings";
+import { resolveMonthlyBudget } from "@/lib/budgets";
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -65,3 +66,12 @@ export async function loadAlertsSeenAt(admin: AdminClient): Promise<string | nul
   const parsed = z.string().datetime({ offset: true }).safeParse(data?.value);
   return parsed.success ? parsed.data : null;
 }
+
+export const MONTHLY_BUDGET_KEY = "monthly_budget";
+
+/** The monthly spending budget, or null when none is set. */
+export const loadMonthlyBudget = cache(async function loadMonthlyBudget(admin: AdminClient): Promise<{ amount: number | null; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", MONTHLY_BUDGET_KEY).maybeSingle();
+  if (error) console.error("Failed to load the monthly budget", error);
+  return { amount: resolveMonthlyBudget(data?.value), error: Boolean(error) };
+});

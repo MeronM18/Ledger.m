@@ -46,6 +46,16 @@ describe("budgetAlerts", () => {
     expect(alerts[1].body).toContain("$15.00 left");
   });
 
+  it("alerts on the whole month against the monthly budget, before any category", () => {
+    const month = { budget: 2500, spent: 2600, remaining: -100, percentUsed: 1.04, status: "over" as const, projected: null, projectedOver: false };
+    const alerts = budgetAlerts([progress({ category: "A", label: "A", status: "over", spent: 120, remaining: -20, percentUsed: 1.2 })], "2026-09", "USD", month);
+    expect(alerts.map((a) => a.key)).toEqual(["budget-over:MONTH:2026-09", "budget-over:A:2026-09"]);
+    expect(alerts[0].title).toBe("You're over your monthly budget");
+    const near = budgetAlerts([], "2026-09", "USD", { ...month, spent: 2100, remaining: 400, percentUsed: 0.84, status: "warning" });
+    expect(near[0]).toMatchObject({ key: "budget-warning:MONTH:2026-09", title: "Monthly budget is 84% used" });
+    expect(budgetAlerts([], "2026-09", "USD", { ...month, spent: 100, remaining: 2400, percentUsed: 0.04, status: "ok" })).toEqual([]);
+  });
+
   it("uses a new key each month so a budget alerts again next month", () => {
     const over = [progress({ status: "over", spent: 120, remaining: -20, percentUsed: 1.2 })];
     expect(budgetAlerts(over, "2026-09", "USD")[0].key).not.toBe(budgetAlerts(over, "2026-10", "USD")[0].key);

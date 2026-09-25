@@ -1,4 +1,4 @@
-import type { BudgetProgress } from "@/lib/budgets";
+import type { BudgetLine, BudgetProgress } from "@/lib/budgets";
 import { formatCurrency } from "@/lib/format";
 import { daysAgo, longDate, type ImportStatus } from "@/lib/import-reminders";
 
@@ -29,6 +29,17 @@ function overRow(b: BudgetProgress, currency: string): AttentionItem {
   };
 }
 
+/** The whole month against the monthly budget, when it's over or nearly used. */
+function monthRow(m: BudgetLine, currency: string): AttentionItem[] {
+  if (m.status === "over") {
+    return [{ key: "over-month", tone: "over", title: "You're over your monthly budget", detail: `${formatCurrency(-m.remaining, currency)} over your ${formatCurrency(m.budget, currency)} budget`, href: "/budgets" }];
+  }
+  if (m.status === "warning") {
+    return [{ key: "warn-month", tone: "warning", title: `Monthly budget is ${Math.round(m.percentUsed * 100)}% used`, detail: `${formatCurrency(m.remaining, currency)} left this month`, href: "/budgets" }];
+  }
+  return [];
+}
+
 function warningRow(b: BudgetProgress, currency: string): AttentionItem {
   return {
     key: `warn-${b.category}`,
@@ -48,7 +59,9 @@ export function attentionItems(
   // since every other number on the page goes stale while they're out.
   disconnected: { id: string; name: string }[] = [],
   // Apple accounts whose last statement import is two weeks old or more.
-  importsDue: { id: string; name: string; status: ImportStatus }[] = []
+  importsDue: { id: string; name: string; status: ImportStatus }[] = [],
+  // The month against the monthly budget, when one is set.
+  month: BudgetLine | null = null
 ): AttentionItem[] {
   const items: AttentionItem[] = [
     ...disconnected.map((bank) => ({
@@ -65,6 +78,7 @@ export function attentionItems(
       detail: `Last imported ${longDate(a.status.lastImportDate)} (${daysAgo(a.status.daysSince)}). Export the CSV from Wallet and import it on the Accounts page`,
       href: "/accounts",
     })),
+    ...(month ? monthRow(month, currency) : []),
     // Every budget on its own line, furthest over (or closest to its limit) first.
     ...budgets
       .filter((b) => b.status === "over")

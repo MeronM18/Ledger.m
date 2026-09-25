@@ -18,12 +18,11 @@ import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
-import { loadAccountSettings, loadAlertSettings } from "@/lib/ui-preferences";
-import { budgetProgress } from "@/lib/budgets";
+import { loadAccountSettings, loadAlertSettings, loadMonthlyBudget } from "@/lib/ui-preferences";
+import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
 import { effectiveNextDate } from "@/lib/subscription-insights";
 import { streamDisplayName } from "@/lib/transaction-display";
-import { categoryTotalsForMonth } from "@/lib/spending-aggregation";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow, easternToday } from "@/lib/time";
@@ -98,7 +97,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings] = await Promise.all([
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget] = await Promise.all([
     loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
@@ -120,6 +119,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     loadAlertSettings(admin),
     loadManualAccounts(admin),
     loadAccountSettings(admin),
+    loadMonthlyBudget(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -127,15 +127,14 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const alerts: Alert[] = [];
   const currency = data.currency;
 
-  if (data.error || budgetsRes.error) {
+  if (data.error || budgetsRes.error || monthlyBudget.error) {
     console.error("Skipping budget alerts: load failed", budgetsRes.error);
   } else {
-    const progress = budgetProgress(
-      categoryTotalsForMonth(data.spending, now.year, now.month),
-      (budgetsRes.data ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) })),
-      now
-    );
-    alerts.push(...budgetAlerts(progress, now.isoDate.slice(0, 7), currency));
+    const spent = monthCategorySpending(data.spending, now.year, now.month);
+    const list = (budgetsRes.data ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) }));
+    const progress = budgetProgress(spent, list, now);
+    const plan = budgetPlan(spent, list, monthlyBudget.amount, now);
+    alerts.push(...budgetAlerts(progress, now.isoDate.slice(0, 7), currency, plan.month));
   }
 
   if (data.error) {
@@ -155,7 +154,8 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
         data.spending,
         (budgetsRes.data ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) })),
         (snapshotsRes.data ?? []).map((r) => ({ date: r.date as string, net_worth: Number(r.net_worth) })),
-        now.isoDate
+        now.isoDate,
+        monthlyBudget.amount
       );
       if (summary) alerts.push(monthlySummaryAlert(summary, currency));
     }

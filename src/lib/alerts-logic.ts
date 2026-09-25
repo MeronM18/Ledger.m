@@ -1,4 +1,4 @@
-import type { BudgetProgress } from "@/lib/budgets";
+import type { BudgetLine, BudgetProgress } from "@/lib/budgets";
 import { GOOD_UTILIZATION, type CardUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
@@ -23,8 +23,25 @@ export type AlertKind =
 
 export type Alert = { key: string; kind: AlertKind; title: string; body: string };
 
-export function budgetAlerts(progress: BudgetProgress[], monthKey: string, currency: string): Alert[] {
+export function budgetAlerts(progress: BudgetProgress[], monthKey: string, currency: string, month: BudgetLine | null = null): Alert[] {
   const alerts: Alert[] = [];
+
+  // The whole month against the monthly budget first.
+  if (month?.status === "over") {
+    alerts.push({
+      key: `budget-over:MONTH:${monthKey}`,
+      kind: "budget-over",
+      title: "You're over your monthly budget",
+      body: `${formatCurrency(month.spent, currency)} spent of your ${formatCurrency(month.budget, currency)} monthly budget.`,
+    });
+  } else if (month?.status === "warning") {
+    alerts.push({
+      key: `budget-warning:MONTH:${monthKey}`,
+      kind: "budget-warning",
+      title: `Monthly budget is ${Math.round(month.percentUsed * 100)}% used`,
+      body: `${formatCurrency(month.spent, currency)} of ${formatCurrency(month.budget, currency)} spent, ${formatCurrency(month.remaining, currency)} left this month.`,
+    });
+  }
 
   for (const p of progress) {
     if (p.status === "over") {

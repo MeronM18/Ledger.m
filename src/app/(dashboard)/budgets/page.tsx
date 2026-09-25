@@ -5,35 +5,36 @@ import { QueryErrorState } from "@/components/query-error";
 import { Button } from "@/components/ui/button";
 import {
   BUDGETABLE_CATEGORIES,
-  budgetIncome,
   budgetMonth,
+  budgetPlan,
   budgetProgress,
   budgetTips,
   categoryLabel,
+  merchantsByCategory,
+  monthCategorySpending,
   shiftBudgetMonth,
-  suggestBudget,
-  unbudgetedSpending,
   type Budget,
 } from "@/lib/budgets";
-import { categoryTotalsForMonth } from "@/lib/spending-aggregation";
-import { loadSpendingData } from "@/lib/spending-data";
+import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow } from "@/lib/time";
+import { loadMonthlyBudget } from "@/lib/ui-preferences";
 
 export const metadata = { title: "Budgets" };
 
 export default async function BudgetsPage({ searchParams }: { searchParams: Promise<{ month?: string | string[] }> }) {
   const admin = createAdminClient();
 
-  const [data, { data: budgetRows, error: budgetError }, params] = await Promise.all([
-    loadSpendingData(admin),
+  const [ledger, { data: budgetRows, error: budgetError }, total, params] = await Promise.all([
+    loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
+    loadMonthlyBudget(admin),
     searchParams,
   ]);
 
   if (budgetError) console.error("Failed to load budgets", budgetError);
 
-  if (data.error || budgetError) {
+  if (ledger.error || budgetError || total.error) {
     return (
       <div className="flex flex-col gap-6">
         <h1 className="font-serif text-2xl font-semibold text-bone">Budgets</h1>
@@ -50,21 +51,16 @@ export default async function BudgetsPage({ searchParams }: { searchParams: Prom
 
   const today = calendarNow();
   const month = budgetMonth(typeof params.month === "string" ? params.month : undefined, today.isoDate);
-  const categoryTotals = categoryTotalsForMonth(data.spending, month.year, month.month);
-  const progress = budgetProgress(categoryTotals, budgets, month);
-  const unbudgeted = unbudgetedSpending(categoryTotals, budgets).map((c) => ({ category: c.category, label: c.label, amount: c.amount }));
+  // The month's spending, net, grouped the way Spending groups it.
+  const categorySpending = monthCategorySpending(ledger.spending, month.year, month.month);
+  const rows = budgetProgress(categorySpending, budgets, month);
+  const plan = budgetPlan(categorySpending, budgets, total.amount, month);
+  const merchants = merchantsByCategory(ledger.spending, month.key);
+  const tips = budgetTips(rows, plan, month, merchants);
 
-  // Suggestions look back from the month shown: its three before.
-  const suggestions: Record<string, number | null> = {};
-  for (const category of BUDGETABLE_CATEGORIES) {
-    suggestions[category] = suggestBudget(data.spending, category, month);
-  }
-
-  const taken = new Set([...budgets.map((b) => b.category), ...unbudgeted.map((u) => u.category)]);
+  // Categories you could give a budget: ones with spending this month first.
+  const taken = new Set([...budgets.map((b) => b.category), ...plan.unbudgeted.map((u) => u.category)]);
   const others = BUDGETABLE_CATEGORIES.filter((c) => !taken.has(c)).map((c) => ({ category: c, label: categoryLabel(c) }));
-
-  const income = budgetIncome(data.all, month.key);
-  const tips = budgetTips(progress, unbudgeted, suggestions, month);
 
   const prev = shiftBudgetMonth(month.key, -1);
   const next = month.isCurrent ? null : shiftBudgetMonth(month.key, 1);
@@ -103,15 +99,7 @@ export default async function BudgetsPage({ searchParams }: { searchParams: Prom
         </nav>
       </div>
 
-      <BudgetBoard
-        month={month}
-        income={income}
-        rows={progress}
-        unbudgeted={unbudgeted}
-        others={others}
-        suggestions={suggestions}
-        tips={tips}
-      />
+      <BudgetBoard month={month} rows={rows} plan={plan} budgets={budgets} merchants={merchants} others={others} tips={tips} />
     </div>
   );
 }

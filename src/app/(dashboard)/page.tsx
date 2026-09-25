@@ -8,7 +8,7 @@ import { AttentionCard } from "@/components/attention-card";
 import { DragHandle } from "@/components/sortable-card-list";
 import { SortableCardGrid, type GridCard } from "@/components/sortable-card-grid";
 import { applyCardOrder } from "@/lib/card-order";
-import { loadCardOrder } from "@/lib/ui-preferences";
+import { loadCardOrder, loadMonthlyBudget } from "@/lib/ui-preferences";
 import { GreetingHeader } from "@/components/greeting-header";
 import { NetWorthHero } from "@/components/net-worth-hero";
 import { OverviewGoalsCard, OverviewGoalsSkeleton } from "@/components/overview-goals-card";
@@ -21,7 +21,7 @@ import { loadManualAccounts } from "@/lib/manual-accounts";
 import { loadLedger } from "@/lib/spending-data";
 import { formatCurrency, timeAgo } from "@/lib/format";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
-import { categoryTotalsForMonth, incomeBySourceForMonth, monthlyIncomeVsSpending } from "@/lib/spending-aggregation";
+import { incomeBySourceForMonth, monthlyIncomeVsSpending } from "@/lib/spending-aggregation";
 import {
   isWithinNextDays,
   projectNextOccurrence,
@@ -35,9 +35,10 @@ import { BudgetBar } from "@/components/budget-bar";
 import { attentionItems } from "@/lib/attention";
 import { isDisconnected } from "@/lib/item-status";
 import { importStatus } from "@/lib/import-reminders";
-import { budgetProgress } from "@/lib/budgets";
+import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import { paceComparison, previousMonth } from "@/lib/trends";
+import { cn } from "@/lib/utils";
 
 function SectionLink({ href }: { href: string }) {
   return (
@@ -69,6 +70,7 @@ export default async function OverviewPage() {
     { data: snapshotRows, error: snapshotsError },
     { data: itemRows },
     savedOrder,
+    monthlyBudget,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -91,6 +93,7 @@ export default async function OverviewPage() {
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
     admin.from("items").select("id, institution_name, status, error_code"),
     loadCardOrder(admin, "overview"),
+    loadMonthlyBudget(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -114,19 +117,20 @@ export default async function OverviewPage() {
   const currency = ledger.currency;
   const spending = ledger.spending;
   const now = calendarNow();
-  const categoryTotals = categoryTotalsForMonth(spending, now.year, now.month);
-  const monthTotal = categoryTotals.reduce((sum, c) => sum + c.amount, 0);
-  const topCategories = [...categoryTotals].sort((a, b) => b.amount - a.amount).slice(0, 3);
+  // Net of refunds, the same total Spending and Budgets show for the month.
+  const categorySpending = monthCategorySpending(spending, now.year, now.month);
+  const monthTotal = Math.round(categorySpending.reduce((sum, c) => sum + c.amount, 0) * 100) / 100;
+  const topCategories = categorySpending.filter((c) => c.amount > 0).slice(0, 3);
   const monthLabel = now.monthLabel;
   const incomeBySource = incomeBySourceForMonth(allTransactions, now.year, now.month);
   const incomeVsSpending = monthlyIncomeVsSpending(allTransactions, now.year, now.month, ledger.connectedCardIssuers);
 
-  const allBudgetProgress = budgetProgress(
-    categoryTotals,
-    (budgetRows ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) })),
-    now
-  );
-  const budgetsToShow = allBudgetProgress.slice(0, 3);
+  const budgetList = (budgetRows ?? []).map((b) => ({ id: b.id, category: b.category, monthly_amount: Number(b.monthly_amount) }));
+  const allBudgetProgress = budgetProgress(categorySpending, budgetList, now);
+  // The monthly budget leads, then the categories closest to (or past) their limit.
+  const plan = budgetPlan(categorySpending, budgetList, monthlyBudget.amount, now);
+  const monthBudget = plan.month ? { id: "month", label: "Monthly budget", category: "", colorSlot: 0, ...plan.month } : null;
+  const budgetsToShow = [...(monthBudget ? [monthBudget] : []), ...allBudgetProgress.slice(0, monthBudget ? 2 : 3)];
 
   const manualSubsAsStreams = (manualSubsData ?? []).map((m) => ({
     average_amount: m.amount,
@@ -198,7 +202,7 @@ export default async function OverviewPage() {
     const status = importStatus(a.lastImportedAt, now.isoDate);
     return status?.overdue ? [{ id: a.id, name: a.name, status }] : [];
   });
-  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency, disconnected, importsDue);
+  const attention = attentionItems(allBudgetProgress, upcoming, now.isoDate, currency, disconnected, importsDue, plan.month);
 
   const netWorthError = Boolean(acctError || manualError || holdingsError || pricesError || manualCardsError);
   const spendingError = ledger.error;
@@ -252,7 +256,7 @@ export default async function OverviewPage() {
             <SectionLink href="/budgets" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {budgetsError || spendingError ? (
+            {budgetsError || spendingError || monthlyBudget.error ? (
               <QueryErrorState message="Couldn't load budgets." />
             ) : budgetsToShow.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -264,9 +268,9 @@ export default async function OverviewPage() {
               </p>
             ) : (
               budgetsToShow.map((b) => (
-                <div key={b.id} className="flex flex-col gap-1.5">
+                <div key={b.id} className={cn("flex flex-col gap-1.5", b.id === "month" && "border-b border-border pb-4")}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{b.label}</span>
+                    <span className={cn("font-medium", b.id === "month" && "text-bone")}>{b.label}</span>
                     <span className="text-muted-foreground">
                       {formatCurrency(b.spent, currency)} of {formatCurrency(b.budget, currency)}
                     </span>

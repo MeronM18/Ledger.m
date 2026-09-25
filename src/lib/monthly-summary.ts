@@ -1,8 +1,8 @@
 import type { Alert } from "@/lib/alerts-logic";
-import { budgetProgress, daysInMonth, type Budget } from "@/lib/budgets";
+import { budgetProgress, daysInMonth, monthCategorySpending, type Budget } from "@/lib/budgets";
 import { formatCurrency } from "@/lib/format";
 import { incomeDeposits } from "@/lib/income";
-import { categoryTotalsForMonth, type SpendingTransaction } from "@/lib/spending-aggregation";
+import type { SpendingTransaction } from "@/lib/spending-aggregation";
 
 // Pure. The push sent early each month about the month that just ended:
 // what came in, what went out, how net worth moved and how the budgets did.
@@ -19,6 +19,8 @@ export type MonthlySummary = {
   netWorthEnd: number | null;
   budgetsTotal: number;
   budgetsOver: { label: string; over: number }[];
+  // The month against the monthly budget, when one is set: what was left (negative when over).
+  monthlyBudget: { amount: number; left: number } | null;
   topCategory: { label: string; amount: number } | null;
 };
 
@@ -42,7 +44,8 @@ export function monthlySummary(
   spending: SpendingTransaction[],
   budgets: Budget[],
   snapshots: NetWorthPoint[],
-  todayIso: string
+  todayIso: string,
+  monthlyBudget: number | null = null
 ): MonthlySummary | null {
   const [ty, tm] = todayIso.split("-").map(Number);
   const year = tm === 1 ? ty - 1 : ty;
@@ -54,8 +57,9 @@ export function monthlySummary(
   const income = incomeDeposits(all)
     .filter((d) => d.date.startsWith(key))
     .reduce((s, d) => s + d.amount, 0);
-  const categories = categoryTotalsForMonth(spending, year, month);
-  const spent = categories.reduce((s, c) => s + c.amount, 0);
+  // Net of refunds, as Spending and Budgets count it.
+  const categories = monthCategorySpending(spending, year, month);
+  const spent = Math.round(categories.reduce((s, c) => s + c.amount, 0) * 100) / 100;
 
   // The nightly snapshot runs just after midnight, so the one dated the 1st
   // is the balance at the end of the month before: measure 1st to 1st.
@@ -65,7 +69,7 @@ export function monthlySummary(
 
   // Judged at the month's last day, so the result is final, not a pace.
   const progress = budgetProgress(categories, budgets, { year, month, isoDate: end });
-  const top = [...categories].sort((a, b) => b.amount - a.amount)[0] ?? null;
+  const top = categories.find((c) => c.amount > 0) ?? null;
 
   return {
     month: key,
@@ -80,6 +84,7 @@ export function monthlySummary(
       .filter((p) => p.status === "over")
       .sort((a, b) => a.remaining - b.remaining)
       .map((p) => ({ label: p.label, over: -p.remaining })),
+    monthlyBudget: monthlyBudget === null ? null : { amount: monthlyBudget, left: Math.round((monthlyBudget - spent) * 100) / 100 },
     topCategory: top ? { label: top.label, amount: top.amount } : null,
   };
 }
@@ -96,6 +101,14 @@ export function monthlySummaryAlert(s: MonthlySummary, currency: string): Alert 
   ];
   if (s.netWorthChange !== null && s.netWorthEnd !== null) {
     lines.push(`Net worth ${signed(s.netWorthChange, currency)}, now ${formatCurrency(s.netWorthEnd, currency)}`);
+  }
+  if (s.monthlyBudget) {
+    const { amount, left } = s.monthlyBudget;
+    lines.push(
+      left >= 0
+        ? `Monthly budget: ${formatCurrency(left, currency)} under your ${formatCurrency(amount, currency)}`
+        : `Monthly budget: ${formatCurrency(-left, currency)} over your ${formatCurrency(amount, currency)}`
+    );
   }
   if (s.budgetsTotal > 0) {
     const onTrack = s.budgetsTotal - s.budgetsOver.length;

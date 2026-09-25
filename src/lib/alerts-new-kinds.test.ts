@@ -79,6 +79,15 @@ describe("monthlySummary", () => {
     expect(alert.body).toContain("Budgets: 1 of 2 within; over: Food & Drink by $100.00");
   });
 
+  it("says how the month finished against the monthly budget", () => {
+    const under = monthlySummary(all, spending, budgets, snaps, "2026-09-01", 1200)!;
+    expect(under.monthlyBudget).toEqual({ amount: 1200, left: 200 });
+    expect(monthlySummaryAlert(under, "USD").body).toContain("Monthly budget: $200.00 under your $1,200.00");
+    const over = monthlySummary(all, spending, budgets, snaps, "2026-09-01", 900)!;
+    expect(monthlySummaryAlert(over, "USD").body).toContain("Monthly budget: $100.00 over your $900.00");
+    expect(monthlySummary(all, spending, budgets, snaps, "2026-09-01")!.monthlyBudget).toBeNull();
+  });
+
   it("rolls back over the new year, and says nothing about a month with no history", () => {
     expect(monthlySummary(all, spending, budgets, snaps, "2027-01-02")).toBeNull();
     const dec = [{ ...charge("2026-12-05", 20) }];
