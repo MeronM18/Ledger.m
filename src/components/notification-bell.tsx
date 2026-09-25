@@ -10,6 +10,7 @@ import {
   CalendarRange,
   CreditCard,
   FileUp,
+  HandCoins,
   Landmark,
   Receipt,
   TrendingUp,
@@ -35,6 +36,11 @@ const KIND: Record<string, { Icon: LucideIcon; className: string }> = {
   "high-utilization": { Icon: CreditCard, className: "text-champagne" },
   transaction: { Icon: ArrowLeftRight, className: "text-muted-foreground" },
   "monthly-summary": { Icon: CalendarRange, className: "text-moss" },
+  "deposit-review": { Icon: HandCoins, className: "text-champagne" },
+};
+// Where an alert of each kind takes you, for the ones with something to do.
+const HREF: Record<string, string> = {
+  "deposit-review": "/#deposits-to-review",
 };
 const FALLBACK = { Icon: Bell, className: "text-muted-foreground" };
 
@@ -114,6 +120,11 @@ export function NotificationBell({ alerts, seenAt, className }: { alerts: BellAl
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <p className="text-sm font-medium">{a.title}</p>
                     <p className="text-xs text-muted-foreground">{a.body}</p>
+                    {HREF[a.kind] && (
+                      <Link href={HREF[a.kind]} onClick={() => setOpen(false)} className="mt-0.5 self-start text-xs text-champagne underline-offset-4 hover:underline">
+                        Review it
+                      </Link>
+                    )}
                   </div>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <span className="text-xs text-muted-foreground">{timeAgo(a.created_at)}</span>

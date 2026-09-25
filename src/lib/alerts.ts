@@ -12,12 +12,13 @@ import {
 } from "@/lib/alerts-logic";
 import type { AlertSettings } from "@/lib/alert-settings";
 import { accountName } from "@/lib/account-settings";
+import { depositReviewAlerts, depositsToReview } from "@/lib/deposit-review";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
-import { loadAccountSettings, loadAlertSettings, loadAlertThresholds, loadMonthlyBudget } from "@/lib/ui-preferences";
+import { loadAccountSettings, loadAlertSettings, loadAlertThresholds, loadDepositReviews, loadMonthlyBudget } from "@/lib/ui-preferences";
 import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
 import { effectiveNextDate } from "@/lib/subscription-insights";
@@ -68,7 +69,7 @@ export async function dispatchAlerts(admin: AdminClient, alerts: Alert[]): Promi
     }
 
     try {
-      await sendNotification(alert.title, alert.body);
+      await sendNotification(alert.title, alert.body, alert.href);
       result.sent++;
     } catch (err) {
       console.error(`Failed to push alert ${alert.key}`, err);
@@ -96,7 +97,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget, thresholds] = await Promise.all([
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget, thresholds, depositReviews] = await Promise.all([
     loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
@@ -120,6 +121,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     loadAccountSettings(admin),
     loadMonthlyBudget(admin),
     loadAlertThresholds(admin),
+    loadDepositReviews(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -255,6 +257,14 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     console.error("Skipping Apple import reminders: load failed");
   } else {
     alerts.push(...importReminderAlerts(manualAccounts.accounts, now.isoDate));
+  }
+
+  // Deposits waiting for an answer (a Zelle from a friend, a check).
+  if (data.error || depositReviews.error) {
+    console.error("Skipping deposit review alerts: load failed");
+  } else {
+    const cardIds = new Set(data.cards.map((c) => c.id));
+    alerts.push(...depositReviewAlerts(depositsToReview(data.transactions, cardIds, depositReviews.reviews, now.isoDate), now.isoDate, currency));
   }
 
   return dispatchAlerts(admin, enabledAlerts(alerts, settings));

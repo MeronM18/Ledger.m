@@ -5,6 +5,7 @@ import { resolveAccountSettings, type AccountSettings } from "@/lib/account-sett
 import { resolveAlertThresholds, resolveDisplayName, type AlertThresholds } from "@/lib/app-preferences";
 import { resolveAlertSettings, type AlertSettings } from "@/lib/alert-settings";
 import { resolveMonthlyBudget } from "@/lib/budgets";
+import { resolveDepositReviews, type DepositReviews } from "@/lib/deposit-review";
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -96,4 +97,13 @@ export const loadMonthlyBudget = cache(async function loadMonthlyBudget(admin: A
   const { data, error } = await admin.from("ui_preferences").select("value").eq("key", MONTHLY_BUDGET_KEY).maybeSingle();
   if (error) console.error("Failed to load the monthly budget", error);
   return { amount: resolveMonthlyBudget(data?.value), error: Boolean(error) };
+});
+
+export const DEPOSIT_REVIEWS_KEY = "deposit_reviews";
+
+/** What each reviewed deposit was said to be, by transaction id. `error` when they couldn't be read. */
+export const loadDepositReviews = cache(async function loadDepositReviews(admin: AdminClient): Promise<{ reviews: DepositReviews; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", DEPOSIT_REVIEWS_KEY).maybeSingle();
+  if (error) console.error("Failed to load deposit reviews", error);
+  return { reviews: resolveDepositReviews(data?.value), error: Boolean(error) };
 });

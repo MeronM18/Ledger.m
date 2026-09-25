@@ -32,7 +32,7 @@ test("a charge paid back in cash counts only your share, and never touches Asset
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Transaction updated")).toBeVisible();
 
-  await expect(row.getByText("Paid back $40.00 cash")).toBeVisible();
+  await expect(row.getByText("Paid back $40.00")).toBeVisible();
   await expect(row.getByText("Edited")).toHaveCount(0);
 
   const writes = await mockWrites(page);
@@ -59,7 +59,7 @@ test("an Apple Card purchase can be paid back too, in full", async ({ page }) =>
   await expect(page.getByText("None of it counts as your spending.")).toBeVisible();
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText("Transaction updated")).toBeVisible();
-  await expect(row.getByText("Paid back in cash")).toBeVisible();
+  await expect(row.getByText("Paid back in full")).toBeVisible();
 
   const writes = await mockWrites(page);
   expect(writes.some((w) => w.table === "manual_transactions" && w.method === "PATCH" && "reimbursed_amount" in ((w.body as object | null) ?? {}))).toBe(true);

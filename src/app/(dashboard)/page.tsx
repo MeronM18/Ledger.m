@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { DepositReviewCard } from "@/components/deposit-review";
 import { GreetingHeader } from "@/components/greeting-header";
 import { MonthChart } from "@/components/overview/month-chart";
 import { AccountNotices, PanelSkeleton, RecentTransactionsCard, UpcomingCard, WhereItWentCard } from "@/components/overview/overview-cards";
@@ -9,6 +10,7 @@ import { applyCardOrder } from "@/lib/card-order";
 import { importStatus } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
+import { chargeOptions, depositsToReview } from "@/lib/deposit-review";
 import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import {
@@ -30,7 +32,7 @@ import { loadForecast } from "@/lib/forecast-data";
 import { loadGoals } from "@/lib/goals-data";
 import { calendarNow } from "@/lib/time";
 import { describeTransactions } from "@/lib/transaction-kind";
-import { loadCardOrder, loadDisplayName, loadMonthlyBudget } from "@/lib/ui-preferences";
+import { loadCardOrder, loadDepositReviews, loadDisplayName, loadMonthlyBudget } from "@/lib/ui-preferences";
 
 export const metadata = { title: "Overview" };
 
@@ -67,6 +69,9 @@ function movement(share: number | null, against: string): TileChange | null {
   return { text: `${pct}%`, direction: up ? "up" : "down", tone: "quiet", label: `${pct}% ${up ? "more" : "less"} than ${against}` };
 }
 
+// The newest charges sent along for "paid me back", to pick from or search.
+const CHARGES_SENT = 300;
+
 // Pills for "left to spend": the monthly budget in equal steps, lit for what's left of it.
 const BUDGET_PILLS = 24;
 // The site's own tones: budget status as on Budgets (moss, champagne, oxblood),
@@ -97,6 +102,7 @@ export default async function OverviewPage() {
     savedOrder,
     monthlyBudget,
     displayName,
+    depositReviews,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -111,6 +117,7 @@ export default async function OverviewPage() {
     loadCardOrder(admin, "overview"),
     loadMonthlyBudget(admin),
     loadDisplayName(admin),
+    loadDepositReviews(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -152,7 +159,13 @@ export default async function OverviewPage() {
   const where = whereItWent(categorySpending);
 
   // Each transaction's kind, so the recent ones read as spending, income, a card payment or a transfer.
-  const described = describeTransactions(ledger.transactions, new Set(ledger.cards.map((c) => c.id)), ledger.connectedCardIssuers);
+  const cardIds = new Set(ledger.cards.map((c) => c.id));
+  const described = describeTransactions(ledger.transactions, cardIds, ledger.connectedCardIssuers);
+
+  // Deposits that aren't pay or interest, waiting to be told what they were,
+  // and the charges one of them could be paying back.
+  const toReview = ledger.error || depositReviews.error ? [] : depositsToReview(ledger.transactions, cardIds, depositReviews.reviews, now.isoDate);
+  const charges = toReview.length ? chargeOptions(ledger.transactions, toReview[toReview.length - 1].date, ledger.connectedCardIssuers).slice(0, CHARGES_SENT) : [];
 
   // The only things the Overview asks you to do: sign in to a bank again, or import a statement.
   const notices = [
@@ -316,6 +329,7 @@ export default async function OverviewPage() {
     <div className="flex flex-col gap-6">
       <GreetingHeader name={displayName} />
       <AccountNotices items={notices} />
+      <DepositReviewCard deposits={toReview} charges={charges} />
       <SortableCardGrid page="overview" cards={applyCardOrder(cards, (c) => c.id, savedOrder)} />
     </div>
   );

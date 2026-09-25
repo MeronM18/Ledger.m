@@ -50,7 +50,7 @@ export type TransactionRow = {
   pending: boolean;
   account: { id: string; name: string; mask: string | null } | null;
   isManual?: boolean;
-  // Paid back in cash by someone else: only the rest counts as spending.
+  // Paid back by someone else (in cash, or a deposit said to be for it): only the rest counts as spending.
   paid_back?: number | null;
   // Only present when isManual is true: the stored row, for its edit form.
   manualSource?: ManualTransaction;
@@ -210,7 +210,7 @@ function Badges({ t }: { t: TransactionRow }) {
           className="text-[10px] text-moss"
           title={`Only ${formatCurrency(Math.max(0, t.amount - t.paid_back), t.iso_currency_code)} counts as your spending`}
         >
-          {t.paid_back >= t.amount - 0.005 ? "Paid back in cash" : `Paid back ${formatCurrency(t.paid_back, t.iso_currency_code)} cash`}
+          {t.paid_back >= t.amount - 0.005 ? "Paid back in full" : `Paid back ${formatCurrency(t.paid_back, t.iso_currency_code)}`}
         </Badge>
       ) : null}
       {(t.notes ?? t.manualSource?.notes) && (
@@ -831,7 +831,7 @@ export function TransactionsExplorer({
 
   // Exports exactly what's on screen, every filter and the sort applied.
   function exportCsv() {
-    const headers = ["Date", "Merchant", "Type", "Category", "Account", "Amount", "Paid back in cash", "Pending", "Source", "Notes"];
+    const headers = ["Date", "Merchant", "Type", "Category", "Account", "Amount", "Paid back", "Pending", "Source", "Notes"];
     const rows = sorted.map((t) => {
       const { displayName, displayCategoryLabel } = humanizeTransaction(t);
       const d = labels.described.get(t.id);

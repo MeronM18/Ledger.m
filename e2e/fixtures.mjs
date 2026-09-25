@@ -125,6 +125,9 @@ export function buildFixtures(now = new Date()) {
   // Far above what Kroger usually costs: the unusual-charge alert's case.
   tx(addDays(today, -1), IDS.freedom, 486.2, "KROGER", "Kroger", "FOOD_AND_DRINK", "FOOD_AND_DRINK_GROCERIES");
   tx(today, IDS.freedom, 6.45, "STARBUCKS", "Starbucks", "FOOD_AND_DRINK", "FOOD_AND_DRINK_COFFEE", { pending: true });
+  // Money in that isn't pay or interest, waiting on the Overview to be told what it was.
+  tx(addDays(today, -2), IDS.checking, -45, "Zelle payment from JORDAN LEE", null, "TRANSFER_IN", "TRANSFER_IN_ACCOUNT_TRANSFER");
+  tx(addDays(today, -9), IDS.momentum, -200, "MOBILE DEPOSIT", null, "TRANSFER_IN", "TRANSFER_IN_DEPOSIT");
 
   const manual_accounts = [
     { id: IDS.appleCard, name: "Apple Card", institution_name: "Apple Card", type: "credit", mask: null, credit_limit: 5000, balance_override: null, apy: null, created_at: "2026-09-01T12:00:00Z" },

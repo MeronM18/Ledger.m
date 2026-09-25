@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { PaidBackField, initialPaidBack, paidBackToSave, savePaidBack } from "@/components/paid-back-field";
+import { PaymentMethodPicker } from "@/components/payment-method-picker";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -261,12 +262,13 @@ export function ManualTransactionForm({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="tx-payment-method">Payment method (optional)</Label>
-        <Input
-          id="tx-payment-method"
+        <Label>
+          {form.direction === "out" ? "Paid with" : "Received as"} <span className="font-normal text-muted-foreground">(optional)</span>
+        </Label>
+        <PaymentMethodPicker
           value={form.payment_method}
-          onChange={(e) => setForm((f) => ({ ...f, payment_method: e.target.value }))}
-          placeholder="e.g. Cash, Check"
+          direction={form.direction}
+          onChange={(v) => setForm((f) => ({ ...f, payment_method: v }))}
         />
       </div>
 

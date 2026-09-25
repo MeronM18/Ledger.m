@@ -19,9 +19,11 @@ export type AlertKind =
   | "bank-signin"
   | "monthly-summary"
   | "import-reminder"
-  | "high-utilization";
+  | "high-utilization"
+  | "deposit-review";
 
-export type Alert = { key: string; kind: AlertKind; title: string; body: string };
+// `href`: where tapping the push opens, when there's a page for it.
+export type Alert = { key: string; kind: AlertKind; title: string; body: string; href?: string };
 
 export function budgetAlerts(progress: BudgetProgress[], monthKey: string, currency: string, month: BudgetLine | null = null): Alert[] {
   const alerts: Alert[] = [];
