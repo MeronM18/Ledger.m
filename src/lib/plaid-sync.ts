@@ -6,7 +6,7 @@ import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
 import { selectTransactionsToNotify, formatTransactionNotification, isLargeCharge } from "@/lib/plaid-notify-format";
 import { runAlertChecks } from "@/lib/alerts";
-import { loadAlertSettings } from "@/lib/ui-preferences";
+import { loadAlertSettings, loadAlertThresholds } from "@/lib/ui-preferences";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -126,9 +126,10 @@ async function notifyNewTransactions(
   const { toPush: candidates } = selectTransactionsToNotify(added, previouslyNotifiedIds);
   // With "every new transaction" switched off, only large charges still
   // push (if those are on).
-  const settings = candidates.length > 0 ? await loadAlertSettings(admin) : null;
+  const [settings, thresholds] = candidates.length > 0 ? await Promise.all([loadAlertSettings(admin), loadAlertThresholds(admin)]) : [null, null];
+  const large = (t: PlaidTransaction) => isLargeCharge(t, thresholds!.largeCharge);
   const toPush = settings
-    ? candidates.filter((t) => settings.transaction || (settings["large-charge"] && isLargeCharge(t)))
+    ? candidates.filter((t) => settings.transaction || (settings["large-charge"] && large(t)))
     : [];
 
   if (toPush.length > 0) {
@@ -146,12 +147,12 @@ async function notifyNewTransactions(
       );
       // A batch summary must not swallow a large charge: those still get
       // their own push.
-      for (const t of toPush.filter((t) => settings?.["large-charge"] && isLargeCharge(t))) {
+      for (const t of toPush.filter((t) => settings?.["large-charge"] && large(t))) {
         const account = accountByPlaidId.get(t.account_id);
         const accountLabel = account
           ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}`
           : "your account";
-        const { subtitle, body } = formatTransactionNotification(t, accountLabel);
+        const { subtitle, body } = formatTransactionNotification(t, accountLabel, thresholds!.largeCharge);
         await sendNotification(subtitle, body);
       }
     } else {
@@ -160,7 +161,7 @@ async function notifyNewTransactions(
         const accountLabel = account
           ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}`
           : "your account";
-        const { subtitle, body } = formatTransactionNotification(t, accountLabel);
+        const { subtitle, body } = formatTransactionNotification(t, accountLabel, thresholds!.largeCharge);
         await sendNotification(subtitle, body);
       }
     }

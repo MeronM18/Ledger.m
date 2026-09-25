@@ -2,7 +2,6 @@ import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DragHandle } from "@/components/sortable-card-list";
-import { ALERT_THRESHOLDS } from "@/lib/config";
 import { loadForecast } from "@/lib/forecast-data";
 import { formatCurrency } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -58,7 +57,7 @@ export async function SafeToSpendCard() {
             )}
             {data.forecast.firstBelowThreshold && (
               <p className="text-sm text-champagne">
-                Balance projected to dip under {formatCurrency(ALERT_THRESHOLDS.lowBalance, data.currency)} on{" "}
+                Balance projected to dip under {formatCurrency(data.lowBalanceThreshold, data.currency)} on{" "}
                 {shortDate(data.forecast.firstBelowThreshold.date)}.
               </p>
             )}

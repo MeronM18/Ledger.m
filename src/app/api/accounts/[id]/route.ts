@@ -5,13 +5,15 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { REWARDS_CHOICES } from "@/lib/account-settings";
 import { ACCOUNT_SETTINGS_KEY, loadAccountSettings } from "@/lib/ui-preferences";
 
-// What's editable on a connected account: the yield (sync never touches
-// apy), and a name and card statement days of your own, which live in
-// ui_preferences so a sync can't overwrite them.
+// What's editable on a connected account: the yield and whether it's
+// hidden (sync never touches either), and a name and card statement days of
+// your own, which live in ui_preferences so a sync can't overwrite them.
 const day = z.number().int().min(1).max(31).nullable();
 const bodySchema = z
   .object({
     apy: z.number().min(0).max(100).nullable(),
+    // Hidden accounts are left out of net worth, the Overview, alerts, goals and the forecast.
+    is_hidden: z.boolean(),
     nickname: z.string().trim().max(60).nullable(),
     statement_close_day: day,
     payment_due_day: day,
@@ -32,6 +34,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const admin = createAdminClient();
   const { data: account } = await admin.from("accounts").select("id").eq("id", id).maybeSingle();
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
+
+  if (parsed.data.is_hidden !== undefined) {
+    const { error } = await admin.from("accounts").update({ is_hidden: parsed.data.is_hidden }).eq("id", id);
+    if (error) {
+      console.error("Failed to update whether the account is hidden", error);
+      return NextResponse.json({ error: "Failed to update the account" }, { status: 500 });
+    }
+  }
 
   if (parsed.data.apy !== undefined) {
     const { error } = await admin.from("accounts").update({ apy: parsed.data.apy }).eq("id", id);

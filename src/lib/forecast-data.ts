@@ -1,5 +1,4 @@
 import "server-only";
-import { ALERT_THRESHOLDS } from "@/lib/config";
 import { accountName } from "@/lib/account-settings";
 import { buildForecast, nextDueDate, typicalDailySpend, type CardPayment, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
@@ -7,7 +6,7 @@ import { loadManualAccounts } from "@/lib/manual-accounts";
 import { effectiveNextDate } from "@/lib/subscription-insights";
 import { streamDisplayName } from "@/lib/transaction-display";
 import type { createAdminClient } from "@/lib/supabase/admin";
-import { loadAccountSettings } from "@/lib/ui-preferences";
+import { loadAccountSettings, loadAlertThresholds } from "@/lib/ui-preferences";
 import { calendarNow, easternToday } from "@/lib/time";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -20,6 +19,8 @@ export type ForecastData =
       currency: string;
       creditOwed: number;
       hasCashAccount: boolean;
+      // The low-balance line the forecast is checked against, from Settings.
+      lowBalanceThreshold: number;
     };
 
 function amountOf(...values: (number | string | null)[]): number {
@@ -30,7 +31,7 @@ function amountOf(...values: (number | string | null)[]): number {
 }
 
 export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
-  const [spending, accountsRes, streamsRes, manualRes, manualCardsRes, accountSettings] = await Promise.all([
+  const [spending, accountsRes, streamsRes, manualRes, manualCardsRes, accountSettings, thresholds] = await Promise.all([
     loadSpendingData(admin),
     admin
       .from("accounts")
@@ -45,6 +46,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     admin.from("manual_subscriptions").select("id, name, amount, frequency, next_billing_date").eq("is_active", true),
     loadManualAccounts(admin),
     loadAccountSettings(admin),
+    loadAlertThresholds(admin),
   ]);
 
   if (accountsRes.error) console.error("Failed to load accounts for forecast", accountsRes.error);
@@ -113,7 +115,7 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     // money only counts once it has landed in the balance.
     income: [],
     typicalDailySpend: typicalDailySpend(spending.spending, calendarNow().isoDate, bills),
-    lowBalanceThreshold: ALERT_THRESHOLDS.lowBalance,
+    lowBalanceThreshold: thresholds.lowBalance,
     cardPayments,
   });
 
@@ -123,5 +125,6 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     currency: spending.currency,
     creditOwed,
     hasCashAccount: cashAccounts.length > 0,
+    lowBalanceThreshold: thresholds.lowBalance,
   };
 }

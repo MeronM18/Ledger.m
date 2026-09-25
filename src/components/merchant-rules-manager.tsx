@@ -9,7 +9,7 @@ import { humanizeCategory } from "@/lib/plaid-categories";
 import type { MerchantRule } from "@/lib/transaction-edits";
 
 /** The Rules button on Transactions: every rename and recategorize rule, in a panel, each removable. */
-export function MerchantRulesButton({ rules }: { rules: MerchantRule[] }) {
+export function MerchantRulesButton({ rules, label = "Rules" }: { rules: MerchantRule[]; label?: string }) {
   const router = useRouter();
 
   async function handleDelete(id: string) {
@@ -31,7 +31,7 @@ export function MerchantRulesButton({ rules }: { rules: MerchantRule[] }) {
       <SheetTrigger asChild>
         <Button size="sm" variant="outline">
           <ListChecks className="size-3.5" />
-          Rules
+          {label}
           {rules.length > 0 && <span className="font-mono text-[11px] text-muted-foreground tabular-nums">{rules.length}</span>}
         </Button>
       </SheetTrigger>

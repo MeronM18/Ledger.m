@@ -28,3 +28,19 @@ export async function PUT(request: Request) {
   }
   return NextResponse.json({ ok: true });
 }
+
+/** Back to the default order on every page. */
+export async function DELETE() {
+  const auth = await requireApiUser();
+  if ("error" in auth) return auth.error;
+
+  const { error } = await createAdminClient()
+    .from("ui_preferences")
+    .delete()
+    .in("key", CARD_ORDER_PAGES.map(cardOrderKey));
+  if (error) {
+    console.error("Failed to reset card order", error);
+    return NextResponse.json({ error: "Failed to reset the layout" }, { status: 500 });
+  }
+  return NextResponse.json({ ok: true });
+}

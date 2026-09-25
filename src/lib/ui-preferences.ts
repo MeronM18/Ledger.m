@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { z } from "zod";
 import { resolveAccountSettings, type AccountSettings } from "@/lib/account-settings";
+import { resolveAlertThresholds, resolveDisplayName, type AlertThresholds } from "@/lib/app-preferences";
 import { resolveAlertSettings, type AlertSettings } from "@/lib/alert-settings";
 import { resolveMonthlyBudget } from "@/lib/budgets";
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
@@ -38,6 +39,24 @@ export async function loadAlertSettings(admin: AdminClient): Promise<AlertSettin
   if (error) console.error("Failed to load alert settings", error);
   return resolveAlertSettings(data?.value);
 }
+
+export const ALERT_THRESHOLDS_KEY = "alert_thresholds";
+
+/** The amounts and days alerts go by. If they can't be read, the defaults. */
+export const loadAlertThresholds = cache(async function loadAlertThresholds(admin: AdminClient): Promise<AlertThresholds> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", ALERT_THRESHOLDS_KEY).maybeSingle();
+  if (error) console.error("Failed to load alert thresholds", error);
+  return resolveAlertThresholds(data?.value);
+});
+
+export const DISPLAY_NAME_KEY = "display_name";
+
+/** The name the Overview greets you by. */
+export const loadDisplayName = cache(async function loadDisplayName(admin: AdminClient): Promise<string> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", DISPLAY_NAME_KEY).maybeSingle();
+  if (error) console.error("Failed to load the display name", error);
+  return resolveDisplayName(data?.value);
+});
 
 export const ACCOUNT_SETTINGS_KEY = "account_settings";
 

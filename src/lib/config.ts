@@ -1,10 +1,8 @@
-// Single-user app — a plain constant rather than a full user-profile/
-// settings system. Change this to change the name shown in the /overview
-// greeting; nothing else reads it.
+// The defaults for what Settings lets you change (app-preferences.ts reads
+// the saved values): the name in the /overview greeting, and the alert
+// thresholds.
 export const DISPLAY_NAME = "Mr. Matti";
 
-// Alert thresholds. Constants for the same reason as DISPLAY_NAME: one
-// user, so a settings screen would be more machinery than the values need.
 export const ALERT_THRESHOLDS = {
   // A single debit at or above this gets a "Large charge" label on its push.
   largeCharge: 250,

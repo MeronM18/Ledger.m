@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
+import { requireApiUser } from "@/lib/auth";
 import { env } from "@/lib/env";
 import { sendNotification } from "@/lib/notify";
 
-// Guarded by CRON_SECRET rather than requireUser() so it can be curl'd
-// directly to confirm ntfy delivery, the same way future cron-triggered
-// routes (webhook backfills, scheduled syncs) will be guarded.
+// Sends a test push. Works signed in (Settings' "Send a test alert"), or
+// with CRON_SECRET so it can be curl'd directly to confirm ntfy delivery.
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const auth = await requireApiUser();
+    if ("error" in auth) return auth.error;
   }
 
   try {

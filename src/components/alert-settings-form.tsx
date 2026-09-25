@@ -6,7 +6,14 @@ import { Switch } from "@/components/ui/switch";
 import { ALERT_SETTINGS, type AlertSettingKind, type AlertSettings } from "@/lib/alert-settings";
 
 /** One switch per kind of push. Each change saves on its own, right away. */
-export function AlertSettingsForm({ initial }: { initial: AlertSettings }) {
+export function AlertSettingsForm({
+  initial,
+  descriptions = {},
+}: {
+  initial: AlertSettings;
+  // Wording that depends on your thresholds, in place of the defaults'.
+  descriptions?: Partial<Record<AlertSettingKind, string>>;
+}) {
   const [settings, setSettings] = useState(initial);
   const [saving, setSaving] = useState<AlertSettingKind | null>(null);
 
@@ -35,7 +42,7 @@ export function AlertSettingsForm({ initial }: { initial: AlertSettings }) {
         <li key={kind} className="flex items-center justify-between gap-6 border-t border-border py-3.5 first:border-t-0 first:pt-0">
           <label htmlFor={`alert-${kind}`} className="flex min-w-0 cursor-pointer flex-col gap-0.5">
             <span className="text-sm font-medium">{label}</span>
-            <span className="text-xs text-muted-foreground">{description}</span>
+            <span className="text-xs text-muted-foreground">{descriptions[kind] ?? description}</span>
           </label>
           <Switch
             id={`alert-${kind}`}

@@ -57,7 +57,8 @@ export function isLargeCharge(t: PlaidTransaction, threshold: number = ALERT_THR
  */
 export function formatTransactionNotification(
   t: PlaidTransaction,
-  accountLabel: string
+  accountLabel: string,
+  largeCharge: number = ALERT_THRESHOLDS.largeCharge
 ): { subtitle: string; body: string } {
   const merchant = humanizeTransactionName(t);
   const isDebit = t.amount >= 0; // Plaid: positive = money out, negative = money in
@@ -65,7 +66,7 @@ export function formatTransactionNotification(
 
   let subtitle = isDebit ? `${amountStr} at ${merchant}` : `+${amountStr} from ${merchant}`;
   if (t.pending) subtitle = `Pending: ${subtitle}`;
-  if (isLargeCharge(t)) subtitle = `Large charge: ${subtitle}`;
+  if (isLargeCharge(t, largeCharge)) subtitle = `Large charge: ${subtitle}`;
   const body = `${isDebit ? "Debit" : "Credit"} on ${accountLabel}`;
 
   return { subtitle, body };

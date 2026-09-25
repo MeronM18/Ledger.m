@@ -8,7 +8,7 @@ import { AttentionCard } from "@/components/attention-card";
 import { DragHandle } from "@/components/sortable-card-list";
 import { SortableCardGrid, type GridCard } from "@/components/sortable-card-grid";
 import { applyCardOrder } from "@/lib/card-order";
-import { loadCardOrder, loadMonthlyBudget } from "@/lib/ui-preferences";
+import { loadCardOrder, loadMonthlyBudget, loadDisplayName } from "@/lib/ui-preferences";
 import { GreetingHeader } from "@/components/greeting-header";
 import { NetWorthHero } from "@/components/net-worth-hero";
 import { OverviewGoalsCard, OverviewGoalsSkeleton } from "@/components/overview-goals-card";
@@ -71,6 +71,7 @@ export default async function OverviewPage() {
     { data: itemRows },
     savedOrder,
     monthlyBudget,
+    displayName,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -94,6 +95,7 @@ export default async function OverviewPage() {
     admin.from("items").select("id, institution_name, status, error_code"),
     loadCardOrder(admin, "overview"),
     loadMonthlyBudget(admin),
+    loadDisplayName(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -564,7 +566,7 @@ export default async function OverviewPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <GreetingHeader />
+      <GreetingHeader name={displayName} />
       <SortableCardGrid page="overview" cards={applyCardOrder(overviewCards, (c) => c.id, savedOrder)} />
     </div>
   );

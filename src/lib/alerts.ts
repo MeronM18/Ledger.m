@@ -1,5 +1,4 @@
 import "server-only";
-import { ALERT_THRESHOLDS } from "@/lib/config";
 import {
   bankSigninAlerts,
   budgetAlerts,
@@ -18,7 +17,7 @@ import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
-import { loadAccountSettings, loadAlertSettings, loadMonthlyBudget } from "@/lib/ui-preferences";
+import { loadAccountSettings, loadAlertSettings, loadAlertThresholds, loadMonthlyBudget } from "@/lib/ui-preferences";
 import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
 import { sendNotification } from "@/lib/notify";
 import { effectiveNextDate } from "@/lib/subscription-insights";
@@ -97,7 +96,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget] = await Promise.all([
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget, thresholds] = await Promise.all([
     loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
@@ -120,6 +119,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     loadManualAccounts(admin),
     loadAccountSettings(admin),
     loadMonthlyBudget(admin),
+    loadAlertThresholds(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -208,7 +208,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       })),
     ];
     alerts.push(
-      ...renewalAlerts(candidates, today, ALERT_THRESHOLDS.renewalDaysAhead, currency),
+      ...renewalAlerts(candidates, today, thresholds.renewalDaysAhead, currency),
       ...priceIncreaseAlerts(streams, currency)
     );
   }
@@ -224,7 +224,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
           current_balance: a.current_balance === null ? null : Number(a.current_balance),
         })),
         now.isoDate,
-        ALERT_THRESHOLDS.lowBalance,
+        thresholds.lowBalance,
         currency
       )
     );

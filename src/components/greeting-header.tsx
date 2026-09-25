@@ -1,5 +1,3 @@
-import { DISPLAY_NAME } from "@/lib/config";
-
 // Single-user app, and that user is in Michigan (America/Detroit uses the
 // same Eastern rules as America/New_York) — pinned explicitly rather than
 // using the server's own timezone (Vercel functions don't run in any
@@ -21,7 +19,8 @@ function greetingForHour(hour: number): string {
  * session), so a plain `new Date()` here reflects the actual request time
  * on every load, not a value frozen at deploy/build time.
  */
-export function GreetingHeader() {
+/** `name` is the one set in Settings. */
+export function GreetingHeader({ name }: { name: string }) {
   const now = new Date();
   const hour =
     Number(
@@ -40,7 +39,7 @@ export function GreetingHeader() {
   return (
     <div className="flex flex-col gap-1">
       <h1 className="font-serif text-2xl font-semibold text-bone">
-        {greeting}, {DISPLAY_NAME}
+        {greeting}, {name}
       </h1>
       <p className="text-sm text-ash-grey">{dateLabel}</p>
     </div>

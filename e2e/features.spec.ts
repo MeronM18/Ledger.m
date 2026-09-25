@@ -304,6 +304,38 @@ test("settings: switching an alert off sticks and stops that alert", async ({ pa
   expect(titles.some((t) => t.includes("Sign in to Fifth Third Bank again"))).toBe(true);
 });
 
+test("settings: your name, alert thresholds, a test push and hiding an account all stick", async ({ page }) => {
+  await page.goto("/settings");
+  await afterWelcome(page);
+
+  // The Overview greets you by the name saved here.
+  await page.getByLabel("Your name").fill("Meron");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Name saved")).toBeVisible();
+
+  // A new large-charge threshold changes what the alert says it does.
+  await page.getByRole("spinbutton", { name: /^Large charge/ }).fill("400");
+  await page.getByRole("button", { name: "Save thresholds" }).click();
+  await expect(page.getByText("Any single charge of $400 or more, even with the one above off.")).toBeVisible();
+
+  // A test push goes out.
+  await page.getByRole("button", { name: "Send a test alert" }).click();
+  await expect.poll(async () => (await mockPushes(page)).some((p) => p.title.endsWith("Test notification"))).toBe(true);
+
+  // Hiding an account keeps it hidden after a reload.
+  const savings = page.getByRole("switch", { name: "Show High Yield Savings" });
+  await expect(savings).toBeChecked();
+  await savings.click();
+  await expect(savings).not.toBeChecked();
+  await expect(page.getByText("High Yield Savings is hidden")).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole("switch", { name: "Show High Yield Savings" })).not.toBeChecked();
+  await expect(page.getByRole("spinbutton", { name: /^Large charge/ })).toHaveValue("400");
+
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Meron");
+});
+
 test("alerts: an unusually large charge is pushed", async ({ page }) => {
   await page.goto("/");
   const res = await page.request.post("/api/alerts/check");
