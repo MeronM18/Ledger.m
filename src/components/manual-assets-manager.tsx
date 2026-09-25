@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Diff, Minus, Pencil, Plus, Trash2 } from "lucide-react";
+import { Diff, Minus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,18 +16,12 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Money } from "@/components/money";
 import { Ago } from "@/components/accounts-board";
 import { AssetRow, AssetSectionHeader } from "@/components/asset-row";
 import { InstitutionAvatar } from "@/components/institution-avatar";
+import type { ValuePoint } from "@/lib/asset-values";
 import { adjustedCash, type CashDirection } from "@/lib/cash-adjust";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -39,7 +33,10 @@ export type ManualAsset = {
   value: number;
   is_liability: boolean;
   notes: string | null;
+  created_at?: string | null;
   updated_at?: string | null;
+  // What it was worth over time, oldest first; it counts toward net worth from the first.
+  history?: ValuePoint[];
 };
 
 const CATEGORY_LABEL: Record<ManualAsset["category"], string> = {
@@ -50,21 +47,37 @@ const CATEGORY_LABEL: Record<ManualAsset["category"], string> = {
   other: "Other",
 };
 
+const CATEGORIES: ManualAsset["category"][] = ["cash", "vehicle", "property", "crypto", "other"];
+
+const NAME_HINT: Record<ManualAsset["category"], string> = {
+  cash: "e.g. Cash on hand",
+  vehicle: "e.g. 2021 Ram 1500",
+  property: "e.g. Home",
+  crypto: "e.g. Bitcoin",
+  other: "e.g. Watch collection",
+};
+
 type FormState = {
   name: string;
   category: ManualAsset["category"];
   value: string;
+  // The day the value is from.
+  asOf: string;
   is_liability: boolean;
   notes: string;
 };
 
-const EMPTY_FORM: FormState = {
+const emptyForm = (today: string): FormState => ({
   name: "",
   category: "cash",
   value: "",
+  asOf: today,
   is_liability: false,
   notes: "",
-};
+});
+
+const dayLabel = (iso: string) =>
+  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 
 /**
  * Cash only: add to it or take from it ("spent $40", "got $200 back")
@@ -190,16 +203,17 @@ function AdjustCashButton({ asset }: { asset: ManualAsset }) {
   );
 }
 
-export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
+export function ManualAssetsManager({ assets, today }: { assets: ManualAsset[]; today: string }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [form, setForm] = useState<FormState>(emptyForm(today));
   const [isSaving, setIsSaving] = useState(false);
+  const editing = editingId ? assets.find((a) => a.id === editingId) : undefined;
 
   function openCreate() {
     setEditingId(null);
-    setForm(EMPTY_FORM);
+    setForm(emptyForm(today));
     setDialogOpen(true);
   }
 
@@ -209,16 +223,34 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
       name: asset.name,
       category: asset.category,
       value: String(asset.value),
+      asOf: today,
       is_liability: asset.is_liability,
       notes: asset.notes ?? "",
     });
     setDialogOpen(true);
   }
 
+  async function removeValue(asset: ManualAsset, date: string) {
+    try {
+      const res = await fetch(`/api/manual-assets/${asset.id}/values?date=${date}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to remove that value");
+      toast.success(`Removed ${dayLabel(date)}`);
+      setForm((f) => ({ ...f, value: String(data.value) }));
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to remove that value");
+    }
+  }
+
   async function handleSave() {
     const value = Number(form.value);
-    if (!form.name.trim() || Number.isNaN(value)) {
-      toast.error("Enter a name and a numeric value");
+    if (!form.name.trim() || form.value.trim() === "" || Number.isNaN(value)) {
+      toast.error("Enter a name and a value");
+      return;
+    }
+    if (!form.asOf || form.asOf > today) {
+      toast.error("Pick the day it was worth that, today or before");
       return;
     }
 
@@ -230,6 +262,7 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
         value,
         is_liability: form.is_liability,
         notes: form.notes.trim() || null,
+        as_of: form.asOf,
       };
 
       const res = editingId
@@ -286,56 +319,95 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
               Add asset
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent
+            // Start in the name, not on the first kind (whose focus ring looks like it's picked).
+            onOpenAutoFocus={(e) => {
+              e.preventDefault();
+              document.getElementById("asset-name")?.focus();
+            }}
+          >
             <DialogHeader>
-              <DialogTitle>{editingId ? "Edit asset" : "Add manual asset"}</DialogTitle>
+              <DialogTitle>{editingId ? `Edit ${editing?.name ?? "asset"}` : "Add something you own"}</DialogTitle>
+              <DialogDescription>
+                {editingId
+                  ? "A new value counts from its date on. A date in the past fills in what it was worth then."
+                  : "It counts toward your net worth from the date you give."}
+              </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-4">
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-medium">What it is</legend>
+                <div role="radiogroup" aria-label="What it is" className="grid grid-cols-5 gap-1.5">
+                  {CATEGORIES.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      role="radio"
+                      aria-checked={form.category === c}
+                      onClick={() => setForm((f) => ({ ...f, category: c }))}
+                      className={cn(
+                        "flex flex-col items-center gap-1.5 rounded-lg border px-1 py-2.5 text-xs transition-colors",
+                        form.category === c ? "border-champagne/60 bg-champagne/10 text-bone" : "border-border text-muted-foreground hover:bg-muted/50 hover:text-bone"
+                      )}
+                    >
+                      <InstitutionAvatar icon={c} size="sm" />
+                      {CATEGORY_LABEL[c]}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="asset-name">Name</Label>
                 <Input
                   id="asset-name"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. 2021 Honda Civic"
+                  placeholder={NAME_HINT[form.category]}
                 />
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <Label>Category</Label>
-                <Select
-                  value={form.category}
-                  onValueChange={(v) =>
-                    setForm((f) => ({ ...f, category: v as ManualAsset["category"] }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(CATEGORY_LABEL).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="asset-value">{form.is_liability ? "Owed" : "Worth"}</Label>
+                  <Input
+                    id="asset-value"
+                    type="number"
+                    step="0.01"
+                    value={form.value}
+                    onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="asset-as-of">As of</Label>
+                  <Input id="asset-as-of" type="date" max={today} value={form.asOf} onChange={(e) => setForm((f) => ({ ...f, asOf: e.target.value }))} />
+                </div>
+              </div>
+
+              {editing && (editing.history?.length ?? 0) > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-sm font-medium">What it&apos;s been worth</p>
+                  <ul className="flex max-h-36 flex-col overflow-y-auto rounded-lg border border-border px-3" aria-label="Values over time">
+                    {[...(editing.history ?? [])].reverse().map((p) => (
+                      <li key={p.date} className="flex items-center justify-between gap-3 border-t border-border py-1.5 text-sm first:border-t-0">
+                        <span className="text-muted-foreground">{p.date === editing.history?.[0]?.date ? `Since ${dayLabel(p.date)}` : dayLabel(p.date)}</span>
+                        <span className="flex items-center gap-1">
+                          <Money amount={p.value} tone="neutral" className="text-sm" />
+                          {(editing.history?.length ?? 0) > 1 && (
+                            <Button type="button" size="icon-xs" variant="ghost" aria-label={`Remove the value on ${dayLabel(p.date)}`} onClick={() => removeValue(editing, p.date)}>
+                              <X className="size-3" />
+                            </Button>
+                          )}
+                        </span>
+                      </li>
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
+                  </ul>
+                </div>
+              )}
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="asset-value">Value</Label>
-                <Input
-                  id="asset-value"
-                  type="number"
-                  step="0.01"
-                  value={form.value}
-                  onChange={(e) => setForm((f) => ({ ...f, value: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <Label htmlFor="asset-liability">This is a liability (a debt, not an asset)</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="asset-liability">It&apos;s a debt (a loan or money owed), not something you own</Label>
                 <Switch
                   id="asset-liability"
                   checked={form.is_liability}
@@ -363,7 +435,7 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
 
       {assets.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">
-          Nothing yet. Add cash on hand, a car, property, crypto, or a debt outside a bank.
+          Nothing yet. Add cash on hand, a car or truck, property, crypto, or a debt outside a bank.
         </p>
       ) : (
         <ul>
@@ -372,7 +444,14 @@ export function ManualAssetsManager({ assets }: { assets: ManualAsset[] }) {
               key={asset.id}
               mark={<InstitutionAvatar icon={asset.category} />}
               name={asset.name}
-              detail={[CATEGORY_LABEL[asset.category], asset.is_liability ? "Owed" : null, asset.notes].filter(Boolean).join(" · ")}
+              detail={[
+                CATEGORY_LABEL[asset.category],
+                asset.is_liability ? "Owed" : null,
+                asset.notes,
+                asset.history?.[0] ? `since ${dayLabel(asset.history[0].date)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
               value={
                 <Money
                   amount={asset.is_liability ? -asset.value : asset.value}

@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
+import { recordAssetValue } from "@/lib/asset-history";
 import { adjustedCash } from "@/lib/cash-adjust";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calendarNow } from "@/lib/time";
 
 const bodySchema = z.object({
   direction: z.enum(["add", "subtract"]),
@@ -27,7 +29,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   for (let attempt = 0; attempt < 3; attempt++) {
     const { data: asset, error: readError } = await admin
       .from("manual_assets")
-      .select("value, category")
+      .select("value, category, created_at, updated_at")
       .eq("id", id)
       .maybeSingle();
     if (readError) {
@@ -53,7 +55,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       console.error("Failed to update manual asset", error);
       return NextResponse.json({ error: "Failed to update the balance" }, { status: 500 });
     }
-    if (updated && updated.length > 0) return NextResponse.json({ ok: true, previous: current, value: result.value });
+    if (updated && updated.length > 0) {
+      await recordAssetValue(admin, { id, value: current, created_at: asset.created_at, updated_at: asset.updated_at }, calendarNow().isoDate, result.value);
+      return NextResponse.json({ ok: true, previous: current, value: result.value });
+    }
   }
 
   return NextResponse.json({ error: "The balance changed while saving. Try again." }, { status: 409 });

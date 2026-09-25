@@ -1,5 +1,7 @@
 import "server-only";
+import { shiftAssetValues, startAssetValues } from "@/lib/asset-history";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import { calendarNow } from "@/lib/time";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -26,14 +28,17 @@ export function cashDeltaForTransaction(
  * never recomputed from scratch by summing cash transactions (that would
  * double-count against this same path). If no Cash asset exists yet, one is
  * created starting from this adjustment, so the first logged cash
- * transaction is never silently dropped.
+ * transaction is never silently dropped. Its history moves by the same
+ * amount from `onDate` (the transaction's day) on, so the net worth line
+ * shows cash spent on the day it was spent.
  */
-export async function adjustCashAsset(admin: AdminClient, delta: number): Promise<void> {
+export async function adjustCashAsset(admin: AdminClient, delta: number, onDate?: string | null): Promise<void> {
   if (delta === 0) return;
+  const day = onDate && /^\d{4}-\d{2}-\d{2}$/.test(onDate) ? onDate : calendarNow().isoDate;
 
   const { data: existing, error: fetchError } = await admin
     .from("manual_assets")
-    .select("id, value")
+    .select("id, value, created_at, updated_at")
     .eq("category", "cash")
     .ilike("name", "cash")
     .limit(1)
@@ -51,17 +56,25 @@ export async function adjustCashAsset(admin: AdminClient, delta: number): Promis
       .eq("id", existing.id);
     if (updateError) {
       console.error("Failed to adjust Cash manual asset balance", updateError);
+      return;
     }
+    await shiftAssetValues(admin, { ...existing, value: Number(existing.value) }, day, delta);
     return;
   }
 
-  const { error: insertError } = await admin.from("manual_assets").insert({
-    name: "Cash",
-    category: "cash",
-    value: delta,
-    is_liability: false,
-  });
+  const { data: created, error: insertError } = await admin
+    .from("manual_assets")
+    .insert({
+      name: "Cash",
+      category: "cash",
+      value: delta,
+      is_liability: false,
+    })
+    .select("id")
+    .single();
   if (insertError) {
     console.error("Failed to auto-create Cash manual asset", insertError);
+    return;
   }
+  await startAssetValues(admin, created.id, day, delta);
 }

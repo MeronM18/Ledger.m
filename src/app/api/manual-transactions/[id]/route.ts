@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // another $10, not by $30 again.
   const { data: previous, error: fetchError } = await admin
     .from("manual_transactions")
-    .select("amount, payment_method")
+    .select("amount, payment_method, date")
     .eq("id", id)
     .single();
   if (fetchError) {
@@ -50,7 +50,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (previous) {
     const oldDelta = cashDeltaForTransaction(previous.amount, previous.payment_method);
     const newDelta = cashDeltaForTransaction(parsed.data.amount, parsed.data.payment_method);
-    await adjustCashAsset(admin, newDelta - oldDelta);
+    const newDate = parsed.data.date ?? previous.date;
+    if (newDate === previous.date) {
+      await adjustCashAsset(admin, newDelta - oldDelta, newDate);
+    } else {
+      // Moved to another day: undo it where it was, then count it where it is.
+      await adjustCashAsset(admin, -oldDelta, previous.date);
+      await adjustCashAsset(admin, newDelta, newDate);
+    }
   }
 
   return NextResponse.json({ ok: true });
@@ -66,7 +73,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   const { data: previous, error: fetchError } = await admin
     .from("manual_transactions")
-    .select("amount, payment_method")
+    .select("amount, payment_method, date")
     .eq("id", id)
     .single();
   if (fetchError) {
@@ -82,7 +89,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
   if (previous) {
     const originalDelta = cashDeltaForTransaction(previous.amount, previous.payment_method);
-    await adjustCashAsset(admin, -originalDelta);
+    await adjustCashAsset(admin, -originalDelta, previous.date);
   }
 
   return NextResponse.json({ ok: true });

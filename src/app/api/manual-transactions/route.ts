@@ -35,10 +35,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create transaction" }, { status: 500 });
   }
 
-  await adjustCashAsset(
-    admin,
-    cashDeltaForTransaction(parsed.data.amount, parsed.data.payment_method)
-  );
+  await adjustCashAsset(admin, cashDeltaForTransaction(parsed.data.amount, parsed.data.payment_method), parsed.data.date);
 
   return NextResponse.json({ transaction: data });
 }

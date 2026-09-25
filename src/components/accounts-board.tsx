@@ -291,7 +291,8 @@ function NetWorthPanel({
           />
         )}
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Worked out from today&apos;s balances and the transactions since. Cash, property and metals count at today&apos;s value.
+          Worked out from today&apos;s balances and the transactions since. Things you track yourself count from the day they were added (or the
+          date you gave), at the values you entered; metals at today&apos;s prices.
           {picked === null && data.length >= 2 && " Click a day to see what it was made of."}
         </p>
       </CardContent>
@@ -405,6 +406,7 @@ function DayBreakdown({
                   <span className="text-foreground">{row.name}</span>
                   {row.mask && <span className="ml-1.5 hidden font-mono text-xs sm:inline">••{row.mask}</span>}
                   {!tracked && <span className="block text-[11px]">Counted at today&apos;s value</span>}
+                  {tracked && row.ref.type === "metals" && <span className="block text-[11px]">At today&apos;s prices</span>}
                 </th>
                 <td className={cell}>
                   <Money amount={then} currency="USD" tone="neutral" className="text-xs" />

@@ -8,6 +8,7 @@
 
 import { accountName, type AccountSettings } from "@/lib/account-settings";
 import { addDays, dailyBalances, type HistoryTx } from "@/lib/account-history";
+import { valueSeries, type ValuePoint } from "@/lib/asset-values";
 import { formatCurrency } from "@/lib/format";
 import { prettyName } from "@/lib/transaction-display";
 
@@ -90,6 +91,8 @@ export type ManualAssetInput = {
   value: number;
   is_liability: boolean;
   updated_at?: string | null;
+  // What it was worth over time (asset-values.ts); without them it counts at today's value throughout.
+  points?: ValuePoint[];
 };
 
 export type BoardInput = {
@@ -97,7 +100,14 @@ export type BoardInput = {
   manualAccounts: ManualAccountInput[];
   assets: ManualAssetInput[];
   // Which metals are held decides the mark: a gold bar, a silver bar, or both.
-  metals: { value: number; count: number; pricedAt: string | null; kinds?: ("gold" | "silver")[] };
+  metals: {
+    value: number;
+    count: number;
+    pricedAt: string | null;
+    kinds?: ("gold" | "silver")[];
+    // Each holding counts from the day it was added, at today's prices.
+    points?: ValuePoint[];
+  };
   settings: AccountSettings;
   // Posted transactions by account id (a manual account's as `manual:<id>`).
   transactions: Map<string, HistoryTx[]>;
@@ -242,7 +252,7 @@ export function buildBoard(input: BoardInput): BoardRow[] {
       icon: place.icon,
       balance: Number(a.value),
       liability: a.is_liability,
-      series: null,
+      series: a.points?.length ? valueSeries(a.points, historyStart, todayIso) : null,
       updated: { at: a.updated_at ?? null, how: "entered" },
       transactionsHref: null,
       ref: { type: "asset", assetId: a.id },
@@ -261,7 +271,7 @@ export function buildBoard(input: BoardInput): BoardRow[] {
       icon: input.metals.kinds?.length === 1 ? input.metals.kinds[0] : "metals",
       balance: input.metals.value,
       liability: false,
-      series: null,
+      series: input.metals.points?.length ? valueSeries(input.metals.points, historyStart, todayIso) : null,
       updated: { at: input.metals.pricedAt, how: "priced" },
       transactionsHref: null,
       ref: { type: "metals" },

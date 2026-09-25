@@ -35,6 +35,8 @@ import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { buildBoard, historyStartFor, type BoardRow, type ManualAssetInput } from "@/lib/accounts-board";
 import { MAX_HISTORY_DAYS, type HistoryTx } from "@/lib/account-history";
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
+import { assetHistories, dayOf, loadAssetValues } from "@/lib/asset-history";
+import { withValue, type ValuePoint } from "@/lib/asset-values";
 
 type AccountRow = {
   id: string;
@@ -126,6 +128,7 @@ export default async function AccountsPage() {
     ledger,
     { data: assetRows, error: assetsError },
     { data: holdingsData },
+    assetValues,
     { data: pricesData },
   ] = await Promise.all([
     admin
@@ -149,8 +152,9 @@ export default async function AccountsPage() {
     loadCardOrder(admin, "accounts"),
     loadAccountSettings(admin),
     loadLedger(admin),
-    admin.from("manual_assets").select("id, name, category, value, is_liability, notes, updated_at").order("created_at"),
-    admin.from("precious_metal_holdings").select("id, metal, weight, weight_unit, purity, notes").order("created_at", { ascending: false }),
+    admin.from("manual_assets").select("id, name, category, value, is_liability, notes, created_at, updated_at").order("created_at"),
+    admin.from("precious_metal_holdings").select("id, metal, weight, weight_unit, purity, notes, created_at").order("created_at", { ascending: false }),
+    loadAssetValues(admin),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd, fetched_at"),
   ]);
 
@@ -214,6 +218,18 @@ export default async function AccountsPage() {
   const prices = pricesData ?? [];
   const pricedAt = prices.map((p) => p.fetched_at as string | null).filter(Boolean).sort().at(-1) ?? null;
 
+  // Assets you track count from the day they were had, at the values they had
+  // (asset-values.ts); metals from the day each holding was added, at today's prices.
+  const assetList = ((assetRows ?? []) as (ManualAssetInput & { created_at: string | null })[]).map((a) => ({ ...a, value: Number(a.value) }));
+  const histories = assetHistories(assetValues, assetList);
+  // (A holding without a date to go by keeps them all at today's value throughout.)
+  const metalPoints = holdings.every((h) => h.created_at)
+    ? [...holdings]
+        .map((h) => ({ date: dayOf(h.created_at as string) as string, value: totalPreciousMetalsValue([h], prices) }))
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .reduce<ValuePoint[]>((points, h) => withValue(points, h.date, (points.at(-1)?.value ?? 0) + h.value), [])
+    : [];
+
   const board: BoardRow[] = buildBoard({
     plaid: rows.flatMap((item) =>
       item.accounts.map((a) => ({
@@ -226,12 +242,13 @@ export default async function AccountsPage() {
       }))
     ),
     manualAccounts: manualCards,
-    assets: ((assetRows ?? []) as ManualAssetInput[]).map((a) => ({ ...a, value: Number(a.value) })),
+    assets: assetList.map((a) => ({ ...a, points: histories[a.id] })),
     metals: {
       value: totalPreciousMetalsValue(holdings, prices),
       count: holdings.length,
       pricedAt,
       kinds: Array.from(new Set(holdings.map((h) => h.metal as "gold" | "silver"))),
+      points: metalPoints,
     },
     settings,
     transactions: transactionsByAccount,
@@ -343,7 +360,7 @@ export default async function AccountsPage() {
                 </div>
                 <Money amount={trackedTotal} currency="USD" tone="neutral" className="shrink-0 text-sm font-semibold" />
               </CardHeader>
-              <ManualAssetsManager assets={(assetRows ?? []) as ManualAsset[]} />
+              <ManualAssetsManager assets={assetList.map((a) => ({ ...(a as unknown as ManualAsset), history: histories[a.id] ?? [] }))} today={today} />
               <PreciousMetalsManager holdings={holdings as PreciousMetalHolding[]} prices={prices as MetalPriceRow[]} />
             </Card>
           </div>
