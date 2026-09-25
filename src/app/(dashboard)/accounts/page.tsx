@@ -16,6 +16,8 @@ import { InstitutionAvatar } from "@/components/institution-avatar";
 import { AccountsBoard, AccountsSummary, Ago } from "@/components/accounts-board";
 import { isDisconnected, needsReconnect, statusLabel } from "@/lib/item-status";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
+import { RewardsCard } from "@/components/rewards-card";
+import { rewardsSummary } from "@/lib/card-rewards";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { AccountApyButton } from "@/components/account-apy-button";
 import { AppleDeleteButton, AppleEditButton, AppleImportButton, ImportTracking, type AppleCard } from "@/components/apple-account-cards";
@@ -347,6 +349,18 @@ export default async function AccountsPage() {
           <div className="flex min-w-0 flex-col gap-4">
             <AccountsSummary rows={board} />
             <CreditUtilizationCard summary={utilization} currency="USD" />
+            <RewardsCard
+              cards={rewardsSummary(
+                ledger.rewardCards.map((c) => {
+                  const a = ledger.accounts.find((x) => x.id === c.accountId);
+                  return { ...c, name: a ? `${a.name}${a.mask ? ` ••${a.mask}` : ""}` : c.name };
+                }),
+                ledger.transactions.map((t) => ({ accountId: t.account?.id ?? null, date: t.date, reward: t.reward })),
+                ledger.freedomBonusSpend,
+                today
+              )}
+              monthLabel={new Date(`${today}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" })}
+            />
 
             <Card>
               <CardHeader>

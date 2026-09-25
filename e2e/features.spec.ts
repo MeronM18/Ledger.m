@@ -40,6 +40,8 @@ test("reports: spending narrows to a category, and its totals match the list", a
   // Over time is one total a month, so there's no grouping to pick.
   await page.getByRole("radio", { name: "Change over time" }).click();
   await expect(page.getByText("Spending over time")).toBeVisible();
+  // The span the chart draws, not the period's days: this month in the year leading up to it.
+  await expect(page.getByText(/^[A-Z][a-z]{2} \d{4} – [A-Z][a-z]{2} \d{4}$/)).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Group by" })).toHaveCount(0);
   await page.getByRole("radio", { name: "Total amounts" }).click();
   await expect(page.getByRole("combobox", { name: "Group by" })).toBeVisible();
@@ -155,11 +157,11 @@ test("accounts: grouped by what they are, with net worth over a chosen period an
 
   // A group folds shut.
   await page.getByRole("button", { name: "Collapse Credit cards" }).click();
-  await expect(page.getByRole("link", { name: "Chase Freedom Flex" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Chase Freedom Flex", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Expand Credit cards" }).click();
 
   // An account opens its transactions.
-  await page.getByRole("link", { name: "Chase Freedom Flex" }).click();
+  await page.getByRole("link", { name: "Chase Freedom Flex", exact: true }).click();
   await expect(page).toHaveURL(/\/transactions\?account=/);
   await expect(page.getByRole("button", { name: "Filters (1 on)" })).toBeVisible();
   await expect(page.locator("[data-transaction]").first()).toContainText("Chase Freedom Flex");
@@ -189,6 +191,34 @@ test("goals: a goal that follows savings says where it stands, what to save, and
   await page.getByLabel("Target", { exact: true }).fill("8000");
   await page.getByLabel("Target date (optional)").fill("2030-06-30");
   await expect(page.getByRole("dialog").getByText(/^That's \$[\d,]+ a month for \d+ months, about \d+% of a typical month's pay\.$/)).toBeVisible();
+});
+
+test("recurring: a subscription whose price changed says by how much", async ({ page }) => {
+  await page.goto("/recurring");
+  await afterWelcome(page);
+  // Spotify's latest charge went from $11.99 to $12.99.
+  const spotify = page.getByRole("button", { name: /^Spotify,/ });
+  await expect(spotify).toContainText("Up $1.00");
+  await spotify.click();
+  await expect(page.getByRole("dialog").getByText(/went up \$1\.00 \(8%\): \$12\.99 on .+, after \$11\.99 on /)).toBeVisible();
+});
+
+test("rewards: card purchases show what they earned, and Accounts adds it up", async ({ page }) => {
+  await page.goto("/transactions");
+  await afterWelcome(page);
+  // A Freedom Flex purchase earns points; a card payment earns none.
+  const shell = page.locator("[data-transaction]").filter({ hasText: "Shell" }).first();
+  await expect(shell).toContainText(/\+\d[\d,]* pts/);
+  await expect(page.locator("[data-transaction]").filter({ hasText: "Payment Thank You" }).first()).not.toContainText("pts");
+  await shell.click();
+  await expect(page.getByRole("dialog").getByText(/ · Chase Freedom Flex$/)).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.goto("/accounts");
+  const rewards = page.locator("[data-slot=card]").filter({ has: page.getByText("Rewards", { exact: true }) });
+  await expect(rewards.getByText(/this year/).first()).toBeVisible();
+  await expect(rewards.getByText(/^5% until /)).toBeVisible();
+  await expect(rewards.getByRole("progressbar", { name: /5% categories used this quarter/ })).toBeVisible();
 });
 
 test("settings: switching an alert off sticks and stops that alert", async ({ page }) => {

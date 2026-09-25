@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Money } from "@/components/money";
 import { formatCurrency } from "@/lib/format";
+import { earnedLabel, PROGRAMS, rateLabel, type Reward } from "@/lib/card-rewards";
 import { CardPaymentButton, isCardPaymentRow } from "@/components/card-payment-dialog";
 import type { Card as StatementCard } from "@/lib/card-statements";
 import { accountLabel, MANUAL_ACCOUNT_ID, MANUAL_ACCOUNT_OPTION, type AccountOption } from "@/components/filter-bar";
@@ -51,6 +52,8 @@ export type TransactionRow = {
   paid_back?: number | null;
   // Only present when isManual is true: the stored row, for its edit form.
   manualSource?: ManualTransaction;
+  // What it earned on a rewards card, estimated.
+  reward?: Reward;
 };
 
 const longDay = (iso: string) =>
@@ -176,7 +179,14 @@ function Row({
         <span className="hidden min-w-0 text-sm text-muted-foreground md:block">
           <AccountLabel t={t} institutions={institutions} />
         </span>
-        <Amount t={t} className="justify-self-end text-right text-sm font-medium" />
+        <span className="flex flex-col items-end justify-self-end">
+          <Amount t={t} className="text-right text-sm font-medium" />
+          {t.reward && (
+            <span className="font-mono text-[11px] text-champagne/90 tabular-nums" title={`${rateLabel(t.reward)} · ${t.reward.why}`}>
+              {earnedLabel(t.reward)}
+            </span>
+          )}
+        </span>
         <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
       </button>
     </li>
@@ -194,6 +204,9 @@ export function SummaryLine({ label, children }: { label: string; children: Reac
 
 function Summary({ rows, onExport }: { rows: TransactionRow[]; onExport: () => void }) {
   const s = listSummary(rows);
+  // What the listed purchases earned on rewards cards.
+  const points = rows.reduce((sum, t) => sum + (t.reward?.unit === "points" ? t.reward.earned : 0), 0);
+  const cash = Math.round(rows.reduce((sum, t) => sum + (t.reward?.unit === "cash" ? t.reward.earned : 0), 0) * 100) / 100;
   return (
     <Card aria-label="Summary">
       <CardHeader>
@@ -218,6 +231,16 @@ function Summary({ rows, onExport }: { rows: TransactionRow[]; onExport: () => v
             {s.largestDeposit ? <span className="text-moss">+{formatCurrency(s.largestDeposit.amount, "USD")}</span> : "—"}
           </SummaryLine>
           <SummaryLine label="Average expense">{s.averageExpense !== null ? formatCurrency(s.averageExpense, "USD") : "—"}</SummaryLine>
+          {points !== 0 && (
+            <SummaryLine label="Points earned">
+              <span className="text-champagne">{points.toLocaleString("en-US")}</span>
+            </SummaryLine>
+          )}
+          {cash !== 0 && (
+            <SummaryLine label="Daily Cash earned">
+              <span className="text-champagne">{formatCurrency(cash, "USD")}</span>
+            </SummaryLine>
+          )}
           <SummaryLine label="First transaction">
             <span className="font-sans">{s.first ? shortDay(s.first) : "—"}</span>
           </SummaryLine>
@@ -235,6 +258,29 @@ function Summary({ rows, onExport }: { rows: TransactionRow[]; onExport: () => v
       </CardContent>
     </Card>
   );
+}
+
+/** "37 points", "$0.62 Daily Cash". */
+function rewardText(r: Reward): string {
+  const n = Math.abs(r.earned);
+  const amount = r.unit === "points" ? `${n.toLocaleString("en-US")} point${n === 1 ? "" : "s"}` : `${formatCurrency(n, "USD")} Daily Cash`;
+  return r.earned < 0 ? `${amount} taken back` : amount;
+}
+
+/** Why it earned that: "3x dining · Chase Sapphire Preferred". */
+function rewardWhy(r: Reward): string {
+  const card = PROGRAMS[r.program].name;
+  const what = r.why.startsWith("Quarterly 5%: ")
+    ? `rotating category (${r.why.slice("Quarterly 5%: ".length)})`
+    : r.program === "apple-card"
+      ? r.rate === 2
+        ? "with Apple Pay (1% with the physical card)"
+        : `at ${r.why}`
+      : r.why === "Everything else"
+        ? "on everything else"
+        : `on ${r.why.replace(/^(Dining|Streaming|Travel|Drugstores|Online groceries|Gas and EV charging|Vacation homes)$/, (w) => w.toLowerCase())}`;
+  const cap = r.capped ? "; over the $1,500 quarterly cap, so partly at the usual rate" : "";
+  return `${rateLabel(r)} ${what} · ${card}${cap}`;
 }
 
 function Detail({ label, children }: { label: string; children: React.ReactNode }) {
@@ -295,6 +341,14 @@ function TransactionPanel({
               <CategoryLabel t={t} label={displayCategoryLabel} />
             </span>
           </Detail>
+          {t.reward && (
+            <Detail label="Rewards">
+              <span className="flex flex-col items-end gap-0.5">
+                <span className="font-mono text-champagne tabular-nums">{rewardText(t.reward)}</span>
+                <span className="text-xs text-muted-foreground">{rewardWhy(t.reward)}</span>
+              </span>
+            </Detail>
+          )}
           <Detail label="Status">{t.pending ? "Pending" : "Posted"}</Detail>
           <Detail label="Source">{t.isManual ? (t.account ? "Imported from a statement" : "Added by you") : "From your bank"}</Detail>
           {!t.isManual && original !== displayName && <Detail label="Bank's name">{original}</Detail>}

@@ -13,6 +13,7 @@ import { applyEditsToAll, type EditMeta, type MerchantRule } from "@/lib/transac
 import { loadConnectedCardIssuers, loadManualAccounts, type ManualAccount } from "@/lib/manual-accounts";
 import { loadTransactionEdits, UNDEFINED_COLUMN } from "@/lib/transaction-edits-server";
 import { accountName } from "@/lib/account-settings";
+import { cardProgramFor, rewardsFor, type ProgramId, type Reward } from "@/lib/card-rewards";
 import type { Card } from "@/lib/card-statements";
 import { loadAccountSettings } from "@/lib/ui-preferences";
 
@@ -30,6 +31,8 @@ export type LedgerTransaction = SpendingTransaction &
     isManual: boolean;
     // The stored row a manual entry came from, for its edit dialog.
     manualSource?: ManualTransaction;
+    // What it earned on a rewards card, estimated (card-rewards.ts).
+    reward?: Reward;
   };
 
 export type Ledger = {
@@ -46,6 +49,10 @@ export type Ledger = {
   manualAccounts: ManualAccount[];
   connectedCardIssuers: string[];
   rules: MerchantRule[];
+  // Credit cards with a known rewards program, and how much of each Freedom
+  // Flex quarter's $1,500 went to its 5% categories ("<account id>|<quarter>").
+  rewardCards: { accountId: string; name: string; program: ProgramId }[];
+  freedomBonusSpend: Record<string, number>;
   currency: string;
   error: boolean;
 };
@@ -153,6 +160,35 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     };
   });
 
+  // Each rewards card by account id, known by its product name (the bank's,
+  // not a nickname), and what every purchase on one earned. Rewards go by
+  // the merchant as the bank reported it, whatever it's been renamed to.
+  const rewardCards = [
+    ...(accountsRes.data ?? [])
+      .filter((a) => a.type === "credit")
+      .map((a) => ({ accountId: a.id as string, program: cardProgramFor(`${a.official_name ?? ""} ${a.name ?? ""}`) })),
+    ...manualAccountsRes.accounts
+      .filter((a) => a.type === "credit")
+      .map((a) => ({ accountId: `manual:${a.id}`, program: cardProgramFor(`${a.name} ${a.institution_name}`) })),
+  ].flatMap((c) => (c.program ? [{ accountId: c.accountId, program: c.program, name: accountById.get(c.accountId)?.name ?? manualAccountRefs.get(c.accountId.slice(7))?.name ?? "" }] : []));
+  const { rewards, bonusSpend } = rewardsFor(
+    [...plaid, ...manual].map((t) => ({
+      id: t.id,
+      date: t.date,
+      amount: t.amount,
+      pfc_primary: t.pfc_primary,
+      pfc_detailed: t.pfc_detailed ?? null,
+      merchant: `${t.original_merchant_name ?? t.merchant_name ?? ""} ${t.name ?? ""}`,
+      accountId: t.account?.id ?? null,
+      pending: t.pending,
+    })),
+    new Map(rewardCards.map((c) => [c.accountId, c.program]))
+  );
+  for (const t of [...plaid, ...manual]) {
+    const reward = rewards.get(t.id);
+    if (reward) t.reward = reward;
+  }
+
   const transactions = [...plaid, ...manual].sort((a, b) => b.date.localeCompare(a.date));
 
   return {
@@ -176,6 +212,8 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     manualAccounts: manualAccountsRes.accounts,
     connectedCardIssuers: issuersRes.issuers,
     rules: edits.rules,
+    rewardCards,
+    freedomBonusSpend: Object.fromEntries(bonusSpend),
     currency: plaidRows[0]?.iso_currency_code ?? "USD",
     error: Boolean(
       txRes.error || manualRes.error || accountsRes.error || issuersRes.error || manualAccountsRes.error || edits.error
