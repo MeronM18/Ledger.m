@@ -42,6 +42,16 @@ export function cardProgramFor(text: string): ProgramId | null {
   return null;
 }
 
+/**
+ * A card's program: the one chosen in its settings, or else whichever its
+ * names say (your nickname, the product name, the bank's name).
+ */
+export function programForAccount(names: (string | null | undefined)[], chosen?: ProgramId | "none" | null): ProgramId | null {
+  if (chosen === "none") return null;
+  if (chosen) return chosen;
+  return cardProgramFor(names.filter(Boolean).join(" "));
+}
+
 export type RewardTx = {
   id: string;
   date: string; // the day of the purchase
@@ -287,6 +297,27 @@ export function rewardsFor(
     rewards.set(t.id, { program: program.id, unit: program.unit, rate: rule.rate, earned: earn(program.unit, t.amount, rule.rate), why: rule.why });
   }
   return { rewards, bonusSpend };
+}
+
+// Names that stay capitalized mid-sentence.
+const PROPER = /^(Chase Travel|Lyft|Amazon|Instacart|McDonald's|PayPal|Old Navy|Norwegian Cruise Line|United Way|American Red Cross|American Heart Association|Feeding America|Apple|Apple Pay|Uber|Walgreens|Exxon Mobil|Nike|Ace Hardware|ChargePoint|Hertz|Booking\.com|T-Mobile|Panera)$/;
+
+/** What a purchase earned its rate for, as it reads mid-sentence: "dining", "gas and EV charging", "Chase Travel". */
+export function benefitName(why: string): string {
+  const name = why.replace(/^Quarterly 5%: /, "");
+  if (PROPER.test(name) || !/^[A-Z][a-z]/.test(name)) return name;
+  return name.charAt(0).toLowerCase() + name.slice(1);
+}
+
+/**
+ * The card benefit a purchase used, for its row: "3x dining" on a points
+ * card (only above its 1x base, where there's a benefit to show), or
+ * "$4.23 Daily Cash" on Apple Card. Null for anything else.
+ */
+export function benefitBadge(r: Reward): string | null {
+  if (r.earned <= 0) return null;
+  if (r.unit === "cash") return `$${r.earned.toFixed(2)} Daily Cash`;
+  return r.rate > 1 ? `${r.rate}x ${benefitName(r.why)}` : null;
 }
 
 /** "3x", "2%": how a rate reads for its program. */

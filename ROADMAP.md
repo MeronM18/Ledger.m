@@ -146,3 +146,6 @@ Open follow-ups worth doing next: run the app against real data and fix what loo
 - [ ] Not verified against live data: the Plaid Link update-mode window itself (needs real Plaid), the monthly summary's first real send on the 1st
 - [ ] Noticed: Plaid logs "link-initialize.js embedded more than once" on the Accounts page in development, from the existing Connect account button (not new)
 
+
+## Planned
+- [ ] Credit score that updates on its own (asked for Sep 24, 2026; parked until the current round of changes is done). Plaid doesn't provide scores, so it needs a credit-data provider that serves consumer scores through an API (candidates to evaluate: Array, SavvyMoney, Experian Connect), which means a business agreement and identity verification. Show the score and its history beside the credit utilization the app already works out, and alert on big moves.

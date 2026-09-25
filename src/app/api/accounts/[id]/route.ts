@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { REWARDS_CHOICES } from "@/lib/account-settings";
 import { ACCOUNT_SETTINGS_KEY, loadAccountSettings } from "@/lib/ui-preferences";
 
 // What's editable on a connected account: the yield (sync never touches
@@ -14,6 +15,7 @@ const bodySchema = z
     nickname: z.string().trim().max(60).nullable(),
     statement_close_day: day,
     payment_due_day: day,
+    rewards_program: z.enum(REWARDS_CHOICES).nullable(),
   })
   .partial();
 
@@ -39,14 +41,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  const { nickname, statement_close_day, payment_due_day } = parsed.data;
-  if (nickname !== undefined || statement_close_day !== undefined || payment_due_day !== undefined) {
+  const { nickname, statement_close_day, payment_due_day, rewards_program } = parsed.data;
+  if (nickname !== undefined || statement_close_day !== undefined || payment_due_day !== undefined || rewards_program !== undefined) {
     const all = await loadAccountSettings(admin);
     const current = all[id] ?? {};
     all[id] = {
       nickname: nickname !== undefined ? nickname || null : (current.nickname ?? null),
       statementCloseDay: statement_close_day !== undefined ? statement_close_day : (current.statementCloseDay ?? null),
       paymentDueDay: payment_due_day !== undefined ? payment_due_day : (current.paymentDueDay ?? null),
+      rewardsProgram: rewards_program !== undefined ? rewards_program : (current.rewardsProgram ?? null),
     };
     const { error } = await admin.from("ui_preferences").upsert({ key: ACCOUNT_SETTINGS_KEY, value: all }, { onConflict: "key" });
     if (error) {

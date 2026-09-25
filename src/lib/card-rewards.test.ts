@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cardProgramFor, earnedLabel, freedomCategories, quarterOf, rateLabel, rewardsFor, rewardsSummary, type ProgramId, type RewardTx } from "@/lib/card-rewards";
+import { benefitBadge, benefitName, cardProgramFor, earnedLabel, programForAccount, freedomCategories, quarterOf, rateLabel, rewardsFor, rewardsSummary, type ProgramId, type RewardTx } from "@/lib/card-rewards";
 
 const CARDS = new Map<string, ProgramId>([
   ["csp", "sapphire-preferred"],
@@ -149,5 +149,38 @@ describe("rewardsSummary", () => {
       ends: "2026-09-30",
     });
     expect(cff.byWhy).toEqual([{ why: "Rotating 5% categories", earned: 250 }]);
+  });
+});
+
+describe("programForAccount", () => {
+  it("goes by the card's chosen program, then any of its names, your nickname included", () => {
+    expect(programForAccount(["Sapphire Preferred", null, "CREDIT CARD"])).toBe("sapphire-preferred");
+    expect(programForAccount(["My travel card", null, "CREDIT CARD"])).toBeNull();
+    expect(programForAccount(["My travel card", null, "CREDIT CARD"], "sapphire-preferred")).toBe("sapphire-preferred");
+    expect(programForAccount(["Chase Sapphire Preferred"], "none")).toBeNull();
+  });
+});
+
+describe("benefitBadge", () => {
+  const r = (unit: "points" | "cash", rate: number, earned: number, why: string) => ({ program: "sapphire-preferred" as const, unit, rate, earned, why });
+
+  it("names the multiplier and what for, on a points card, above 1x", () => {
+    expect(benefitBadge(r("points", 3, 128, "Dining"))).toBe("3x dining");
+    expect(benefitBadge(r("points", 5, 200, "Chase Travel"))).toBe("5x Chase Travel");
+    expect(benefitBadge(r("points", 5, 204, "Quarterly 5%: Gas and EV charging"))).toBe("5x gas and EV charging");
+    expect(benefitBadge(r("points", 5, 50, "Quarterly 5%: United Way"))).toBe("5x United Way");
+    expect(benefitBadge(r("points", 1, 13, "Everything else"))).toBeNull();
+  });
+
+  it("says Daily Cash in dollars on Apple Card, and nothing for a refund", () => {
+    expect(benefitBadge(r("cash", 3, 4.23, "Apple"))).toBe("$4.23 Daily Cash");
+    expect(benefitBadge(r("cash", 2, 0.06, "Apple Pay"))).toBe("$0.06 Daily Cash");
+    expect(benefitBadge(r("points", 3, -60, "Dining"))).toBeNull();
+  });
+
+  it("keeps names that are names", () => {
+    expect(benefitName("EV charging")).toBe("EV charging");
+    expect(benefitName("Online groceries")).toBe("online groceries");
+    expect(benefitName("McDonald's")).toBe("McDonald's");
   });
 });

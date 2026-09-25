@@ -206,12 +206,16 @@ test("recurring: a subscription whose price changed says by how much", async ({ 
 test("rewards: card purchases show what they earned, and Accounts adds it up", async ({ page }) => {
   await page.goto("/transactions");
   await afterWelcome(page);
-  // A Freedom Flex purchase earns points; a card payment earns none.
-  const shell = page.locator("[data-transaction]").filter({ hasText: "Shell" }).first();
-  await expect(shell).toContainText(/\+\d[\d,]* pts/);
-  await expect(page.locator("[data-transaction]").filter({ hasText: "Payment Thank You" }).first()).not.toContainText("pts");
-  await shell.click();
-  await expect(page.getByRole("dialog").getByText(/ · Chase Freedom Flex$/)).toBeVisible();
+  const row = (name: string) => page.locator("[data-transaction]").filter({ hasText: name }).first();
+  // Dining on Freedom Flex shows its multiplier (5x in a quarter where dining
+  // is the rotating category), Apple Card its Daily Cash, a payment nothing.
+  const chipotle = row("Chipotle");
+  await expect(chipotle).toContainText(/[35]x dining/);
+  await expect(row("Apple Store")).toContainText(/\$\d+\.\d{2} Daily Cash/);
+  await expect(row("Payment Thank You")).not.toContainText(/\dx |Daily Cash/);
+  await chipotle.click();
+  await expect(page.getByRole("dialog").getByText(/^[35]x on dining/)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText(/^\d[\d,]* points · Chase Freedom Flex/)).toBeVisible();
   await page.keyboard.press("Escape");
 
   await page.goto("/accounts");

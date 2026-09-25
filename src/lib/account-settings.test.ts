@@ -11,9 +11,16 @@ describe("accountName", () => {
 });
 
 describe("resolveAccountSettings", () => {
-  it("keeps valid days and names, drops the rest", () => {
-    expect(resolveAccountSettings({ a: { nickname: " Flex ", statementCloseDay: 3, paymentDueDay: 40 }, b: "junk" })).toEqual({
-      a: { nickname: "Flex", statementCloseDay: 3, paymentDueDay: null },
+  it("keeps valid days, names and rewards programs, drops the rest", () => {
+    expect(
+      resolveAccountSettings({
+        a: { nickname: " Flex ", statementCloseDay: 3, paymentDueDay: 40, rewardsProgram: "freedom-flex" },
+        c: { rewardsProgram: "platinum-card" },
+        b: "junk",
+      })
+    ).toEqual({
+      a: { nickname: "Flex", statementCloseDay: 3, paymentDueDay: null, rewardsProgram: "freedom-flex" },
+      c: { nickname: null, statementCloseDay: null, paymentDueDay: null, rewardsProgram: null },
     });
     expect(resolveAccountSettings(null)).toEqual({});
   });

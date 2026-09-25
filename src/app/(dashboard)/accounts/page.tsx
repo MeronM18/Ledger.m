@@ -17,7 +17,7 @@ import { AccountsBoard, AccountsSummary, Ago } from "@/components/accounts-board
 import { isDisconnected, needsReconnect, statusLabel } from "@/lib/item-status";
 import { CreditUtilizationCard } from "@/components/credit-utilization-card";
 import { RewardsCard } from "@/components/rewards-card";
-import { rewardsSummary } from "@/lib/card-rewards";
+import { programForAccount, rewardsSummary } from "@/lib/card-rewards";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { AccountApyButton } from "@/components/account-apy-button";
 import { AppleDeleteButton, AppleEditButton, AppleImportButton, ImportTracking, type AppleCard } from "@/components/apple-account-cards";
@@ -281,6 +281,8 @@ export default async function AccountsPage() {
             closeDay={settings[a.id]?.statementCloseDay ?? null}
             dueDay={settings[a.id]?.paymentDueDay ?? null}
             suggestedCloseDay={guesses[a.id] ?? null}
+            rewardsProgram={settings[a.id]?.rewardsProgram ?? null}
+            detectedProgram={programForAccount([settings[a.id]?.nickname, a.official_name, a.name])}
           />
           {a.type === "depository" && a.subtype !== "checking" && <AccountApyButton accountId={a.id} name={row.name} apy={ref.apy} />}
         </>

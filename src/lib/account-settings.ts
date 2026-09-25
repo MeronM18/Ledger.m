@@ -1,3 +1,4 @@
+import type { ProgramId } from "@/lib/card-rewards";
 import { prettyName } from "@/lib/transaction-display";
 
 // Pure. What the user has told the app about a connected account that the
@@ -9,7 +10,12 @@ export type AccountSetting = {
   nickname?: string | null;
   statementCloseDay?: number | null; // 1-31; the last day of shorter months stands in for 29-31
   paymentDueDay?: number | null;
+  // A credit card's rewards program when its name doesn't say ("none" for a
+  // card that earns nothing); unset, it's recognized by name.
+  rewardsProgram?: ProgramId | "none" | null;
 };
+
+export const REWARDS_CHOICES = ["sapphire-preferred", "freedom-flex", "apple-card", "none"] as const;
 
 export type AccountSettings = Record<string, AccountSetting>;
 
@@ -24,6 +30,7 @@ export function resolveAccountSettings(stored: unknown): AccountSettings {
       nickname: typeof r.nickname === "string" && r.nickname.trim() ? r.nickname.trim() : null,
       statementCloseDay: day(r.statementCloseDay),
       paymentDueDay: day(r.paymentDueDay),
+      rewardsProgram: (REWARDS_CHOICES as readonly unknown[]).includes(r.rewardsProgram) ? (r.rewardsProgram as ProgramId | "none") : null,
     };
   }
   return out;

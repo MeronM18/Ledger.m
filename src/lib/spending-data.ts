@@ -13,7 +13,7 @@ import { applyEditsToAll, type EditMeta, type MerchantRule } from "@/lib/transac
 import { loadConnectedCardIssuers, loadManualAccounts, type ManualAccount } from "@/lib/manual-accounts";
 import { loadTransactionEdits, UNDEFINED_COLUMN } from "@/lib/transaction-edits-server";
 import { accountName } from "@/lib/account-settings";
-import { cardProgramFor, rewardsFor, type ProgramId, type Reward } from "@/lib/card-rewards";
+import { cardProgramFor, programForAccount, rewardsFor, type ProgramId, type Reward } from "@/lib/card-rewards";
 import type { Card } from "@/lib/card-statements";
 import { loadAccountSettings } from "@/lib/ui-preferences";
 
@@ -160,13 +160,19 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     };
   });
 
-  // Each rewards card by account id, known by its product name (the bank's,
-  // not a nickname), and what every purchase on one earned. Rewards go by
-  // the merchant as the bank reported it, whatever it's been renamed to.
+  // Each rewards card by account id, as chosen in its settings or known by
+  // its names, and what every purchase on one earned. Rewards go by the
+  // merchant as the bank reported it, whatever it's been renamed to.
   const rewardCards = [
     ...(accountsRes.data ?? [])
       .filter((a) => a.type === "credit")
-      .map((a) => ({ accountId: a.id as string, program: cardProgramFor(`${a.official_name ?? ""} ${a.name ?? ""}`) })),
+      .map((a) => ({
+        accountId: a.id as string,
+        program: programForAccount(
+          [accountSettings[a.id as string]?.nickname, a.official_name as string | null, a.name as string],
+          accountSettings[a.id as string]?.rewardsProgram
+        ),
+      })),
     ...manualAccountsRes.accounts
       .filter((a) => a.type === "credit")
       .map((a) => ({ accountId: `manual:${a.id}`, program: cardProgramFor(`${a.name} ${a.institution_name}`) })),

@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { PROGRAMS, type ProgramId } from "@/lib/card-rewards";
 
 function ordinal(n: number): string {
   const s = n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th";
@@ -42,6 +44,8 @@ export function AccountSettingsButton({
   closeDay,
   dueDay,
   suggestedCloseDay,
+  rewardsProgram = null,
+  detectedProgram = null,
 }: {
   accountId: string;
   name: string; // what's shown now
@@ -52,14 +56,23 @@ export function AccountSettingsButton({
   dueDay: number | null;
   // The best guess when no closing day is set, and how it was reached.
   suggestedCloseDay: { day: number; from: "payments" | "due-date" } | null;
+  // The rewards program picked for the card, and the one its names suggest.
+  rewardsProgram?: ProgramId | "none" | null;
+  detectedProgram?: ProgramId | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ nickname: "", close: "", due: "" });
+  const [form, setForm] = useState({ nickname: "", close: "", due: "", rewards: "auto" });
 
   function handleOpenChange(next: boolean) {
-    if (next) setForm({ nickname: nickname ?? "", close: closeDay ? String(closeDay) : "", due: dueDay ? String(dueDay) : "" });
+    if (next)
+      setForm({
+        nickname: nickname ?? "",
+        close: closeDay ? String(closeDay) : "",
+        due: dueDay ? String(dueDay) : "",
+        rewards: rewardsProgram ?? "auto",
+      });
     setOpen(next);
   }
 
@@ -77,7 +90,9 @@ export function AccountSettingsButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           nickname: form.nickname.trim() || null,
-          ...(isCard ? { statement_close_day: close, payment_due_day: due } : {}),
+          ...(isCard
+            ? { statement_close_day: close, payment_due_day: due, rewards_program: form.rewards === "auto" ? null : form.rewards }
+            : {}),
         }),
       });
       if (!res.ok) {
@@ -156,6 +171,26 @@ export function AccountSettingsButton({
                   onChange={(e) => setForm((f) => ({ ...f, due: e.target.value }))}
                   placeholder="e.g. 28"
                 />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor={`rewards-${accountId}`}>Rewards</Label>
+                <Select value={form.rewards} onValueChange={(v) => setForm((f) => ({ ...f, rewards: v }))}>
+                  <SelectTrigger id={`rewards-${accountId}`} className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent position="popper">
+                    <SelectItem value="auto">
+                      {detectedProgram ? `${PROGRAMS[detectedProgram].name} (from its name)` : "Not recognized from its name"}
+                    </SelectItem>
+                    {(Object.keys(PROGRAMS) as ProgramId[]).map((id) => (
+                      <SelectItem key={id} value={id}>
+                        {PROGRAMS[id].name}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="none">No rewards</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">What each purchase on this card earns, shown on its transactions.</p>
               </div>
             </>
           )}
