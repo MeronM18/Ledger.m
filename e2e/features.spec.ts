@@ -193,13 +193,19 @@ test("goals: each goal says its next step, and its panel says where it stands an
   await page.goto("/goals");
   await afterWelcome(page);
 
-  // The list: a card per goal with its status and one next step.
-  const card = page.getByRole("button", { name: /^Start a business:/ });
+  // The goal that needs attention leads, with its status, one next step and a what-if slider.
+  const card = page.locator("[data-slot=card]").filter({ hasText: "Needs you most" });
+  await expect(card.getByRole("heading", { name: "Start a business" })).toBeVisible();
   await expect(card.getByText(/^(Ahead of pace|On pace|Behind pace)$/)).toBeVisible();
   await expect(card.getByText(/^(Move \$[\d,]+( more)? from your [A-Z][a-z]{2} \d+ paycheck|Save \$[\d,]+ a month to finish on time)$/)).toBeVisible();
+  const slider = card.getByRole("slider", { name: "Monthly amount to try" });
+  // Sliding to the top amount finishes it early.
+  await slider.focus();
+  await page.keyboard.press("End");
+  await expect(card.getByText(/months? before your date\./)).toBeVisible();
 
   // Its panel has the rest.
-  await card.click();
+  await card.getByRole("button", { name: "Open Start a business" }).click();
   const panel = page.getByRole("dialog");
   await expect(panel.getByText(/^\$[\d,]+ to go · \d+ months? left$/)).toBeVisible();
   await expect(panel.getByText("Save each month")).toBeVisible();
@@ -220,6 +226,14 @@ test("goals: each goal says its next step, and its panel says where it stands an
   await page.getByLabel("Target", { exact: true }).fill("8000");
   await page.getByLabel("Target date (optional)").fill("2030-06-30");
   await expect(page.getByRole("dialog").getByText(/^That's \$[\d,]+ a month for \d+ months, about \d+% of a typical month's pay\.$/)).toBeVisible();
+
+  // Half of one savings account counts toward it.
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Name").fill("New bike");
+  await dialog.getByRole("checkbox", { name: /High Yield Savings/ }).check();
+  await dialog.getByRole("spinbutton", { name: /Share of High Yield Savings/ }).fill("50");
+  await dialog.getByRole("button", { name: "Create goal" }).click();
+  await expect(page.getByRole("button", { name: /^New bike: \$9,125\.00 of \$8,000\.00/ })).toBeVisible();
 });
 
 test("recurring: a subscription whose price changed says by how much", async ({ page }) => {

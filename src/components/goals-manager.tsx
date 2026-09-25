@@ -5,22 +5,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
-  Briefcase,
-  Car,
   Check,
   ChevronRight,
-  Gift,
-  GraduationCap,
-  House,
-  Laptop,
   Pencil,
   PiggyBank,
-  Plane,
   Plus,
-  ShieldCheck,
   Trash2,
-  TrendingUp,
-  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Area, ComposedChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -45,10 +35,13 @@ import { dateTicks, formatTickMoney, valueTicks } from "@/lib/day-chart";
 import { formatCurrency } from "@/lib/format";
 import { dollars, fullDate, roughDate, roughGap, shortDate, VERDICT } from "@/lib/goal-copy";
 import type { GoalInsight, PaySummary } from "@/lib/goal-insights";
+import { GOAL_COLORS, GOAL_ICONS, colorVar, type GoalColor, type GoalIcon, type GoalOptions } from "@/lib/goal-options";
+import { GoalBadge, ICON_COMPONENTS, accentFor, iconFor } from "@/components/goal-look";
 import { monthsUntil, type GoalProgress } from "@/lib/goals";
 import { cn } from "@/lib/utils";
 
 export type GoalRow = GoalProgress & {
+  options: GoalOptions;
   savedManual: number;
   accountRefs: string[];
   // Names of the accounts it follows that have a balance, in the order chosen.
@@ -57,7 +50,8 @@ export type GoalRow = GoalProgress & {
   accountLabels: Record<string, string>;
   insight: GoalInsight;
 };
-export type AccountChoice = { id: string; label: string; balance: number | null };
+// "asset": something tracked by hand on Accounts (cash, crypto), which has a value but no transactions.
+export type AccountChoice = { id: string; label: string; balance: number | null; kind: "account" | "asset" };
 
 async function send(url: string, method: string, body?: unknown) {
   const res = await fetch(url, {
@@ -75,18 +69,29 @@ const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 // ---- Adding and editing ----------------------------------------------------
 
+type TrackMode = "balance" | "growth" | "hand";
+
+const TRACK_MODES: { value: TrackMode; label: string; help: string }[] = [
+  { value: "balance", label: "Account balances", help: "What's in the accounts you pick counts. Take a share of one when it holds more than this goal." },
+  { value: "growth", label: "New money only", help: "Only what's added to the accounts from today counts, not what's already there." },
+  { value: "hand", label: "By hand", help: "Enter what you've saved and add to it as you go." },
+];
+
 function GoalDialog({
   goal,
   accounts,
   pay,
   today,
   trigger,
+  preset,
 }: {
   goal?: GoalRow;
   accounts: AccountChoice[];
   pay: PaySummary | null;
   today: string;
   trigger: React.ReactNode;
+  // A starting point for a new goal (from the ideas), filled in when it opens.
+  preset?: { name: string; icon: GoalIcon; color: GoalColor };
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -95,28 +100,44 @@ function GoalDialog({
   const [target, setTarget] = useState("");
   const [saved, setSaved] = useState("");
   const [date, setDate] = useState("");
-  // Refs ("plaid:<id>" / "manual:<id>") of the accounts this goal follows; empty = tracked by hand.
+  const [mode, setMode] = useState<TrackMode>("balance");
+  const [icon, setIcon] = useState<GoalIcon | null>(null);
+  const [color, setColor] = useState<GoalColor | null>(null);
+  // Refs ("plaid:<id>" / "manual:<id>" / "asset:<id>") of what this goal follows.
   const [followed, setFollowed] = useState<string[]>([]);
+  // Percent of each followed account that counts; missing is all of it.
+  const [shares, setShares] = useState<Record<string, string>>({});
 
   function handleOpenChange(next: boolean) {
     if (next) {
-      setName(goal?.name ?? "");
+      setName(goal?.name ?? preset?.name ?? "");
       setTarget(goal ? String(goal.target) : "");
       setSaved(goal ? String(goal.savedManual) : "");
       setDate(goal?.targetDate ?? "");
       setFollowed(goal?.accountRefs ?? []);
+      setMode(goal ? (goal.accountRefs.length === 0 ? "hand" : goal.options.tracking) : "balance");
+      setIcon(goal?.options.icon ?? preset?.icon ?? null);
+      setColor(goal?.options.color ?? preset?.color ?? null);
+      setShares(Object.fromEntries(Object.entries(goal?.options.shares ?? {}).map(([k, v]) => [k, String(v)])));
     }
     setOpen(next);
   }
+
+  const shareOf = (ref: string) => {
+    const v = Number(shares[ref]);
+    return shares[ref] && Number.isFinite(v) && v > 0 && v <= 100 ? v : 100;
+  };
 
   // What the goal as typed would take, before it's saved.
   const preview = (() => {
     const targetValue = Number(target);
     if (!target || !Number.isFinite(targetValue) || targetValue <= 0) return null;
     const have =
-      followed.length > 0
-        ? followed.reduce((s, ref) => s + (accounts.find((a) => a.id === ref)?.balance ?? 0), 0)
-        : Number(saved) || 0;
+      mode === "hand"
+        ? Number(saved) || 0
+        : mode === "growth"
+          ? (goal?.options.tracking === "growth" ? goal.saved : 0)
+          : followed.reduce((s, ref) => s + ((accounts.find((a) => a.id === ref)?.balance ?? 0) * shareOf(ref)) / 100, 0);
     const remaining = targetValue - have;
     if (remaining <= 0) return `${dollars(have)} is already there, so this goal starts out reached.`;
     if (!date) return `${dollars(remaining)} to go. Add a date to see what it takes each month.`;
@@ -136,16 +157,27 @@ function GoalDialog({
       toast.error("Enter a name, a target above 0, and an amount saved of 0 or more");
       return;
     }
+    if (mode !== "hand" && followed.length === 0) {
+      toast.error("Pick at least one account to follow, or track it by hand");
+      return;
+    }
     setSaving(true);
     try {
+      const refs = mode === "hand" ? [] : followed;
       const payload = {
         name: name.trim(),
         target_amount: targetValue,
         // Only sent when tracking by hand, so linking an account and
         // unlinking later doesn't wipe the amount saved before.
-        ...(followed.length === 0 ? { saved_amount: savedValue } : {}),
+        ...(mode === "hand" ? { saved_amount: savedValue } : {}),
         target_date: date || null,
-        account_refs: followed,
+        account_refs: refs,
+        options: {
+          icon,
+          color,
+          tracking: mode === "growth" ? "growth" : "balance",
+          shares: Object.fromEntries(refs.filter((ref) => shareOf(ref) < 100).map((ref) => [ref, shareOf(ref)])),
+        },
       };
       if (goal) await send(`/api/goals/${goal.id}`, "PATCH", payload);
       else await send("/api/goals", "POST", payload);
@@ -159,68 +191,157 @@ function GoalDialog({
     }
   }
 
+  const groups = [
+    { title: "Accounts", items: accounts.filter((a) => a.kind === "account") },
+    { title: "Assets you track", items: accounts.filter((a) => a.kind === "asset") },
+  ].filter((g) => g.items.length > 0);
+  const lookName = name || goal?.name || preset?.name || "";
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{goal ? "Edit goal" : "New savings goal"}</DialogTitle>
-          <DialogDescription>
-            Follow the accounts the money sits in to see its pace and when it lands, or track it by hand.
-          </DialogDescription>
+          <DialogDescription>What you&apos;re saving for, by when, and where the money sits.</DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="goal-name">Name</Label>
-            <Input id="goal-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Emergency fund" />
+        <div className="flex flex-col gap-5">
+          <div className="flex items-end gap-3">
+            <GoalBadge name={lookName} options={{ icon, color }} className="size-10" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Label htmlFor="goal-name">Name</Label>
+              <Input id="goal-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Emergency fund" />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="goal-target">Target</Label>
-              <Input id="goal-target" type="number" min="0" step="1" value={target} onChange={(e) => setTarget(e.target.value)} />
+              <Input id="goal-target" type="number" min="0" step="1" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="10000" />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="goal-date">Target date (optional)</Label>
               <Input id="goal-date" type="date" min={today} value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
           </div>
+
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1.5 text-sm font-medium">Track progress with</legend>
-            {accounts.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No accounts to follow yet. Progress is tracked by hand.</p>
-            ) : (
-              <div className="flex max-h-44 flex-col gap-1 overflow-y-auto rounded-lg border border-border p-2">
-                {accounts.map((a) => {
-                  const checked = followed.includes(a.id);
-                  return (
-                    <label key={a.id} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-muted/40">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => setFollowed((f) => (checked ? f.filter((x) => x !== a.id) : [...f, a.id]))}
-                        className="size-4 accent-[var(--champagne)]"
-                      />
-                      <span className="min-w-0 flex-1 truncate">{a.label}</span>
-                      {a.balance !== null && (
-                        <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">{formatCurrency(a.balance, "USD")}</span>
-                      )}
-                    </label>
-                  );
-                })}
+            <legend className="mb-1.5 text-sm font-medium">Look</legend>
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Icon">
+              {GOAL_ICONS.map((key) => {
+                const Icon = ICON_COMPONENTS[key];
+                const active = iconFor(lookName, { icon }) === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={key.replace("-", " ")}
+                    onClick={() => setIcon(key)}
+                    className={cn(
+                      "flex size-8 items-center justify-center rounded-md transition-colors",
+                      active ? "bg-bone/12 text-bone ring-1 ring-bone/20 ring-inset" : "text-muted-foreground hover:bg-bone/6 hover:text-bone"
+                    )}
+                  >
+                    <Icon className="size-4" aria-hidden />
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1" role="radiogroup" aria-label="Color">
+              {GOAL_COLORS.map((key) => {
+                const active = (color ?? "champagne") === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    aria-label={key}
+                    onClick={() => setColor(key)}
+                    className={cn("size-6 rounded-full ring-offset-2 ring-offset-background transition-shadow", active ? "ring-2 ring-bone/70" : "hover:ring-2 hover:ring-bone/25")}
+                    style={{ backgroundColor: colorVar(key) }}
+                  />
+                );
+              })}
+            </div>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1.5 text-sm font-medium">Track progress</legend>
+            <div role="radiogroup" aria-label="Track progress" className="grid grid-cols-3 gap-1 rounded-lg border border-border p-1">
+              {TRACK_MODES.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode === m.value}
+                  onClick={() => setMode(m.value)}
+                  className={cn(
+                    "rounded-md px-2 py-1.5 text-xs transition-colors",
+                    mode === m.value ? "bg-bone/12 font-medium text-bone ring-1 ring-bone/10 ring-inset hover:bg-bone/16" : "text-muted-foreground hover:bg-bone/6 hover:text-bone"
+                  )}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{TRACK_MODES.find((m) => m.value === mode)!.help}</p>
+
+            {mode !== "hand" &&
+              (groups.length === 0 ? (
+                <p className="text-xs text-muted-foreground">No accounts to follow yet. Track it by hand for now.</p>
+              ) : (
+                <div className="flex max-h-60 flex-col gap-3 overflow-y-auto rounded-lg border border-border p-2">
+                  {groups.map((g) => (
+                    <div key={g.title} className="flex flex-col gap-0.5">
+                      <span className="px-1.5 pb-1 text-[10px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{g.title}</span>
+                      {g.items.map((a) => {
+                        const checked = followed.includes(a.id);
+                        return (
+                          <div key={a.id} className={cn("flex items-center gap-2 rounded px-1.5 py-1.5 text-sm", checked ? "bg-bone/[0.04]" : "hover:bg-muted/40")}>
+                            <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => setFollowed((f) => (checked ? f.filter((x) => x !== a.id) : [...f, a.id]))}
+                                className="size-4 accent-[var(--champagne)]"
+                              />
+                              <span className="min-w-0 flex-1 truncate">{a.label}</span>
+                              {a.balance !== null && (
+                                <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">{formatCurrency(a.balance, "USD")}</span>
+                              )}
+                            </label>
+                            {checked && (
+                              <span className="relative flex shrink-0 items-center">
+                                <Input
+                                  type="number"
+                                  min={1}
+                                  max={100}
+                                  aria-label={`Share of ${a.label} that counts`}
+                                  value={shares[a.id] ?? "100"}
+                                  onChange={(e) => setShares((s) => ({ ...s, [a.id]: e.target.value }))}
+                                  className="h-7 w-16 pr-5 text-right font-mono text-xs tabular-nums"
+                                />
+                                <span className="pointer-events-none absolute right-2 text-xs text-muted-foreground">%</span>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+            {mode === "hand" && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="goal-saved">Saved so far</Label>
+                <Input id="goal-saved" type="number" min="0" step="1" value={saved} onChange={(e) => setSaved(e.target.value)} placeholder="0" />
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
-              {followed.length === 0
-                ? "Nothing selected: you add money by hand."
-                : `Following ${followed.length} account${followed.length === 1 ? "" : "s"}; their balances add up.`}
-            </p>
           </fieldset>
-          {followed.length === 0 && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="goal-saved">Saved so far</Label>
-              <Input id="goal-saved" type="number" min="0" step="1" value={saved} onChange={(e) => setSaved(e.target.value)} placeholder="0" />
-            </div>
-          )}
+
           {preview && (
             <p aria-live="polite" className="rounded-lg bg-muted/50 px-3 py-2.5 text-sm text-muted-foreground">
               {preview}
@@ -229,7 +350,7 @@ function GoalDialog({
         </div>
         <DialogFooter>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save"}
+            {saving ? "Saving..." : goal ? "Save changes" : "Create goal"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -804,31 +925,12 @@ function Tiles({ goal, today }: { goal: GoalRow; today: string }) {
 
 // ---- The list, and one goal's panel ------------------------------------------
 
-const ICONS: [RegExp, LucideIcon][] = [
-  [/trip|travel|vacation|holiday|japan|europe|flight/i, Plane],
-  [/emergency|rainy|safety|cushion/i, ShieldCheck],
-  [/business|startup|company/i, Briefcase],
-  [/house|home|down ?payment|apartment|rent/i, House],
-  [/car|truck|vehicle/i, Car],
-  [/school|college|tuition|degree|student/i, GraduationCap],
-  [/wedding|ring|gift|holiday/i, Gift],
-  [/laptop|computer|phone|tech/i, Laptop],
-  [/retire|invest/i, TrendingUp],
-];
-
 function GoalIcon({ goal, className }: { goal: GoalRow; className?: string }) {
-  const Icon = ICONS.find(([re]) => re.test(goal.name))?.[1] ?? PiggyBank;
-  const done = goal.status === "complete";
-  return (
-    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", done ? "bg-moss/15 text-moss" : "bg-champagne/12 text-champagne", className)}>
-      <Icon className="size-4" aria-hidden />
-    </span>
-  );
+  return <GoalBadge name={goal.name} options={goal.options} complete={goal.status === "complete"} className={className} />;
 }
 
-/** Progress as a ring, the share saved in the middle. */
-function Ring({ goal, size = 64 }: { goal: GoalRow; size?: number }) {
-  const stroke = 6;
+/** Progress as a ring in the goal's color, the share saved in the middle. */
+function Ring({ goal, size = 64, stroke = 6 }: { goal: GoalRow; size?: number; stroke?: number }) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const share = Math.min(1, Math.max(0, goal.percent));
@@ -841,13 +943,16 @@ function Ring({ goal, size = 64 }: { goal: GoalRow; size?: number }) {
           cy={size / 2}
           r={r}
           fill="none"
-          stroke={goal.status === "complete" ? "var(--moss)" : "var(--champagne)"}
+          stroke={accentFor(goal.options, goal.status === "complete")}
           strokeWidth={stroke}
           strokeLinecap="round"
           strokeDasharray={`${c * share} ${c}`}
+          className="transition-[stroke-dasharray] duration-700 ease-out"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-semibold text-bone tabular-nums">{percent(share)}</span>
+      <span className={cn("absolute inset-0 flex items-center justify-center font-mono font-semibold text-bone tabular-nums", size >= 100 ? "text-lg" : "text-xs")}>
+        {percent(share)}
+      </span>
     </span>
   );
 }
@@ -1083,6 +1188,213 @@ function GoalDetail({
   );
 }
 
+// ---- The goal that needs you most, with a what-if planner --------------------
+
+/** The goal most worth attention: past its date, then behind, then the soonest date; reached goals never. */
+function featuredGoal(goals: GoalRow[]): GoalRow | null {
+  const rank = (g: GoalRow) => {
+    const v = g.insight.verdict;
+    return v === "overdue" ? 0 : v === "behind" || v === "stalled" ? 1 : g.targetDate ? 2 : 3;
+  };
+  const open = goals.filter((g) => g.status !== "complete");
+  return open.sort((a, b) => rank(a) - rank(b) || (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") || b.percent - a.percent)[0] ?? null;
+}
+
+function addMonthsIso(iso: string, months: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Drag to try a monthly amount: when it would finish, against the goal's
+ * date, drawn as the road from today to the target next to what's saved so far.
+ */
+function WhatIf({ goal, today }: { goal: GoalRow; today: string }) {
+  const { plan, pace, interestPerMonth, history } = goal.insight;
+  const interest = interestPerMonth ?? 0;
+  const suggested = plan?.perMonth ?? (pace && pace.perMonth > 0 ? pace.perMonth : goal.remaining / 12);
+  const max = Math.max(250, Math.ceil((Math.max(suggested, pace?.perMonth ?? 0) * 2) / 50) * 50);
+  const [amount, setAmount] = useState(() => Math.min(max, Math.max(25, Math.round(suggested / 25) * 25)));
+
+  const perMonth = amount + interest;
+  const months = perMonth > 0 ? Math.ceil(goal.remaining / perMonth) : null;
+  const finish = months !== null ? addMonthsIso(today, months) : null;
+  const diff = finish && goal.targetDate ? Math.round(daysBetween(goal.targetDate, finish) / 30.44) : null;
+  const color = accentFor(goal.options);
+
+  // The picture: saved so far (last six months), then the road at this amount.
+  const W = 320;
+  const H = 110;
+  const past = history ? history.values.slice(-180).filter((_, i, all) => i % 7 === 0 || i === all.length - 1) : [goal.saved];
+  const futureMonths = Math.min(months ?? 24, 60);
+  const totalSteps = past.length - 1 + futureMonths;
+  const top = goal.target * 1.08;
+  const x = (i: number) => (totalSteps > 0 ? (i / totalSteps) * W : 0);
+  const y = (v: number) => H - (Math.max(0, v) / top) * H;
+  const pastPath = past.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const nowX = x(past.length - 1);
+  const endV = Math.min(goal.target, goal.saved + perMonth * futureMonths);
+  const endX = x(past.length - 1 + (months !== null && goal.saved + perMonth * futureMonths >= goal.target ? Math.min(months, futureMonths) : futureMonths));
+  const dueX = goal.targetDate && monthsUntil(today, goal.targetDate) !== null ? x(past.length - 1 + Math.min(monthsUntil(today, goal.targetDate)!, futureMonths)) : null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <SectionTitle>What if you saved…</SectionTitle>
+        <span className="font-mono text-2xl font-semibold text-bone tabular-nums">
+          {dollars(amount)}
+          <span className="font-sans text-sm font-normal text-muted-foreground"> a month</span>
+        </span>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={max}
+        step={25}
+        value={amount}
+        onChange={(e) => setAmount(Number(e.target.value))}
+        aria-label="Monthly amount to try"
+        className="w-full cursor-pointer"
+        style={{ accentColor: color }}
+      />
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-28 w-full overflow-visible" aria-hidden>
+        <line x1={0} x2={W} y1={y(goal.target)} y2={y(goal.target)} stroke="var(--bone)" strokeOpacity={0.3} strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
+        {dueX !== null && <line x1={dueX} x2={dueX} y1={0} y2={H} stroke="var(--bone)" strokeOpacity={0.2} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
+        <path d={`${pastPath} L${nowX},${H} L0,${H} Z`} fill={color} fillOpacity={0.1} />
+        <path d={pastPath} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
+        <path
+          d={`M${nowX},${y(goal.saved)} L${endX},${y(endV)}`}
+          fill="none"
+          stroke={color}
+          strokeWidth={2}
+          strokeDasharray="5 5"
+          vectorEffect="non-scaling-stroke"
+          className="transition-all duration-300"
+        />
+      </svg>
+      <div className="flex flex-wrap justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>Saved so far</span>
+        {goal.targetDate && <span>┊ your date, {shortDate(goal.targetDate, today)}</span>}
+        <span>Target {dollars(goal.target)}</span>
+      </div>
+      <p className="rounded-lg border border-border bg-muted/20 px-3.5 py-3 text-sm text-muted-foreground">
+        {finish === null ? (
+          <>At $0 a month{interest > 0.5 ? " and only interest" : ""}, it won&apos;t get there. Slide to try an amount.</>
+        ) : (
+          <>
+            You&apos;d reach {dollars(goal.target)} around <span className="text-bone">{roughDate(finish, today)}</span>
+            {diff === null ? (
+              "."
+            ) : diff < 0 ? (
+              <span className="text-moss">, {-diff} month{diff === -1 ? "" : "s"} before your date.</span>
+            ) : diff === 0 ? (
+              <span className="text-moss">, right on time.</span>
+            ) : (
+              <span className="text-oxblood-text">, {diff} month{diff === 1 ? "" : "s"} after your date.</span>
+            )}
+            {interest >= 0.5 ? ` That counts about ${dollars(interest)} a month of interest.` : ""}
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function FeaturedGoal({ goal, today, onOpen }: { goal: GoalRow; today: string; onOpen: () => void }) {
+  const step = nextStep(goal, today);
+  const monthsLeft = goal.targetDate && goal.targetDate > today ? monthsUntil(today, goal.targetDate) : null;
+  return (
+    <Card className="relative overflow-hidden">
+      {/* A soft wash of the goal's color behind it. */}
+      <div
+        className="pointer-events-none absolute -top-24 -left-24 size-72 rounded-full opacity-[0.07] blur-3xl"
+        style={{ backgroundColor: accentFor(goal.options) }}
+        aria-hidden
+      />
+      <CardContent className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
+        <div className="flex flex-col gap-5">
+          <div className="flex items-start gap-3">
+            <GoalIcon goal={goal} className="size-11" />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">Needs you most</span>
+              <h2 className="truncate text-lg font-medium text-bone">{goal.name}</h2>
+              <span className="text-xs text-muted-foreground">
+                {goal.targetDate ? `By ${fullDate(goal.targetDate)}` : "No date"}
+                {monthsLeft ? ` · ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} left` : ""}
+              </span>
+            </div>
+            <StatusPill goal={goal} />
+          </div>
+          <div className="flex items-center gap-5">
+            <Ring goal={goal} size={112} stroke={9} />
+            <div className="flex min-w-0 flex-col gap-1">
+              <Money amount={goal.saved} currency="USD" tone="neutral" className="text-3xl font-semibold" />
+              <span className="text-sm text-muted-foreground">of {formatCurrency(goal.target, "USD")}</span>
+              <span className="text-sm text-muted-foreground">{strong(dollars(goal.remaining))} to go</span>
+            </div>
+          </div>
+          <div className={cn("flex items-center gap-3 rounded-lg border px-3.5 py-3 text-sm", step.tone === "act" ? "border-champagne/30 bg-champagne/[0.06]" : "border-border bg-muted/20")}>
+            <ArrowRight className={cn("size-4 shrink-0", STEP_TONE[step.tone])} aria-hidden />
+            <span className={cn("min-w-0 flex-1", STEP_TONE[step.tone])}>{step.text}</span>
+          </div>
+          <Button variant="outline" size="sm" className="self-start" onClick={onOpen} aria-label={`Open ${goal.name}`}>
+            See everything about it
+            <ChevronRight className="size-3.5" />
+          </Button>
+        </div>
+        <WhatIf key={goal.id} goal={goal} today={today} />
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---- Ideas for a next goal ----------------------------------------------------
+
+const IDEAS: { name: string; icon: GoalIcon; color: GoalColor; note: string }[] = [
+  { name: "Emergency fund", icon: "shield", color: "moss", note: "3 to 6 months of spending" },
+  { name: "Vacation", icon: "plane", color: "travel", note: "A trip, paid before you go" },
+  { name: "New car", icon: "car", color: "home", note: "A down payment, or all of it" },
+  { name: "Home down payment", icon: "house", color: "champagne", note: "Often 10 to 20% of the price" },
+  { name: "Holiday gifts", icon: "gift", color: "shopping", note: "No January card bill" },
+  { name: "Wedding", icon: "ring", color: "entertainment", note: "The day, without the debt" },
+];
+
+function Ideas({ goals, accounts, pay, today }: { goals: GoalRow[]; accounts: AccountChoice[]; pay: PaySummary | null; today: string }) {
+  const taken = new Set(goals.map((g) => iconFor(g.name, g.options)));
+  const ideas = IDEAS.filter((i) => !taken.has(i.icon)).slice(0, 4);
+  if (ideas.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-3" aria-label="Ideas for a new goal">
+      <SectionTitle>Start another goal</SectionTitle>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {ideas.map((idea) => (
+          <GoalDialog
+            key={idea.name}
+            accounts={accounts}
+            pay={pay}
+            today={today}
+            preset={idea}
+            trigger={
+              <button
+                type="button"
+                className="group flex items-center gap-3 rounded-xl border border-dashed border-border p-3.5 text-left transition-colors hover:border-solid hover:border-bone/20 hover:bg-bone/[0.03]"
+              >
+                <GoalBadge name={idea.name} options={idea} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="text-sm text-bone">{idea.name}</span>
+                  <span className="truncate text-xs text-muted-foreground">{idea.note}</span>
+                </span>
+                <Plus className="size-4 shrink-0 text-muted-foreground transition-colors group-hover:text-champagne" aria-hidden />
+              </button>
+            }
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function GoalsManager({
   goals,
   accounts,
@@ -1112,16 +1424,24 @@ export function GoalsManager({
     );
   }
 
-  // Ones still in progress first, the reached ones after.
-  const sorted = [...goals].sort((a, b) => Number(a.status === "complete") - Number(b.status === "complete"));
+  const featured = featuredGoal(goals);
+  // The rest: ones still in progress first, the reached ones after.
+  const rest = goals.filter((g) => g !== featured).sort((a, b) => Number(a.status === "complete") - Number(b.status === "complete"));
 
   return (
     <>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {sorted.map((g) => (
-          <GoalCard key={g.id} goal={g} today={today} onOpen={() => setOpenId(g.id)} />
-        ))}
-      </div>
+      {featured && <FeaturedGoal goal={featured} today={today} onOpen={() => setOpenId(featured.id)} />}
+      {rest.length > 0 && (
+        <section className="flex flex-col gap-3" aria-label="Your goals">
+          {featured && <SectionTitle>{rest.length === 1 ? "Your other goal" : "Your other goals"}</SectionTitle>}
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {rest.map((g) => (
+              <GoalCard key={g.id} goal={g} today={today} onOpen={() => setOpenId(g.id)} />
+            ))}
+          </div>
+        </section>
+      )}
+      <Ideas goals={goals} accounts={accounts} pay={pay} today={today} />
 
       <Sheet open={open !== null} onOpenChange={(next) => !next && setOpenId(null)}>
         <SheetContent

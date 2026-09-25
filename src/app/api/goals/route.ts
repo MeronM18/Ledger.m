@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
+import { accountRefsSchema, goalOptionsSchema, saveGoalOptions } from "@/lib/goal-options-store";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-// "plaid:<uuid>" or "manual:<uuid>"; a handful at most.
-const accountRefsSchema = z
-  .array(z.string().regex(/^(plaid|manual):[0-9a-f-]{36}$/))
-  .max(10);
 
 const goalBodySchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -14,6 +10,7 @@ const goalBodySchema = z.object({
   saved_amount: z.number().min(0).max(100_000_000).default(0),
   target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   account_refs: accountRefsSchema.optional(),
+  options: goalOptionsSchema.optional(),
 });
 
 export async function POST(request: Request) {
@@ -43,5 +40,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to create goal" }, { status: 500 });
   }
 
+  // The goal stands without its options; a failure here only means the defaults.
+  await saveGoalOptions(admin, data.id, parsed.data.options, parsed.data.account_refs ?? []);
   return NextResponse.json({ goal: data });
 }

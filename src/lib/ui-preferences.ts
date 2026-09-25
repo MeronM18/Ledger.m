@@ -58,6 +58,9 @@ export const loadDisplayName = cache(async function loadDisplayName(admin: Admin
   return resolveDisplayName(data?.value);
 });
 
+// Each goal's icon, color and how its accounts count (goal-options.ts), by goal id.
+export const GOAL_OPTIONS_KEY = "goal_options";
+
 export const ACCOUNT_SETTINGS_KEY = "account_settings";
 
 /** Names, statement closing days and due days you've set, by account id. */

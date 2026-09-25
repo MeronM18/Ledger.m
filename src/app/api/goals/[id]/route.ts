@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
+import { accountRefsSchema, goalOptionsSchema, removeGoalOptions, saveGoalOptions } from "@/lib/goal-options-store";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 // Partial edit, plus add_amount to add (or, if negative, take out) money
@@ -11,7 +12,8 @@ const bodySchema = z
     target_amount: z.number().positive().max(100_000_000),
     saved_amount: z.number().min(0).max(100_000_000),
     target_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
-    account_refs: z.array(z.string().regex(/^(plaid|manual):[0-9a-f-]{36}$/)).max(10),
+    account_refs: accountRefsSchema,
+    options: goalOptionsSchema,
     add_amount: z.number().min(-100_000_000).max(100_000_000),
   })
   .partial();
@@ -26,7 +28,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { add_amount, ...changes } = parsed.data;
+  const { add_amount, options, ...changes } = parsed.data;
   const admin = createAdminClient();
   const update: Record<string, unknown> = { ...changes };
 
@@ -43,12 +45,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     update.saved_amount = Math.max(0, Number(current.saved_amount) + add_amount);
   }
 
-  const { error } = await admin.from("savings_goals").update(update).eq("id", id);
-  if (error) {
-    console.error("Failed to update savings goal", error);
-    return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
+  if (Object.keys(update).length > 0) {
+    const { error } = await admin.from("savings_goals").update(update).eq("id", id);
+    if (error) {
+      console.error("Failed to update savings goal", error);
+      return NextResponse.json({ error: "Failed to update goal" }, { status: 500 });
+    }
   }
 
+  const saved = await saveGoalOptions(admin, id, options, changes.account_refs);
+  if (saved.error) return NextResponse.json({ error: "Saved, but its look and tracking couldn't be" }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
 
@@ -65,5 +71,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Failed to delete goal" }, { status: 500 });
   }
 
+  await removeGoalOptions(admin, id);
   return NextResponse.json({ ok: true });
 }
