@@ -6,12 +6,13 @@ import { categoryColorSlot, humanizeCategory, OTHER_CATEGORY_COLOR_SLOT } from "
 import { displayCategoryKey, type SpendingTransaction } from "@/lib/spending-aggregation";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 
-export type PeriodPreset = "this-month" | "last-month" | "last-3-months" | "this-year" | "last-year" | "all";
+export type PeriodPreset = "this-month" | "last-month" | "last-3-months" | "last-12-months" | "this-year" | "last-year" | "all";
 
 export const PERIOD_PRESETS: { value: PeriodPreset; label: string }[] = [
   { value: "this-month", label: "This month" },
   { value: "last-month", label: "Last month" },
   { value: "last-3-months", label: "Last 3 months" },
+  { value: "last-12-months", label: "Last 12 months" },
   { value: "this-year", label: "This year" },
   { value: "last-year", label: "Last year" },
   { value: "all", label: "All time" },
@@ -45,6 +46,12 @@ export function periodRange(period: string, todayIso: string): DateRange {
     case "last-3-months": {
       // This month and the two before it.
       const sm = m - 2;
+      const sy = sm < 0 ? y - 1 : y;
+      return { start: iso(sy, (sm + 12) % 12, 1), end: iso(y, m, lastDay(y, m)) };
+    }
+    case "last-12-months": {
+      // This month and the eleven before it.
+      const sm = m - 11;
       const sy = sm < 0 ? y - 1 : y;
       return { start: iso(sy, (sm + 12) % 12, 1), end: iso(y, m, lastDay(y, m)) };
     }

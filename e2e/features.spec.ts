@@ -7,6 +7,28 @@ test("income shows the baseline to budget around and this month against it", asy
   await expect(page.getByText("Every month", { exact: true })).toBeVisible();
 });
 
+test("income: the total for any period, narrowed by kind and by source", async ({ page }) => {
+  await page.goto("/reports/income");
+  await afterWelcome(page);
+  await expect(page.getByText(/^Total income · /)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Period" })).toHaveText(/Last 12 months/);
+  await expect(page.getByText("Spent", { exact: true })).toBeVisible();
+
+  // Interest alone: spending isn't set against a slice of income.
+  await page.getByRole("radio", { name: "Interest" }).click();
+  await expect(page.getByText("Spent", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Show all income" }).click();
+  await expect(page.getByText("Spent", { exact: true })).toBeVisible();
+
+  // Picking a source narrows the deposits to it.
+  const source = page.getByRole("button", { name: /^United Mortgage Paycheck/ });
+  await source.click();
+  await expect(source).toHaveAttribute("aria-pressed", "true");
+  const deposits = page.locator("li").filter({ hasText: /· (Paycheck|Interest|Other) ·/ });
+  await expect(deposits.first()).toBeVisible();
+  for (const text of await deposits.allInnerTexts()) expect(text).toContain("United Mortgage Paycheck");
+});
+
 test("reports: spending narrows to a category, and its totals match the list", async ({ page }) => {
   await page.goto("/reports/spending");
   await afterWelcome(page);

@@ -60,7 +60,7 @@ function todayIso(): string {
 const pct = (amount: number, total: number) => (total > 0 ? `${((amount / total) * 100).toFixed(1)}%` : "0%");
 
 /** A pair (or more) of buttons where one is on, like a small segmented control. */
-function Segmented<T extends string>({
+export function Segmented<T extends string>({
   label,
   value,
   options,

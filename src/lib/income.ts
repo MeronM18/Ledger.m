@@ -89,18 +89,20 @@ export function isInterest(t: Pick<SpendingTransaction, "pfc_detailed" | "mercha
 /** Every settled deposit categorized as income, newest first. A reversal (money taken back) counts against it. */
 export function incomeDeposits(transactions: SpendingTransaction[]): IncomeDeposit[] {
   return transactions
-    .filter((t) => !t.pending && effectiveCategory(t) === "INCOME")
-    .map((t) => {
-      const payroll = detectPayrollCompany(t.name ?? "");
-      const interest = isInterest(t);
-      return {
-        date: t.date,
-        amount: -t.amount,
-        source: humanizeTransactionName(t),
-        kind: payroll || t.pfc_detailed === "INCOME_WAGES" ? ("paycheck" as const) : interest ? ("interest" as const) : ("other" as const),
-      };
-    })
+    .filter(isIncomeDeposit)
+    .map((t) => ({ date: t.date, amount: -t.amount, source: humanizeTransactionName(t), kind: incomeKind(t) }))
     .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/** A settled deposit (or its reversal) categorized as income. */
+export function isIncomeDeposit(t: SpendingTransaction): boolean {
+  return !t.pending && effectiveCategory(t) === "INCOME";
+}
+
+/** A paycheck (by the payroll name or Plaid's wages category), interest, or other income. */
+export function incomeKind(t: SpendingTransaction): IncomeKind {
+  if (detectPayrollCompany(t.name ?? "") || t.pfc_detailed === "INCOME_WAGES") return "paycheck";
+  return isInterest(t) ? "interest" : "other";
 }
 
 export function variabilityOf(spread: number, average: number): IncomeStats["variability"] {
