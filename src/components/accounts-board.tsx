@@ -62,7 +62,10 @@ function Change({ amount, base, liability = false, className }: { amount: number
   }
   const up = amount > 0;
   const good = liability ? !up : up;
-  const pct = base && base !== 0 ? ` (${Math.abs((amount / Math.abs(base)) * 100).toFixed(1)}%)` : "";
+  // A percent only means something against a real starting amount: from
+  // (almost) nothing, say a holding added this month, it's just the amount.
+  const share = base !== undefined && Math.abs(base) >= 1 ? Math.abs(amount / base) : null;
+  const pct = share !== null && share <= 10 ? ` (${(share * 100).toFixed(1)}%)` : "";
   const Arrow = up ? ArrowUp : ArrowDown;
   return (
     <span className={cn("inline-flex items-center gap-0.5 font-mono text-xs tabular-nums", good ? "text-moss" : "text-oxblood-text", className)}>

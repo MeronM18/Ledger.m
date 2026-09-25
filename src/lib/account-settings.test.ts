@@ -19,8 +19,8 @@ describe("resolveAccountSettings", () => {
         b: "junk",
       })
     ).toEqual({
-      a: { nickname: "Flex", statementCloseDay: 3, paymentDueDay: null, rewardsProgram: "freedom-flex" },
-      c: { nickname: null, statementCloseDay: null, paymentDueDay: null, rewardsProgram: null },
+      a: { nickname: "Flex", statementCloseDay: 3, paymentDueDay: null, rewardsProgram: "freedom-flex", rewardsBalance: null },
+      c: { nickname: null, statementCloseDay: null, paymentDueDay: null, rewardsProgram: null, rewardsBalance: null },
     });
     expect(resolveAccountSettings(null)).toEqual({});
   });

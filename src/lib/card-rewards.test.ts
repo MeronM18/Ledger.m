@@ -149,6 +149,23 @@ describe("rewardsSummary", () => {
       ends: "2026-09-30",
     });
     expect(cff.byWhy).toEqual([{ why: "Rotating 5% categories", earned: 250 }]);
+    expect(csp.balance).toBeNull();
+  });
+
+  it("starts from the balance you entered and adds purchases made after it", () => {
+    const txs = [
+      tx("csp", "2026-09-10", 100, "Chipotle", "FOOD_AND_DRINK", "FOOD_AND_DRINK_FAST_FOOD"),
+      tx("csp", "2026-09-20", 50, "Chipotle", "FOOD_AND_DRINK", "FOOD_AND_DRINK_FAST_FOOD"),
+    ];
+    const { rewards, bonusSpend } = rewardsFor(txs, CARDS);
+    const [csp] = rewardsSummary(
+      [{ accountId: "csp", name: "Sapphire", program: "sapphire-preferred", balance: { available: 125045, pending: 2030, asOf: "2026-09-15" } }],
+      txs.map((t) => ({ accountId: t.accountId, date: t.date, reward: rewards.get(t.id) })),
+      Object.fromEntries(bonusSpend),
+      "2026-09-24"
+    );
+    // Only the Sep 20 dinner (3x on $50) came after Sep 15.
+    expect(csp.balance).toEqual({ available: 125045, pending: 2030, asOf: "2026-09-15", since: 150, total: 127225 });
   });
 });
 

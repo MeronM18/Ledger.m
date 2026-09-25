@@ -372,7 +372,7 @@ export default async function AccountsPage() {
               cards={rewardsSummary(
                 ledger.rewardCards.map((c) => {
                   const a = ledger.accounts.find((x) => x.id === c.accountId);
-                  return { ...c, name: a ? `${a.name}${a.mask ? ` ••${a.mask}` : ""}` : c.name };
+                  return { ...c, name: a?.name ?? c.name, mask: a?.mask ?? null, balance: settings[c.accountId]?.rewardsBalance ?? null };
                 }),
                 ledger.transactions.map((t) => ({ accountId: t.account?.id ?? null, date: t.date, reward: t.reward })),
                 ledger.freedomBonusSpend,

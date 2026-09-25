@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireApiUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { REWARDS_CHOICES } from "@/lib/account-settings";
+import { calendarNow } from "@/lib/time";
 import { ACCOUNT_SETTINGS_KEY, loadAccountSettings } from "@/lib/ui-preferences";
 
 // What's editable on a connected account: the yield and whether it's
@@ -18,6 +19,10 @@ const bodySchema = z
     statement_close_day: day,
     payment_due_day: day,
     rewards_program: z.enum(REWARDS_CHOICES).nullable(),
+    // The card's points as its app shows them; today becomes the date they're as of.
+    rewards_balance: z
+      .object({ available: z.number().min(0).max(1_000_000_000), pending: z.number().min(0).max(1_000_000_000) })
+      .nullable(),
   })
   .partial();
 
@@ -51,8 +56,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
   }
 
-  const { nickname, statement_close_day, payment_due_day, rewards_program } = parsed.data;
-  if (nickname !== undefined || statement_close_day !== undefined || payment_due_day !== undefined || rewards_program !== undefined) {
+  const { nickname, statement_close_day, payment_due_day, rewards_program, rewards_balance } = parsed.data;
+  if (
+    nickname !== undefined ||
+    statement_close_day !== undefined ||
+    payment_due_day !== undefined ||
+    rewards_program !== undefined ||
+    rewards_balance !== undefined
+  ) {
     const all = await loadAccountSettings(admin);
     const current = all[id] ?? {};
     all[id] = {
@@ -60,6 +71,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       statementCloseDay: statement_close_day !== undefined ? statement_close_day : (current.statementCloseDay ?? null),
       paymentDueDay: payment_due_day !== undefined ? payment_due_day : (current.paymentDueDay ?? null),
       rewardsProgram: rewards_program !== undefined ? rewards_program : (current.rewardsProgram ?? null),
+      rewardsBalance:
+        rewards_balance === undefined
+          ? (current.rewardsBalance ?? null)
+          : rewards_balance && { available: Math.round(rewards_balance.available), pending: Math.round(rewards_balance.pending), asOf: calendarNow().isoDate },
     };
     const { error } = await admin.from("ui_preferences").upsert({ key: ACCOUNT_SETTINGS_KEY, value: all }, { onConflict: "key" });
     if (error) {

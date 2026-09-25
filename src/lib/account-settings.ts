@@ -13,7 +13,22 @@ export type AccountSetting = {
   // A credit card's rewards program when its name doesn't say ("none" for a
   // card that earns nothing); unset, it's recognized by name.
   rewardsProgram?: ProgramId | "none" | null;
+  // The points balance as the issuer's app showed it, typed in, since banks
+  // don't send it. Estimates for purchases after `asOf` are added on top.
+  rewardsBalance?: RewardsBalance | null;
 };
+
+export type RewardsBalance = { available: number; pending: number; asOf: string };
+
+function resolveRewardsBalance(raw: unknown): RewardsBalance | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : null);
+  const available = n(r.available);
+  const pending = n(r.pending) ?? 0;
+  const asOf = typeof r.asOf === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.asOf) ? r.asOf : null;
+  return available !== null && asOf ? { available, pending, asOf } : null;
+}
 
 export const REWARDS_CHOICES = ["sapphire-preferred", "freedom-flex", "apple-card", "none"] as const;
 
@@ -31,6 +46,7 @@ export function resolveAccountSettings(stored: unknown): AccountSettings {
       statementCloseDay: day(r.statementCloseDay),
       paymentDueDay: day(r.paymentDueDay),
       rewardsProgram: (REWARDS_CHOICES as readonly unknown[]).includes(r.rewardsProgram) ? (r.rewardsProgram as ProgramId | "none") : null,
+      rewardsBalance: resolveRewardsBalance(r.rewardsBalance),
     };
   }
   return out;

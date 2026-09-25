@@ -335,6 +335,7 @@ export function earnedLabel(r: Pick<Reward, "unit" | "earned">): string {
 export type CardRewards = {
   accountId: string;
   name: string;
+  mask?: string | null;
   program: ProgramId;
   unit: "points" | "cash";
   thisMonth: number;
@@ -343,11 +344,14 @@ export type CardRewards = {
   byWhy: { why: string; earned: number }[];
   // Freedom Flex: this quarter's 5% categories and how much of the $1,500 they've used.
   quarter: { quarter: string; categories: string[]; used: number; cap: number; ends: string } | null;
+  // The balance you entered from the issuer's app, and what purchases since
+  // then are estimated to have added; null until one is entered.
+  balance: { available: number; pending: number; asOf: string; since: number; total: number } | null;
 };
 
 /** Each rewards card's month and year so far, where it came from, and Freedom Flex's quarter. */
 export function rewardsSummary(
-  cards: { accountId: string; name: string; program: ProgramId }[],
+  cards: { accountId: string; name: string; mask?: string | null; program: ProgramId; balance?: { available: number; pending: number; asOf: string } | null }[],
   transactions: { accountId: string | null; date: string; reward?: Reward }[],
   bonusSpend: Record<string, number>,
   todayIso: string
@@ -359,6 +363,13 @@ export function rewardsSummary(
     const unit = PROGRAMS[c.program].unit;
     let thisMonth = 0;
     let thisYear = 0;
+    // Purchases after the day the balance was read aren't in it yet.
+    let since = 0;
+    if (c.balance) {
+      for (const t of transactions) {
+        if (t.accountId === c.accountId && t.reward && t.date > c.balance.asOf && t.date <= todayIso) since += t.reward.earned;
+      }
+    }
     const byWhy = new Map<string, number>();
     for (const t of transactions) {
       if (t.accountId !== c.accountId || !t.reward || t.date.slice(0, 4) !== year || t.date > todayIso) continue;
@@ -370,9 +381,17 @@ export function rewardsSummary(
     const q = quarterOf(todayIso);
     const qEndMonth = Number(q.slice(-1)) * 3;
     const ends = new Date(Date.UTC(Number(year), qEndMonth, 0)).toISOString().slice(0, 10);
+    const { balance: entered, ...card } = c;
     return {
-      ...c,
+      ...card,
       unit,
+      balance: entered
+        ? {
+            ...entered,
+            since: round(unit, since),
+            total: round(unit, entered.available + entered.pending + since),
+          }
+        : null,
       thisMonth: round(unit, thisMonth),
       thisYear: round(unit, thisYear),
       byWhy: Array.from(byWhy, ([why, earned]) => ({ why, earned: round(unit, earned) }))

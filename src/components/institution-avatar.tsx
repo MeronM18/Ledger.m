@@ -23,6 +23,12 @@ const MARKS: [RegExp, Mark][] = [
   [/fifth third/i, { kind: "fifth-third" }],
 ];
 
+/** A brand's mark as a 24×24 path, for places that draw it themselves (the card art on Accounts). */
+export function brandPath(name: "apple" | "chase"): string {
+  const mark = MARKS.find(([re]) => re.test(name))?.[1];
+  return mark?.kind === "path" ? mark.d : "";
+}
+
 const BRAND: [RegExp, string][] = [
   [/bank of america/i, "#c8102e"],
   [/wells fargo/i, "#c8161d"],

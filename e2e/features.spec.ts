@@ -264,8 +264,18 @@ test("rewards: card purchases show what they earned, and Accounts adds it up", a
   await page.goto("/accounts");
   const rewards = page.locator("[data-slot=card]").filter({ has: page.getByText("Rewards", { exact: true }) });
   await expect(rewards.getByText(/this year/).first()).toBeVisible();
-  await expect(rewards.getByText(/^5% until /)).toBeVisible();
   await expect(rewards.getByRole("progressbar", { name: /5% categories used this quarter/ })).toBeVisible();
+
+  // The points balance comes from the card's app, typed in once; it then shows as the card's total.
+  await rewards.getByRole("button", { name: "Add your balance" }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Available").fill("125,045");
+  await dialog.getByLabel("Pending").fill("2,030");
+  await dialog.getByRole("button", { name: "Save points" }).click();
+  await expect(rewards.getByText("127,075")).toBeVisible();
+  await expect(rewards.getByText("125,045", { exact: true })).toBeVisible();
+  await rewards.getByRole("button", { name: "Details" }).first().click();
+  await expect(rewards.getByText(/^5% categories run until /)).toBeVisible();
 });
 
 test("assets: a vehicle counts from the date it's given, and a new value keeps the old one as history", async ({ page }) => {
