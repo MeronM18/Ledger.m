@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { accountName } from "@/lib/account-settings";
 import { MAX_HISTORY_DAYS, type HistoryTx } from "@/lib/account-history";
 import { historyStartFor } from "@/lib/accounts-board";
@@ -21,7 +22,7 @@ type AdminClient = ReturnType<typeof createAdminClient>;
  * forecast, plan), plus the accounts a goal can follow and the pay picture
  * plans are measured against. Shared by /goals and the overview.
  */
-export async function loadGoals(
+export const loadGoals = cache(async function loadGoals(
   admin: AdminClient
 ): Promise<{
   rows: GoalRow[];
@@ -166,7 +167,7 @@ export async function loadGoals(
     thisMonth: followedRefs.size > 0 ? { added: cents(thisMonth.added), interest: cents(thisMonth.interest), out: cents(thisMonth.out) } : null,
     error: false,
   };
-}
+});
 
 /** Today's balance of each account ref ("plaid:", "manual:" or "asset:"), for a growth goal's starting point. */
 export async function loadRefBalances(admin: AdminClient, refs: string[]): Promise<Map<string, number>> {

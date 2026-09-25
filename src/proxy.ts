@@ -26,9 +26,14 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims checks the session's token on the spot (against the
+  // project's published signing keys, fetched once and cached) instead of a
+  // round trip to Supabase Auth on every page, and still refreshes an
+  // expired session. Projects on the older shared secret fall back to that
+  // round trip inside it. The (dashboard) layout still asks Supabase Auth
+  // (requireUser), so a session revoked elsewhere is caught there.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ? { email: typeof data.claims.email === "string" ? data.claims.email : null } : null;
 
   const isPublicPath = PUBLIC_PATHS.some((path) => request.nextUrl.pathname.startsWith(path));
 

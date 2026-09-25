@@ -4,8 +4,12 @@ import { afterWelcome, expect, mockWrites, test } from "./test";
 async function foodThisMonth(page: import("@playwright/test").Page): Promise<number> {
   await page.goto("/budgets");
   await afterWelcome(page);
+  // Wait for the amount itself: with no welcome animation to sit through
+  // (it plays once a session), the page can still be filling in.
+  const pattern = /Food & Drink[\s\S]*?\$([\d,]+\.\d{2})/;
+  await expect(page.locator("main")).toContainText(pattern);
   const text = await page.locator("main").innerText();
-  const match = text.match(/Food & Drink[\s\S]*?\$([\d,]+\.\d{2})/);
+  const match = text.match(pattern);
   return Number(match![1].replace(/,/g, ""));
 }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { WELCOME_COOKIE } from "@/lib/sidebar-state";
 import { useEffect, useState } from "react";
 
 const WORDMARK = ["L", "e", "d", "g", "e", "r", ".", "m"];
@@ -45,12 +46,15 @@ function Wordmark({ animated }: { animated: boolean }) {
  * Rendered on the server, so it covers the first paint rather than
  * appearing after the page has flashed. The animation itself is CSS
  * (globals.css, "Welcome"); script only removes it afterwards and handles
- * skipping.
+ * skipping. It plays once a browser session; refreshes after that skip it.
  */
 export function WelcomeOverlay({ month, day, year }: { month: string; day: string; year: string }) {
   const [phase, setPhase] = useState<"playing" | "leaving" | "gone">("playing");
 
   useEffect(() => {
+    // Once a browser session: a session cookie (gone when the browser
+    // closes) tells the layout not to draw it again on a refresh.
+    document.cookie = `${WELCOME_COOKIE}=1; path=/; samesite=lax`;
     const skip = () => setPhase((p) => (p === "playing" ? "leaving" : p));
     window.addEventListener("keydown", skip);
     // A backstop in case the closing animation's end event never arrives

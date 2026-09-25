@@ -4,6 +4,7 @@ import {
   applyListOptions,
   DEFAULT_LIST_OPTIONS,
   isMoneyMovement,
+  firstRowsOfDays,
   groupByDay,
   listSummary,
   type ListOptions,
@@ -107,5 +108,20 @@ describe("activeFilterCount, listSummary and groupByDay", () => {
       ["2026-09-24", 2, 40],
       ["2026-09-23", 1, -5.5],
     ]);
+  });
+});
+
+describe("firstRowsOfDays", () => {
+  it("cuts after the first rows, keeping a cut day's whole net", () => {
+    const days = groupByDay([
+      { date: "2026-09-25", amount: 10 },
+      { date: "2026-09-25", amount: 5 },
+      { date: "2026-09-24", amount: 20 },
+    ]);
+    const first = firstRowsOfDays(days, 1);
+    expect(first).toHaveLength(1);
+    expect(first[0].rows).toHaveLength(1);
+    expect(first[0].net).toBe(-15);
+    expect(firstRowsOfDays(days, 10)).toEqual(days);
   });
 });

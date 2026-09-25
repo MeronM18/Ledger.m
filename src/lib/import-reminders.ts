@@ -1,6 +1,9 @@
 import { z } from "zod";
+import { daysAgo, easternDateOf, longDate } from "@/lib/import-dates";
+
+// Shared with the browser from import-dates.ts, which has no zod in it.
+export { daysAgo, easternDateOf, longDate } from "@/lib/import-dates";
 import type { Alert } from "@/lib/alerts-logic";
-import { calendarNow } from "@/lib/time";
 
 // Pure. Apple Card and Apple Savings can't sync, so their statements are
 // imported by hand. Every import is logged with its date; once an account's
@@ -46,11 +49,6 @@ const DAY_MS = 86_400_000;
 const dayNumber = (iso: string) => Math.round(Date.parse(`${iso}T00:00:00Z`) / DAY_MS);
 const isoOfDay = (day: number) => new Date(day * DAY_MS).toISOString().slice(0, 10);
 
-/** The Eastern calendar day of a timestamp. */
-export function easternDateOf(timestamp: string): string {
-  return calendarNow(new Date(timestamp)).isoDate;
-}
-
 export type ImportStatus = {
   lastImportDate: string; // Eastern calendar day
   daysSince: number;
@@ -69,15 +67,6 @@ export function importStatus(lastImportedAt: string | null, today: string): Impo
     dueDate: isoOfDay(dayNumber(lastImportDate) + IMPORT_REMINDER_DAYS),
     overdue: daysSince >= IMPORT_REMINDER_DAYS,
   };
-}
-
-export const longDate = (iso: string) =>
-  new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
-
-export function daysAgo(days: number): string {
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  return `${days} days ago`;
 }
 
 /**

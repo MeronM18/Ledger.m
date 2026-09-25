@@ -26,6 +26,8 @@ import {
 import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { loadForecast } from "@/lib/forecast-data";
+import { loadGoals } from "@/lib/goals-data";
 import { calendarNow } from "@/lib/time";
 import { describeTransactions } from "@/lib/transaction-kind";
 import { loadCardOrder, loadDisplayName, loadMonthlyBudget } from "@/lib/ui-preferences";
@@ -77,6 +79,10 @@ const WORTH_COLOR = "var(--champagne)";
 
 export default async function OverviewPage() {
   const admin = createAdminClient();
+  // The Safe to spend and Goals cards load on their own (in Suspense);
+  // starting their reads now, beside the page's, means they're ready sooner.
+  void loadForecast(admin);
+  void loadGoals(admin);
 
   const [
     { data: accountsData, error: acctError },

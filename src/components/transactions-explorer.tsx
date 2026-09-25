@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeftRight, CalendarDays, ChevronRight, CreditCard, Download, PiggyBank, Search, StickyNote } from "lucide-react";
 import { InstitutionAvatar } from "@/components/institution-avatar";
 import { TransactionAvatar } from "@/components/transaction-avatar";
@@ -26,7 +26,7 @@ import type { MerchantRule } from "@/lib/transaction-edits";
 import { effectiveCategory, humanizeTransaction, humanizeTransactionName } from "@/lib/transaction-display";
 import { transactionIconColor } from "@/lib/transaction-icons";
 import { describeTransactions, inCategory, kindSummary, matchesKind, type Described, type KindFilter } from "@/lib/transaction-kind";
-import { applyListOptions, DEFAULT_LIST_OPTIONS, groupByDay, listSummary, type ListOptions } from "@/lib/transaction-list";
+import { applyListOptions, DEFAULT_LIST_OPTIONS, firstRowsOfDays, groupByDay, listSummary, type ListOptions } from "@/lib/transaction-list";
 import { Segmented } from "@/components/segmented";
 import { cn } from "@/lib/utils";
 
@@ -610,6 +610,21 @@ export function TransactionDayList({
   label?: string;
 }) {
   const days = useMemo(() => (byDate ? groupByDay(rows) : null), [byDate, rows]);
+  // A long list is drawn a batch at a time: the first rows right away, more
+  // as you scroll near the end. A new list (a filter, a search) starts over.
+  const [batch, setBatch] = useState({ rows, count: LIST_BATCH });
+  const count = batch.rows === rows ? batch.count : LIST_BATCH;
+  const more = rows.length - count;
+  const showMore = () => setBatch({ rows, count: count + LIST_BATCH });
+  const sentinel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || more <= 0) return;
+    const observer = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && showMore(), { rootMargin: "800px 0px" });
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
+  const shownDays = days ? firstRowsOfDays(days, count) : null;
   const list = (items: TransactionRow[], showDate: boolean) => (
     <ul>
       {items.map((t) => (
@@ -630,8 +645,8 @@ export function TransactionDayList({
       )}
       {rows.length === 0 ? (
         <p className="py-12 text-center text-sm text-muted-foreground">{empty}</p>
-      ) : days ? (
-        days.map((d) => (
+      ) : shownDays ? (
+        shownDays.map((d) => (
           <section key={d.date} aria-label={longDay(d.date)} className="border-t border-border first:border-t-0">
             <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/40 py-2 pr-11 pl-4 text-xs">
               <h2 className="font-medium text-muted-foreground">{longDay(d.date)}</h2>
@@ -644,11 +659,21 @@ export function TransactionDayList({
           </section>
         ))
       ) : (
-        list(rows, true)
+        list(rows.slice(0, count), true)
+      )}
+      {more > 0 && (
+        <div ref={sentinel} className="border-t border-border p-2 text-center">
+          <Button variant="ghost" size="sm" onClick={showMore}>
+            Show more ({more.toLocaleString("en-US")} left)
+          </Button>
+        </div>
       )}
     </Card>
   );
 }
+
+// How many rows a list draws at a time.
+const LIST_BATCH = 60;
 
 /**
  * Which transaction's panel is open, for a page with a list. Each opening

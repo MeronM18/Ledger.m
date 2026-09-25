@@ -12,7 +12,6 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { DISPLAY_NAME_MAX, THRESHOLD_LIMITS, type AlertThresholds } from "@/lib/app-preferences";
 import { formatCurrency } from "@/lib/format";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 async function send(url: string, method: string, body?: unknown): Promise<void> {
@@ -83,6 +82,8 @@ export function SignOutButtons() {
   const [busy, setBusy] = useState<"local" | "global" | null>(null);
   async function signOut(scope: "local" | "global") {
     setBusy(scope);
+    // Loaded on click: the Supabase browser client is big, and only signing out needs it.
+    const { createClient } = await import("@/lib/supabase/client");
     const { error } = await createClient().auth.signOut({ scope });
     if (error) {
       toast.error("Couldn't sign out", { description: error.message });

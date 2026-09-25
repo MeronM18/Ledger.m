@@ -25,6 +25,21 @@ export const metadata = { title: "Recurring" };
 export default async function SubscriptionsPage() {
   const admin = createAdminClient();
 
+  // Started now, used further down: they don't depend on the streams, so
+  // they load alongside them instead of after.
+  const importedPromise = Promise.all([
+    fetchAllRows<{ date: string; name: string; amount: number; pfc_primary: string; manual_account_id: string | null }>((from, to) =>
+      admin
+        .from("manual_transactions")
+        .select("date, name, amount, pfc_primary, manual_account_id")
+        .eq("source", "apple_card_csv")
+        .order("date")
+        .order("id")
+        .range(from, to)
+    ),
+    loadManualAccounts(admin),
+  ]);
+
   // Only outflow streams: inflow streams (payroll, interest credits) are
   // money coming in, not subscriptions someone would want to cancel.
   const [{ data, error }, { data: manualData, error: manualError }, { data: accounts, error: acctError }] =
@@ -113,18 +128,7 @@ export default async function SubscriptionsPage() {
 
   // Recurring charges hiding in imported Apple Card transactions, minus
   // anything already tracked. A failed read just means no suggestions.
-  const [importedRes, manualAccounts] = await Promise.all([
-    fetchAllRows<{ date: string; name: string; amount: number; pfc_primary: string; manual_account_id: string | null }>((from, to) =>
-      admin
-        .from("manual_transactions")
-        .select("date, name, amount, pfc_primary, manual_account_id")
-        .eq("source", "apple_card_csv")
-        .order("date")
-        .order("id")
-        .range(from, to)
-    ),
-    loadManualAccounts(admin),
-  ]);
+  const [importedRes, manualAccounts] = await importedPromise;
   if (importedRes.error) console.error("Failed to load imported card transactions", importedRes.error);
 
   // A subscription you added that's charged to an imported card (Apple Card)

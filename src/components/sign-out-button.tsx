@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
 /** `collapsed`: in the sidebar's icon rail, the label fades and shows on hover instead. */
@@ -12,6 +11,8 @@ export function SignOutButton({ collapsed = false }: { collapsed?: boolean }) {
 
   async function handleClick() {
     setIsSigningOut(true);
+    // Loaded on click: the Supabase browser client is big, and only signing out needs it.
+    const { createClient } = await import("@/lib/supabase/client");
     const supabase = createClient();
     const { error } = await supabase.auth.signOut();
 

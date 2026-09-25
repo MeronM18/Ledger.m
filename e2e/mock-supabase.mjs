@@ -164,9 +164,22 @@ export function startMockSupabase({ port = MOCK_PORT } = {}) {
   const writes = [];
   const pushes = [];
 
+  // For timing pages locally: MOCK_SUPABASE_LATENCY_MS adds a network-like
+  // delay to every database call, and /__e2e/requests counts them.
+  const latency = Number(process.env.MOCK_SUPABASE_LATENCY_MS ?? 0);
+  const requests = [];
+
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     const path = url.pathname;
+    if (path === "/__e2e/requests") {
+      if (req.method === "DELETE") requests.length = 0;
+      return send(res, 200, requests);
+    }
+    if (!path.startsWith("/__e2e/")) {
+      requests.push({ at: Date.now(), method: req.method, path: `${path}${url.search}`.slice(0, 160) });
+      if (latency > 0) await new Promise((r) => setTimeout(r, latency));
+    }
 
     if (req.method === "OPTIONS") return send(res, 204, undefined, { "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "*" });
 

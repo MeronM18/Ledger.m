@@ -16,7 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { daysAgo, easternDateOf, longDate, type ImportRecord, type ImportStatus } from "@/lib/import-reminders";
+import { daysAgo, easternDateOf, longDate } from "@/lib/import-dates";
+import type { ImportRecord, ImportStatus } from "@/lib/import-reminders";
 
 export type AppleCard = {
   id: string;

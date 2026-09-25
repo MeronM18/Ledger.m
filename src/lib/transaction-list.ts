@@ -177,3 +177,18 @@ export function groupByDay<T extends { date: string; amount: number }>(rows: T[]
   for (const g of groups) g.net = cents(g.net);
   return groups;
 }
+
+/**
+ * The first `limit` rows of a day-grouped list, for drawing a long list a
+ * batch at a time. A day cut short keeps its whole day's net.
+ */
+export function firstRowsOfDays<T>(groups: DayGroup<T>[], limit: number): DayGroup<T>[] {
+  const out: DayGroup<T>[] = [];
+  let left = limit;
+  for (const g of groups) {
+    if (left <= 0) break;
+    out.push(g.rows.length <= left ? g : { ...g, rows: g.rows.slice(0, left) });
+    left -= g.rows.length;
+  }
+  return out;
+}

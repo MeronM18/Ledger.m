@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { accountName } from "@/lib/account-settings";
 import { buildForecast, nextDueDate, typicalDailySpend, type CardPayment, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
@@ -30,7 +31,7 @@ function amountOf(...values: (number | string | null)[]): number {
   return 0;
 }
 
-export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
+export const loadForecast = cache(async function loadForecast(admin: AdminClient): Promise<ForecastData> {
   const [spending, accountsRes, streamsRes, manualRes, manualCardsRes, accountSettings, thresholds] = await Promise.all([
     loadSpendingData(admin),
     admin
@@ -127,4 +128,4 @@ export async function loadForecast(admin: AdminClient): Promise<ForecastData> {
     hasCashAccount: cashAccounts.length > 0,
     lowBalanceThreshold: thresholds.lowBalance,
   };
-}
+});

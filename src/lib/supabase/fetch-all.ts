@@ -21,14 +21,25 @@ type PageResult<T> = { data: T[] | null; error: PostgrestError | null };
 export async function fetchAllRows<T>(
   buildQuery: (from: number, to: number) => PromiseLike<PageResult<T>>
 ): Promise<PageResult<T>> {
-  const rows: T[] = [];
+  const page = (i: number) => buildQuery(i * PAGE_SIZE, (i + 1) * PAGE_SIZE - 1);
 
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1);
-    if (error) return { data: null, error };
-    rows.push(...(data ?? []));
-    if (!data || data.length < PAGE_SIZE) break;
+  // The first page says whether there's more. After that, pages are asked
+  // for a few at once rather than one after another, so a long history
+  // costs a round trip or two instead of one per thousand rows.
+  const first = await page(0);
+  if (first.error) return { data: null, error: first.error };
+  const rows: T[] = [...(first.data ?? [])];
+  if (!first.data || first.data.length < PAGE_SIZE) return { data: rows, error: null };
+
+  for (let next = 1; ; next += PARALLEL_PAGES) {
+    const results = await Promise.all(Array.from({ length: PARALLEL_PAGES }, (_, k) => page(next + k)));
+    for (const r of results) {
+      if (r.error) return { data: null, error: r.error };
+      rows.push(...(r.data ?? []));
+      if (!r.data || r.data.length < PAGE_SIZE) return { data: rows, error: null };
+    }
   }
-
-  return { data: rows, error: null };
 }
+
+// Pages read at once after the first. A page past the end just comes back empty.
+const PARALLEL_PAGES = 4;
