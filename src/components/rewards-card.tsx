@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown, Pencil, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { CardArt } from "@/components/card-art";
 import { Button } from "@/components/ui/button";
@@ -92,7 +92,7 @@ function BalanceDialog({ card, trigger }: { card: CardRewards; trigger: React.Re
   );
 }
 
-function RewardsRow({ card, monthLabel }: { card: CardRewards; monthLabel: string }) {
+function RewardsRow({ card }: { card: CardRewards }) {
   const [open, setOpen] = useState(false);
   const points = card.unit === "points";
   const b = card.balance;
@@ -104,11 +104,23 @@ function RewardsRow({ card, monthLabel }: { card: CardRewards; monthLabel: strin
           <CardArt program={card.program} mask={card.mask} />
         </Link>
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-xs text-muted-foreground">{card.name}</span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs text-muted-foreground">{card.name}</span>
+            <button
+              type="button"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              aria-label={`${open ? "Hide" : "Show"} ${card.name} details`}
+              title="Details"
+              className="-mr-1 inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-bone/6 hover:text-bone"
+            >
+              <ChevronDown className={cn("size-3.5 transition-transform", open && "rotate-180")} aria-hidden />
+            </button>
+          </div>
           {points && b ? (
             <>
               <span className="font-mono text-xl font-semibold text-bone tabular-nums">{pts(b.total)}</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="truncate text-xs text-muted-foreground">
                 points{b.since > 0 ? ` · incl. ~${pts(b.since)} since ${shortDate(b.asOf)}` : ` · as of ${shortDate(b.asOf)}`}
               </span>
             </>
@@ -133,28 +145,36 @@ function RewardsRow({ card, monthLabel }: { card: CardRewards; monthLabel: strin
           <Stat value={`$${Math.round(b.total / 100).toLocaleString("en-US")}`} label="As cash" />
         </div>
       )}
+      {points && !b && (
+        <BalanceDialog
+          card={card}
+          trigger={
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-champagne/35 px-3 py-2 text-xs text-champagne transition-colors hover:border-champagne/60 hover:bg-champagne/[0.06]"
+            >
+              <Plus className="size-3.5" aria-hidden />
+              Add your balance from the Chase app
+            </button>
+          }
+        />
+      )}
 
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="whitespace-nowrap text-muted-foreground">
-          <span className="font-mono text-champagne tabular-nums">+{points ? pts(card.thisMonth) : formatCurrency(card.thisMonth, "USD")}</span> in {monthLabel}
+          <span className="font-mono text-champagne tabular-nums">+{points ? pts(card.thisMonth) : formatCurrency(card.thisMonth, "USD")}</span> this month
         </span>
-        <span className="flex items-center gap-1">
-          {points && (
-            <BalanceDialog
-              card={card}
-              trigger={
-                <Button size="xs" variant="ghost" className={cn(!b && "text-champagne")}>
-                  <Pencil className="size-3" />
-                  {b ? "Update" : "Add your balance"}
-                </Button>
-              }
-            />
-          )}
-          <Button size="xs" variant="ghost" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-            Details
-            <ChevronDown className={cn("size-3 transition-transform", open && "rotate-180")} />
-          </Button>
-        </span>
+        {points && b && (
+          <BalanceDialog
+            card={card}
+            trigger={
+              <button type="button" className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-bone">
+                <Pencil className="size-3" aria-hidden />
+                Update balance
+              </button>
+            }
+          />
+        )}
       </div>
 
       {card.quarter && card.quarter.categories.length > 0 && (
@@ -220,7 +240,7 @@ function Stat({ value, label }: { value: string; label: string }) {
  * you copied from the card's app (plus estimates since), what this month
  * added, Freedom Flex's 5% progress, and the breakdown on request.
  */
-export function RewardsCard({ cards, monthLabel }: { cards: CardRewards[]; monthLabel: string }) {
+export function RewardsCard({ cards }: { cards: CardRewards[] }) {
   if (cards.length === 0) return null;
   return (
     <Card>
@@ -230,7 +250,7 @@ export function RewardsCard({ cards, monthLabel }: { cards: CardRewards[]; month
       <CardContent>
         <ul className="flex flex-col gap-4">
           {cards.map((c) => (
-            <RewardsRow key={c.accountId} card={c} monthLabel={monthLabel} />
+            <RewardsRow key={c.accountId} card={c} />
           ))}
         </ul>
       </CardContent>

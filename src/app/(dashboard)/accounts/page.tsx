@@ -378,7 +378,6 @@ export default async function AccountsPage() {
                 ledger.freedomBonusSpend,
                 today
               )}
-              monthLabel={new Date(`${today}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" })}
             />
 
             <Card>
