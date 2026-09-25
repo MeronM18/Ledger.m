@@ -49,8 +49,7 @@ async function spendingEverywhere(page: Page) {
 
   await page.goto("/");
   await afterWelcome(page);
-  const overview = page.locator("[data-slot=card]").filter({ has: page.getByText(/^\w+ \d{4} spending$/) });
-  const overviewTotal = money(await overview.locator(".font-mono").first().textContent());
+  const overviewTotal = money(await page.getByRole("region", { name: /^Spent in / }).locator(".font-serif").first().textContent());
 
   await page.goto("/budgets");
   const budgetsTotal = money(await page.getByText(/spent of \$2,500/).locator(".font-mono").first().textContent());

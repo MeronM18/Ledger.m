@@ -24,8 +24,10 @@ export type Described = {
 };
 
 const TRANSFERS = new Set(["TRANSFER_IN", "TRANSFER_OUT", "TRANSFER", "LOAN_DISBURSEMENTS"]);
-// How a payment onto a card is filed: as a payment, or as money transferred in.
-const CARD_CREDIT = new Set(["LOAN_PAYMENTS", "TRANSFER_IN", "TRANSFER"]);
+// How a payment onto a card is filed: as a payment, as money transferred
+// (either way; one entered by hand is often "transfer out"), or as the loan
+// Plaid sometimes thinks it is.
+const CARD_CREDIT = new Set(["LOAN_PAYMENTS", "TRANSFER_IN", "TRANSFER_OUT", "TRANSFER", "LOAN_DISBURSEMENTS"]);
 // A payment's description naming a card, for one with no detailed category (a manual entry, or recategorized).
 const CARD_NAME = /\b(card|crd|credit|amex|american express|applecard|apple card|discover)\b/i;
 

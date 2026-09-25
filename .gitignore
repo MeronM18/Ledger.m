@@ -49,3 +49,6 @@ next-env.d.ts
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Impeccable review captures (regenerated each design review)
+/.impeccable/review/

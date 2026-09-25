@@ -144,7 +144,8 @@ export function buildFixtures(now = new Date()) {
     mtx(at(4), "Whole Foods", between(40, 110), "FOOD_AND_DRINK", IDS.appleCard);
     mtx(at(13), "Uber", between(12, 38), "TRANSPORTATION", IDS.appleCard);
     mtx(at(21), "Apple Store", between(20, 60), "GENERAL_MERCHANDISE", IDS.appleCard);
-    mtx(at(25), "Payment to Apple Card", -between(90, 200), "TRANSFER_OUT", IDS.appleCard);
+    // As the Apple Card import files a payment: money transferred in.
+    mtx(at(25), "Payment to Apple Card", -between(90, 200), "TRANSFER_IN", IDS.appleCard);
     mtx(at(26), "Daily Cash", -between(1.5, 4.5), "INCOME", IDS.appleSavings);
     mtx(at(28), "Interest", -between(0.9, 1.2), "INCOME", IDS.appleSavings);
   }

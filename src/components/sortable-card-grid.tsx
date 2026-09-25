@@ -28,8 +28,10 @@ export type GridCard = {
   id: string;
   // Read out by screen readers while moving the card.
   label: string;
-  // "full" spans both columns on wider screens; "half" takes one.
-  span: "full" | "half";
+  // How much of the row it takes on a wide screen: all of it, half, a
+  // quarter, two thirds and two rows tall ("wide", for a chart with two
+  // "side" cards stacked beside it), or a third. Below that, two columns.
+  span: "full" | "half" | "quarter" | "wide" | "side";
   node: React.ReactNode;
 };
 
@@ -91,6 +93,16 @@ const CARRIED_GRIP_ATTRIBUTES: GripWiring["attributes"] = {
 };
 const noRef = () => {};
 
+// Two columns up to a wide screen: quarters pair up, even on a phone; the
+// rest take both until there's room for halves and thirds.
+const SPAN: Record<GridCard["span"], string> = {
+  full: "col-span-2 xl:col-span-12",
+  half: "col-span-2 md:col-span-1 xl:col-span-6",
+  quarter: "col-span-1 xl:col-span-3",
+  wide: "col-span-2 xl:col-span-8 xl:row-span-2",
+  side: "col-span-2 md:col-span-1 xl:col-span-4",
+};
+
 function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -104,7 +116,7 @@ function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("relative min-w-0", card.span === "full" && "md:col-span-2")}
+      className={cn("group/card relative min-w-0", SPAN[card.span])}
     >
       {/* While it's being carried, its place in the grid shows as an outline
           of where it will land. Cards fill their tile, so two side by side
@@ -124,7 +136,7 @@ function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
 }
 
 /**
- * A two-column grid of cards (one column on phones) the user can rearrange
+ * A grid of cards (twelve columns on a wide screen, two below that) the user can rearrange
  * by the grip beside each card's title, with the mouse, a finger, or the
  * keyboard (focus the grip, Space to lift, arrows to move, Space to drop).
  * The card being moved lifts and follows the pointer while the rest make
@@ -212,7 +224,8 @@ export function SortableCardGrid({ page, cards }: { page: CardOrderPage; cards: 
       }}
     >
       <SortableContext items={ids} strategy={noDisplacement}>
-        <div className="grid gap-6 md:grid-cols-2">
+        {/* Dense, so two side cards fill the rows beside a wide one wherever it's moved. */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-flow-dense xl:grid-cols-12">
           {ordered.map((card) => (
             <Tile key={card.id} card={card} enabled={ordered.length > 1} />
           ))}

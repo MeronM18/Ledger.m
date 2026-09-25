@@ -188,6 +188,16 @@
   }
   html {
     @apply font-sans;
+    /* Browser surfaces in the palette: scrollbars, selection, the caret. */
+    scrollbar-color: color-mix(in oklab, var(--bone) 18%, transparent) transparent;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--champagne) 38%, transparent);
+    color: var(--bone);
+  }
+  input,
+  textarea {
+    caret-color: var(--champagne);
   }
   /* A small caption sitting directly under a line of text (a name over its
      details, a title over its subtitle) gets a hairline of air, so stacked

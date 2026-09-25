@@ -5,8 +5,8 @@ import { afterWelcome, expect, test } from "./test";
 test("an Apple account two weeks past its last import is flagged until it's imported again", async ({ page }) => {
   await page.goto("/");
   await afterWelcome(page);
-  await expect(page.getByText("Import your Apple Savings statement")).toBeVisible();
-  await expect(page.getByText("Import your Apple Card statement")).toHaveCount(0);
+  await expect(page.getByText("Your Apple Savings statement is 20 days old.")).toBeVisible();
+  await expect(page.getByText(/Your Apple Card statement is/)).toHaveCount(0);
 
   await page.goto("/accounts");
   const appleCard = page.locator("[data-connection='Apple Card']");
@@ -30,6 +30,6 @@ test("an Apple account two weeks past its last import is flagged until it's impo
 
   await page.goto("/");
   await afterWelcome(page);
-  await expect(page.getByText("Recent alerts")).toBeVisible();
-  await expect(page.getByText("Import your Apple Savings statement")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Left to spend" })).toBeVisible();
+  await expect(page.getByText(/Your Apple Savings statement is/)).toHaveCount(0);
 });

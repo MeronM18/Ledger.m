@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { attentionItems } from "@/lib/attention";
 import {
   easternDateOf,
   importReminderAlerts,
@@ -70,16 +69,5 @@ describe("importReminderAlerts", () => {
     const imported = [{ ...accounts[1], lastImportedAt: "2026-09-27T18:00:00Z" }];
     expect(importReminderAlerts(imported, "2026-09-27")).toEqual([]);
     expect(importReminderAlerts(imported, "2026-10-11")).toHaveLength(1);
-  });
-});
-
-describe("attention items", () => {
-  it("lists an Apple account due for an import, linking to Accounts", () => {
-    const status = importStatus("2026-09-10T15:00:00Z", "2026-09-26")!;
-    const items = attentionItems([], [], "2026-09-26", "USD", [], [{ id: "savings", name: "Apple Savings", status }]);
-    expect(items).toEqual([
-      expect.objectContaining({ title: "Import your Apple Savings statement", href: "/accounts", tone: "warning" }),
-    ]);
-    expect(items[0].detail).toContain("Sep 10, 2026 (16 days ago)");
   });
 });

@@ -35,6 +35,8 @@ describe("transactionKind", () => {
     expect(transactionKind(tx({ amount: -809.59, pfc_primary: "LOAN_DISBURSEMENTS", name: "Payment Thank You-Mobile", merchant_name: null }), cards)).toBe("card-payment");
     // Onto the card, filed as a transfer in.
     expect(transactionKind(tx({ amount: -250, pfc_primary: "TRANSFER_IN", account: { id: APPLE } }), cards)).toBe("card-payment");
+    // Entered by hand as a transfer out, it's still money onto the card.
+    expect(transactionKind(tx({ amount: -250, pfc_primary: "TRANSFER_OUT", account: { id: APPLE } }), cards)).toBe("card-payment");
     // A car payment is a loan payment, not a card payment.
     expect(transactionKind(tx({ amount: 380, pfc_primary: "LOAN_PAYMENTS", pfc_detailed: "LOAN_PAYMENTS_CAR_PAYMENT", name: "HONDA FINANCIAL", account: { id: CHECKING } }), cards)).toBe("loan-payment");
     // With no detailed category, the name decides.
