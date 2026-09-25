@@ -80,10 +80,14 @@ test("the month's spending is the same on Overview, Budgets, Spending, Transacti
   for (const [page, total] of Object.entries(totals)) expect(total, page).toBe(totals.overviewTotal);
 });
 
-test("goals: each month's deposits against what the plan needs, the latest activity, and spending against the budget", async ({ page }) => {
+test("goals: each month's deposits against what the plan needs, and the latest activity", async ({ page }) => {
   await page.goto("/goals");
   await afterWelcome(page);
-  const business = page.locator("[data-slot=card]").filter({ has: page.getByRole("heading", { name: "Start a business", exact: true }) });
+  // What went into goal accounts this month, at the top.
+  await expect(page.getByText(/^Put in this \w+$/)).toBeVisible();
+
+  await page.getByRole("button", { name: /^Start a business:/ }).click();
+  const business = page.getByRole("dialog");
 
   const months = business.getByRole("region", { name: "Start a business, month by month" });
   await expect(months.getByText(/so far: \$[\d,]+ moved in/)).toBeVisible();
@@ -94,10 +98,4 @@ test("goals: each month's deposits against what the plan needs, the latest activ
   await expect(activity.getByRole("listitem").first()).toBeVisible();
   await activity.getByRole("link", { name: /in Transactions/ }).click();
   await expect(page).toHaveURL(/\/transactions\?account=/);
-
-  // The top of Goals ties back to Budgets.
-  await page.goto("/goals");
-  await expect(page.getByText(/^\w+ so far$/)).toBeVisible();
-  await page.getByRole("link", { name: /Set a monthly budget/ }).click();
-  await expect(page).toHaveURL(/\/budgets$/);
 });

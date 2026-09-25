@@ -61,15 +61,20 @@ function when(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "America/New_York" });
 }
 
+/** A settings group: what it is on the left, its controls in a card on the right (stacked on narrow screens). */
 function Section({ id, title, description, children }: { id: string; title: string; description?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <Card id={id}>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description && <p className="max-w-[65ch] text-sm text-muted-foreground">{description}</p>}
-      </CardHeader>
-      <CardContent className="flex flex-col">{children}</CardContent>
-    </Card>
+    <section id={id} aria-labelledby={`${id}-title`} className="grid gap-4 border-t border-border pt-8 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,17rem)_minmax(0,1fr)] lg:gap-12">
+      <div className="flex flex-col gap-1.5">
+        <h2 id={`${id}-title`} className="text-base font-medium text-bone">
+          {title}
+        </h2>
+        {description && <p className="text-sm leading-relaxed text-muted-foreground">{description}</p>}
+      </div>
+      <Card className="min-w-0">
+        <CardContent className="flex flex-col">{children}</CardContent>
+      </Card>
+    </section>
   );
 }
 
@@ -144,25 +149,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         })}
       </nav>
 
-      <div className="flex w-full max-w-3xl flex-col gap-6">
+      <div className="flex w-full max-w-6xl flex-col gap-8">
         {tab === "profile" && (
-          <Section id="profile" title="Profile">
-            <SettingRow htmlFor="display-name" label="Your name" description="How the Overview greets you.">
-              <DisplayNameForm initial={displayName} fallback={DISPLAY_NAME} />
-            </SettingRow>
-            <SettingRow
-              label="Signed in as"
-              description={
-                <>
-                  {user.email}
-                  {user.last_sign_in_at ? ` · last sign-in ${when(user.last_sign_in_at)}` : ""}. Only this address can sign in, with
-                  a link sent to it.
-                </>
-              }
-            >
-              <SignOutButtons />
-            </SettingRow>
-          </Section>
+          <>
+            <Section id="profile" title="Your name" description="How the Overview greets you each day.">
+              <SettingRow htmlFor="display-name" label="Display name" description={`Leave it blank for “${DISPLAY_NAME}”.`}>
+                <DisplayNameForm initial={displayName} fallback={DISPLAY_NAME} />
+              </SettingRow>
+            </Section>
+            <Section id="account" title="Account" description="Only this address can sign in, with a link sent to it. No password to forget or leak.">
+              <SettingRow
+                label="Signed in as"
+                description={
+                  <>
+                    {user.email}
+                    {user.last_sign_in_at ? ` · last sign-in ${when(user.last_sign_in_at)}` : ""}
+                  </>
+                }
+              >
+                <SignOutButtons />
+              </SettingRow>
+            </Section>
+          </>
         )}
 
         {tab === "alerts" && (
@@ -177,7 +185,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </>
               }
             >
-              <SettingRow label="Check delivery" description="Sends one push now, so you know alerts reach your phone.">
+              <SettingRow label="Send a test" description="One push now, so you know alerts reach your phone.">
                 <TestAlertButton />
               </SettingRow>
             </Section>
@@ -226,17 +234,20 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         )}
 
         {tab === "rules" && (
-          <Section id="rules" title="Rules & imports">
-            <SettingRow
-              label="Merchant rules"
-              description={
-                rules.length === 0
-                  ? "None yet. Make one from a transaction: open it and apply its name or category to every match."
-                  : `${rules.length} rule${rules.length === 1 ? "" : "s"} renaming or recategorizing merchants, past and future.`
-              }
-            >
-              <MerchantRulesButton rules={rules} label="Manage rules" />
-            </SettingRow>
+          <>
+            <Section id="rules" title="Merchant rules" description="A rule renames or recategorizes every transaction whose merchant contains its text, past and future.">
+              <SettingRow
+                label={rules.length === 0 ? "No rules yet" : `${rules.length} rule${rules.length === 1 ? "" : "s"}`}
+                description={
+                  rules.length === 0
+                    ? "Make one from a transaction: open it and apply its name or category to every match."
+                    : "Review or remove them here; add new ones from a transaction."
+                }
+              >
+                <MerchantRulesButton rules={rules} label="Manage rules" />
+              </SettingRow>
+            </Section>
+            <Section id="imports" title="Statement imports" description="Apple Card and Apple Savings don't connect through Plaid, so their monthly statements are imported by hand.">
             <SettingRow
               label="Apple Card and Apple Savings statements"
               description={
@@ -252,11 +263,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </Link>
               </Button>
             </SettingRow>
-          </Section>
+            </Section>
+          </>
         )}
 
         {tab === "layout" && (
-          <Section id="layout" title="Layout">
+          <Section id="layout" title="Layout" description="How cards are arranged on the Overview and Accounts.">
             <SettingRow
               label="Card order"
               description={
@@ -273,8 +285,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {tab === "data" && (
           <Section
             id="data"
-            title="Data"
-            description="One file with everything in Ledger.m: every transaction and your edits to them, merchant rules, manual entries and accounts, subscriptions, budgets, goals, assets, net worth history and settings. Bank logins and access tokens are never included."
+            title="Backup & restore"
+            description="One file with everything in Ledger.m: transactions and your edits, rules, manual entries, subscriptions, budgets, goals, assets, net worth history and settings. Bank logins and access tokens are never included."
           >
             <SettingRow label="Download a backup" description="A JSON file you can keep, or restore from later.">
               <Button asChild size="sm" variant="outline">

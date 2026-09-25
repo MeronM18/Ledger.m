@@ -189,24 +189,31 @@ test("accounts: grouped by what they are, with net worth over a chosen period an
   await expect(page.locator("[data-transaction]").first()).toContainText("Chase Freedom Flex");
 });
 
-test("goals: a goal that follows savings says where it stands, what to save, and the latest check's share", async ({ page }) => {
+test("goals: each goal says its next step, and its panel says where it stands and what to save", async ({ page }) => {
   await page.goto("/goals");
   await afterWelcome(page);
-  const panel = (name: string) => page.locator("[data-slot=card]").filter({ has: page.getByRole("heading", { name, exact: true }) });
 
-  const business = panel("Start a business");
-  await expect(business.getByText(/^(Ahead of pace|On pace|Behind pace)$/)).toBeVisible();
-  await expect(business.getByText(/^\$[\d,]+ to go · \d+ months? left$/)).toBeVisible();
-  await expect(business.getByText("Save each month")).toBeVisible();
-  await expect(business.getByText(/about \d+% of your pay/)).toBeVisible();
-  await expect(business.getByText(/^From your [A-Z][a-z]{2} \d+ check$/)).toBeVisible();
-  await expect(business.getByText("At your current pace")).toBeVisible();
-  await expect(business.getByRole("group", { name: /saved over time/ })).toBeVisible();
+  // The list: a card per goal with its status and one next step.
+  const card = page.getByRole("button", { name: /^Start a business:/ });
+  await expect(card.getByText(/^(Ahead of pace|On pace|Behind pace)$/)).toBeVisible();
+  await expect(card.getByText(/^(Move \$[\d,]+( more)? from your [A-Z][a-z]{2} \d+ paycheck|Save \$[\d,]+ a month to finish on time)$/)).toBeVisible();
+
+  // Its panel has the rest.
+  await card.click();
+  const panel = page.getByRole("dialog");
+  await expect(panel.getByText(/^\$[\d,]+ to go · \d+ months? left$/)).toBeVisible();
+  await expect(panel.getByText("Save each month")).toBeVisible();
+  await expect(panel.getByText(/about \d+% of your pay/)).toBeVisible();
+  await expect(panel.getByText(/^From your [A-Z][a-z]{2} \d+ check$/)).toBeVisible();
+  await expect(panel.getByText("At your current pace")).toBeVisible();
+  await expect(panel.getByRole("group", { name: /saved over time/ })).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // Tracked by hand: no pace to read, but still a monthly amount.
-  const trip = panel("Japan trip");
-  await expect(trip.getByText(/^Tracked by hand · by /)).toBeVisible();
-  await expect(trip.getByText("Save each month")).toBeVisible();
+  await page.getByRole("button", { name: /^Japan trip:/ }).click();
+  await expect(page.getByRole("dialog").getByText(/^Tracked by hand · by /)).toBeVisible();
+  await expect(page.getByRole("dialog").getByText("Save each month")).toBeVisible();
+  await page.keyboard.press("Escape");
 
   // A new goal says what it would take before it's saved.
   await page.getByRole("button", { name: "New goal" }).click();
@@ -309,7 +316,7 @@ test("settings: your name, alert thresholds, a test push and hiding an account a
   await afterWelcome(page);
 
   // The Overview greets you by the name saved here.
-  await page.getByLabel("Your name").fill("Meron");
+  await page.getByLabel("Display name").fill("Meron");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Name saved")).toBeVisible();
 

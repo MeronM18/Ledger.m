@@ -1,28 +1,32 @@
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { GoalsManager, NewGoalButton } from "@/components/goals-manager";
-import { Money } from "@/components/money";
 import { QueryErrorState } from "@/components/query-error";
-import { Card, CardContent } from "@/components/ui/card";
-import { monthCategorySpending } from "@/lib/budgets";
 import { dollars } from "@/lib/goal-copy";
 import { goalsSummary } from "@/lib/goals";
 import { loadGoals } from "@/lib/goals-data";
-import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow } from "@/lib/time";
-import { loadMonthlyBudget } from "@/lib/ui-preferences";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Goals" };
 
+function Stat({ label, value, note, tone, share }: { label: string; value: string; note: string; tone?: "bad"; share?: number }) {
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-border bg-card px-4 py-3.5">
+      <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{label}</span>
+      <span className={cn("font-mono text-2xl font-semibold tabular-nums", tone === "bad" ? "text-oxblood-text" : "text-bone")}>{value}</span>
+      {share !== undefined && (
+        <span className="my-1 h-1 overflow-hidden rounded-full bg-bone/8" aria-hidden>
+          <span className="block h-full rounded-full bg-champagne" style={{ width: `${Math.min(1, share) * 100}%` }} />
+        </span>
+      )}
+      <span className="text-xs text-muted-foreground">{note}</span>
+    </div>
+  );
+}
+
 export default async function GoalsPage() {
   const admin = createAdminClient();
-  const [{ rows, accounts, pay, thisMonth, error }, ledger, monthlyBudget] = await Promise.all([
-    loadGoals(admin),
-    // Shared with loadGoals (the same request), so not a second read.
-    loadLedger(admin),
-    loadMonthlyBudget(admin),
-  ]);
+  const { rows, accounts, pay, thisMonth, error } = await loadGoals(admin);
   const now = calendarNow();
   const today = now.isoDate;
 
@@ -43,10 +47,6 @@ export default async function GoalsPage() {
   const moved = thisMonth ? Math.round((thisMonth.added - thisMonth.out) * 100) / 100 : null;
   const monthName = now.monthLabel.split(" ")[0];
 
-  // Spending this month against the monthly budget: what's kept from spending is what can go to goals.
-  const spent = ledger.error ? null : Math.round(monthCategorySpending(ledger.spending, now.year, now.month).reduce((s, c) => s + c.amount, 0) * 100) / 100;
-  const budget = monthlyBudget.amount;
-
   return (
     <div className="flex flex-col gap-6">
       {/* Room at the right for the alerts bell. */}
@@ -56,71 +56,33 @@ export default async function GoalsPage() {
       </div>
 
       {rows.length > 0 && (
-        <Card>
-          <CardContent className="grid gap-5 text-sm md:grid-cols-3 md:divide-x md:divide-border">
-            <div className="flex flex-col gap-1 md:pr-5">
-              <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">Saved</span>
-              <p className="flex flex-wrap items-baseline gap-x-2">
-                <Money amount={summary.saved} currency="USD" tone="neutral" className="text-xl font-semibold" />
-                <span className="text-muted-foreground">
-                  of <Money amount={summary.target} currency="USD" tone="neutral" />
-                </span>
-              </p>
-              <span className="text-xs text-muted-foreground">
-                {summary.completed} of {rows.length} {rows.length === 1 ? "goal" : "goals"} reached
-              </span>
-            </div>
-
-            <div className="flex flex-col gap-1 md:px-5">
-              <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{monthName} so far</span>
-              {moved === null ? (
-                <span className="text-muted-foreground">Follow the accounts a goal sits in to see what goes in each month.</span>
-              ) : (
-                <>
-                  <p className="flex flex-wrap items-baseline gap-x-2">
-                    <span className={`font-mono text-xl font-semibold tabular-nums ${moved < 0 ? "text-oxblood-text" : "text-bone"}`}>
-                      {moved < 0 ? "−" : ""}
-                      {dollars(Math.abs(moved))}
-                    </span>
-                    <span className="text-muted-foreground">{moved < 0 ? "taken out" : "moved in"}</span>
-                  </p>
-                  <span className="text-xs text-muted-foreground">
-                    {thisMonth!.interest >= 0.5 ? `plus ${dollars(thisMonth!.interest)} interest` : "no interest yet"}
-                    {plans.length > 0 && monthly > 0 && (
-                      <>
-                        {" · "}your dated goals need {dollars(monthly)} a month{share !== null ? `, about ${Math.round(share * 100)}% of pay` : ""}
-                      </>
-                    )}
-                  </span>
-                </>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-1 md:pl-5">
-              <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">Spending</span>
-              {spent === null ? (
-                <span className="text-muted-foreground">Couldn&apos;t load this month&apos;s spending.</span>
-              ) : budget === null ? (
-                <>
-                  <Money amount={spent} currency="USD" tone="neutral" className="text-xl font-semibold" />
-                  <Link href="/budgets" className="inline-flex items-center gap-1 text-xs text-champagne hover:underline">
-                    Set a monthly budget to keep more for your goals <ArrowRight className="size-3" aria-hidden />
-                  </Link>
-                </>
-              ) : (
-                <>
-                  <p className="flex flex-wrap items-baseline gap-x-2">
-                    <span className={`font-mono text-xl font-semibold tabular-nums ${spent > budget ? "text-oxblood-text" : "text-bone"}`}>{dollars(Math.abs(budget - spent))}</span>
-                    <span className="text-muted-foreground">{spent > budget ? "over budget" : "left in your budget"}</span>
-                  </p>
-                  <Link href="/budgets" className="inline-flex items-center gap-1 text-xs text-champagne hover:underline">
-                    {dollars(spent)} spent of {dollars(budget)}: see Budgets <ArrowRight className="size-3" aria-hidden />
-                  </Link>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat
+            label="Saved toward goals"
+            value={dollars(summary.saved)}
+            note={`of ${dollars(summary.target)} · ${summary.completed} of ${rows.length} reached`}
+            share={summary.target > 0 ? summary.saved / summary.target : 0}
+          />
+          <Stat
+            label={`Put in this ${monthName}`}
+            value={moved === null ? "—" : `${moved < 0 ? "−" : ""}${dollars(Math.abs(moved))}`}
+            tone={moved !== null && moved < 0 ? "bad" : undefined}
+            note={
+              moved === null
+                ? "Shows for goals that follow an account"
+                : thisMonth!.interest >= 0.5
+                  ? `plus ${dollars(thisMonth!.interest)} interest`
+                  : moved < 0
+                    ? "more came out than went in"
+                    : "moved into your goal accounts"
+            }
+          />
+          <Stat
+            label="Needed each month"
+            value={monthly > 0 ? dollars(monthly) : "—"}
+            note={monthly > 0 ? (share !== null ? `about ${Math.round(share * 100)}% of your pay, across dated goals` : "across your dated goals") : "Give a goal a date to get a plan"}
+          />
+        </div>
       )}
 
       <GoalsManager goals={rows} accounts={accounts} pay={pay} today={today} />

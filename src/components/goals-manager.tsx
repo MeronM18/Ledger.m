@@ -3,7 +3,25 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Check, PiggyBank, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  Briefcase,
+  Car,
+  Check,
+  ChevronRight,
+  Gift,
+  GraduationCap,
+  House,
+  Laptop,
+  Pencil,
+  PiggyBank,
+  Plane,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  TrendingUp,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Area, ComposedChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/money";
@@ -19,6 +37,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { addDays, daysBetween } from "@/lib/account-history";
 import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
@@ -696,10 +715,12 @@ function summaryOf(goal: GoalRow, today: string): React.ReactNode {
 
 function Tile({ label, value, note, tone }: { label: string; value: React.ReactNode; note?: React.ReactNode; tone?: "good" | "bad" }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-muted/20 px-4 py-3">
-      <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{label}</span>
-      <span className={cn("font-mono text-xl font-semibold tabular-nums", tone ? TONE_TEXT[tone] : "text-bone")}>{value}</span>
-      {note && <span className="text-xs text-muted-foreground">{note}</span>}
+    <div className="flex items-center justify-between gap-4 px-4 py-3">
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm text-bone">{label}</span>
+        {note && <span className="text-xs text-muted-foreground">{note}</span>}
+      </span>
+      <span className={cn("shrink-0 font-mono text-lg font-semibold tabular-nums", tone ? TONE_TEXT[tone] : "text-bone")}>{value}</span>
     </div>
   );
 }
@@ -778,78 +799,237 @@ function Tiles({ goal, today }: { goal: GoalRow; today: string }) {
   }
 
   if (tiles.length === 0) return null;
-  return <div className={cn("grid gap-3", tiles.length > 1 && "sm:grid-cols-2", tiles.length > 2 && "lg:grid-cols-3")}>{tiles}</div>;
+  return <div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-muted/20">{tiles}</div>;
 }
 
-function GoalPanel({
+// ---- The list, and one goal's panel ------------------------------------------
+
+const ICONS: [RegExp, LucideIcon][] = [
+  [/trip|travel|vacation|holiday|japan|europe|flight/i, Plane],
+  [/emergency|rainy|safety|cushion/i, ShieldCheck],
+  [/business|startup|company/i, Briefcase],
+  [/house|home|down ?payment|apartment|rent/i, House],
+  [/car|truck|vehicle/i, Car],
+  [/school|college|tuition|degree|student/i, GraduationCap],
+  [/wedding|ring|gift|holiday/i, Gift],
+  [/laptop|computer|phone|tech/i, Laptop],
+  [/retire|invest/i, TrendingUp],
+];
+
+function GoalIcon({ goal, className }: { goal: GoalRow; className?: string }) {
+  const Icon = ICONS.find(([re]) => re.test(goal.name))?.[1] ?? PiggyBank;
+  const done = goal.status === "complete";
+  return (
+    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-full", done ? "bg-moss/15 text-moss" : "bg-champagne/12 text-champagne", className)}>
+      <Icon className="size-4" aria-hidden />
+    </span>
+  );
+}
+
+/** Progress as a ring, the share saved in the middle. */
+function Ring({ goal, size = 64 }: { goal: GoalRow; size?: number }) {
+  const stroke = 6;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const share = Math.min(1, Math.max(0, goal.percent));
+  return (
+    <span className="relative inline-flex shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bone)" strokeOpacity={0.08} strokeWidth={stroke} />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke={goal.status === "complete" ? "var(--moss)" : "var(--champagne)"}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${c * share} ${c}`}
+        />
+      </svg>
+      <span className="absolute inset-0 flex items-center justify-center font-mono text-xs font-semibold text-bone tabular-nums">{percent(share)}</span>
+    </span>
+  );
+}
+
+function StatusPill({ goal }: { goal: GoalRow }) {
+  // A goal tracked by hand has no pace to judge, so no status.
+  if (goal.insight.verdict === "unknown" && !goal.tracksAccount) return null;
+  const verdict = VERDICT[goal.insight.verdict];
+  return (
+    <span className={cn("inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset", TONE_PILL[verdict.tone])}>
+      {verdict.label}
+    </span>
+  );
+}
+
+/** The one thing to do next for a goal, in a few words. */
+function nextStep(goal: GoalRow, today: string): { text: string; tone: "good" | "bad" | "quiet" | "act" } {
+  const { plan, nextMove: move, verdict, reachDate } = goal.insight;
+  if (goal.status === "complete") return { text: "Reached. Nice work.", tone: "good" };
+  if (verdict === "overdue") return { text: "Its date has passed. Pick a new one.", tone: "bad" };
+  if (move) {
+    const toGo = move.moved === null ? move.suggested : move.suggested - move.moved;
+    if (toGo > 0.5) {
+      return { text: `Move ${dollars(toGo)}${move.moved ? " more" : ""} from your ${shortDate(move.paycheck.date, today)} paycheck`, tone: "act" };
+    }
+    if (move.moved !== null) return { text: `This paycheck's ${dollars(move.suggested)} is in`, tone: "good" };
+  }
+  if (plan && goal.targetDate) {
+    if (plan.perMonth === 0) return { text: "Interest alone gets it there", tone: "good" };
+    return { text: `Save ${dollars(plan.perMonth)} a month to finish on time`, tone: "act" };
+  }
+  if (verdict === "open" && reachDate) return { text: `On pace to finish around ${roughDate(reachDate, today)}`, tone: "quiet" };
+  if (!goal.targetDate) return { text: "Add a date to get a monthly plan", tone: "quiet" };
+  return { text: "A pace shows after a few weeks of history", tone: "quiet" };
+}
+
+const STEP_TONE = { good: "text-moss", bad: "text-oxblood-text", quiet: "text-muted-foreground", act: "text-champagne" } as const;
+
+/** One goal in the list: where it stands and what to do next. Opens its panel. */
+function GoalCard({ goal, today, onOpen }: { goal: GoalRow; today: string; onOpen: () => void }) {
+  const step = nextStep(goal, today);
+  const monthsLeft = goal.targetDate && goal.targetDate > today ? monthsUntil(today, goal.targetDate) : null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${goal.name}: ${formatCurrency(goal.saved, "USD")} of ${formatCurrency(goal.target, "USD")}`}
+      className="group flex flex-col gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-bone/20 hover:bg-bone/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+    >
+      <span className="flex items-start gap-3">
+        <GoalIcon goal={goal} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-sm font-medium text-bone">{goal.name}</span>
+          <span className="truncate text-xs text-muted-foreground">
+            {goal.targetDate ? `By ${shortDate(goal.targetDate, today)}` : "No date"}
+            {monthsLeft ? ` · ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} left` : ""}
+          </span>
+        </span>
+        <StatusPill goal={goal} />
+      </span>
+      <span className="flex items-center gap-4">
+        <Ring goal={goal} />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <Money amount={goal.saved} currency="USD" tone="neutral" className="text-xl font-semibold" />
+          <span className="text-xs text-muted-foreground">
+            of {dollars(goal.target)}
+            {goal.status !== "complete" ? ` · ${dollars(goal.remaining)} to go` : ""}
+          </span>
+        </span>
+      </span>
+      <span className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
+        <span className={cn("min-w-0", STEP_TONE[step.tone])}>{step.text}</span>
+        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+      </span>
+    </button>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <h3 className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{children}</h3>;
+}
+
+function DeleteGoalButton({ goal, onDeleted }: { goal: GoalRow; onDeleted: () => void }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  async function remove() {
+    setBusy(true);
+    try {
+      await send(`/api/goals/${goal.id}`, "DELETE");
+      toast.success("Goal removed");
+      setOpen(false);
+      onDeleted();
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete goal");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost" className="text-oxblood-text hover:text-oxblood-text">
+          <Trash2 className="size-3.5" />
+          Delete
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete {goal.name}?</DialogTitle>
+          <DialogDescription>The goal goes away. Your accounts and the money in them aren&apos;t touched.</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
+            Keep it
+          </Button>
+          <Button variant="destructive" onClick={remove} disabled={busy}>
+            {busy ? "Deleting…" : "Delete goal"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Everything about one goal, in the panel that slides in. */
+function GoalDetail({
   goal,
   accounts,
   pay,
   today,
+  onClose,
 }: {
   goal: GoalRow;
   accounts: AccountChoice[];
   pay: PaySummary | null;
   today: string;
+  onClose: () => void;
 }) {
-  const router = useRouter();
-  // A goal tracked by hand has no pace to judge, so no status pill.
-  const verdict = goal.insight.verdict === "unknown" && !goal.tracksAccount ? null : VERDICT[goal.insight.verdict];
-  const fill = goal.status === "complete" ? "bg-moss" : "bg-champagne";
   const summary = summaryOf(goal, today);
   const monthsLeft = goal.targetDate && goal.targetDate > today ? monthsUntil(today, goal.targetDate) : null;
-
-  async function handleDelete() {
-    try {
-      await send(`/api/goals/${goal.id}`, "DELETE");
-      toast.success("Goal removed");
-      router.refresh();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete goal");
-    }
-  }
+  const fill = goal.status === "complete" ? "bg-moss" : "bg-champagne";
 
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h2 className="text-base font-medium text-bone">{goal.name}</h2>
-            <p className="text-xs text-muted-foreground">
+    <>
+      <SheetHeader>
+        <div className="flex items-center gap-3">
+          <GoalIcon goal={goal} className="size-10" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <SheetTitle className="truncate">{goal.name}</SheetTitle>
+            <SheetDescription>
               {goal.tracksAccount ? goal.accountNames.join(" + ") : "Tracked by hand"}
               {goal.targetDate ? ` · by ${fullDate(goal.targetDate)}` : ""}
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-1">
-            {!goal.tracksAccount && goal.status !== "complete" && <AddMoneyDialog goal={goal} />}
-            <GoalDialog
-              goal={goal}
-              accounts={accounts}
-              pay={pay}
-              today={today}
-              trigger={
-                <Button size="icon" variant="ghost" aria-label={`Edit ${goal.name}`}>
-                  <Pencil className="size-3.5" />
-                </Button>
-              }
-            />
-            <Button size="icon" variant="ghost" aria-label={`Delete ${goal.name}`} onClick={handleDelete}>
-              <Trash2 className="size-3.5" />
-            </Button>
+            </SheetDescription>
           </div>
         </div>
-
-        <div className="flex flex-col gap-2.5">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {!goal.tracksAccount && goal.status !== "complete" && <AddMoneyDialog goal={goal} />}
+          <GoalDialog
+            goal={goal}
+            accounts={accounts}
+            pay={pay}
+            today={today}
+            trigger={
+              <Button size="sm" variant="outline">
+                <Pencil className="size-3.5" />
+                Edit
+              </Button>
+            }
+          />
+          <DeleteGoalButton goal={goal} onDeleted={onClose} />
+        </div>
+      </SheetHeader>
+      <SheetBody className="flex flex-col gap-6">
+        <section className="flex flex-col gap-2.5">
           <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
             <p className="flex flex-wrap items-baseline gap-x-2">
               <Money amount={goal.saved} currency="USD" tone="neutral" className="text-3xl font-semibold" />
               <span className="text-sm text-muted-foreground">of {formatCurrency(goal.target, "USD")}</span>
             </p>
-            {verdict && (
-              <span className={cn("inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset", TONE_PILL[verdict.tone])}>
-                {verdict.label}
-              </span>
-            )}
+            <StatusPill goal={goal} />
           </div>
           <div
             role="progressbar"
@@ -872,23 +1052,34 @@ function GoalPanel({
               </span>
             )}
           </div>
-          <Milestones goal={goal} today={today} />
-        </div>
+          {summary && <p className="pt-1 text-sm leading-relaxed text-muted-foreground">{summary}</p>}
+        </section>
 
-        {summary && <p className="text-sm leading-relaxed text-muted-foreground">{summary}</p>}
-
-        <Tiles goal={goal} today={today} />
-
-        {goal.insight.history && <GoalChart goal={goal} today={today} />}
-
-        {goal.insight.months.length > 0 && (
-          <div className="grid gap-6 border-t border-border pt-5 lg:grid-cols-2">
-            <MonthByMonth goal={goal} today={today} />
-            <RecentActivity goal={goal} today={today} />
-          </div>
+        {goal.status !== "complete" && (
+          <section className="flex flex-col gap-2.5">
+            <SectionTitle>What to do</SectionTitle>
+            <Tiles goal={goal} today={today} />
+          </section>
         )}
-      </CardContent>
-    </Card>
+
+        {goal.insight.history && (
+          <section className="flex flex-col gap-2.5">
+            <SectionTitle>Saved over time</SectionTitle>
+            <GoalChart goal={goal} today={today} />
+          </section>
+        )}
+
+        {goal.tracksAccount && goal.status !== "complete" && (
+          <section className="flex flex-col gap-2.5">
+            <SectionTitle>Milestones</SectionTitle>
+            <Milestones goal={goal} today={today} />
+          </section>
+        )}
+
+        {goal.insight.months.length > 0 && <MonthByMonth goal={goal} today={today} />}
+        <RecentActivity goal={goal} today={today} />
+      </SheetBody>
+    </>
   );
 }
 
@@ -903,6 +1094,9 @@ export function GoalsManager({
   pay: PaySummary | null;
   today: string;
 }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const open = openId ? (goals.find((g) => g.id === openId) ?? null) : null;
+
   if (goals.length === 0) {
     return (
       <Card>
@@ -917,11 +1111,29 @@ export function GoalsManager({
       </Card>
     );
   }
+
+  // Ones still in progress first, the reached ones after.
+  const sorted = [...goals].sort((a, b) => Number(a.status === "complete") - Number(b.status === "complete"));
+
   return (
-    <div className="flex flex-col gap-4">
-      {goals.map((g) => (
-        <GoalPanel key={g.id} goal={g} accounts={accounts} pay={pay} today={today} />
-      ))}
-    </div>
+    <>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {sorted.map((g) => (
+          <GoalCard key={g.id} goal={g} today={today} onOpen={() => setOpenId(g.id)} />
+        ))}
+      </div>
+
+      <Sheet open={open !== null} onOpenChange={(next) => !next && setOpenId(null)}>
+        <SheetContent
+          className="sm:max-w-xl"
+          onOpenAutoFocus={(e) => {
+            e.preventDefault();
+            (e.currentTarget as HTMLElement).focus();
+          }}
+        >
+          {open && <GoalDetail key={open.id} goal={open} accounts={accounts} pay={pay} today={today} onClose={() => setOpenId(null)} />}
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
