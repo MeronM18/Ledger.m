@@ -13,21 +13,37 @@ import {
   PiggyBank,
   Landmark,
   Settings,
+  type LucideIcon,
 } from "lucide-react";
 import { SignOutButton } from "@/components/sign-out-button";
 import { SIDEBAR_COOKIE } from "@/lib/sidebar-state";
 import { cn } from "@/lib/utils";
 
-const NAV_ITEMS = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
-  { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
-  { href: "/accounts", label: "Accounts", icon: Landmark },
-  { href: "/reports", label: "Reports", icon: PieChart },
-  { href: "/budgets", label: "Budgets", icon: Target },
-  { href: "/goals", label: "Goals", icon: PiggyBank },
-  { href: "/recurring", label: "Recurring", icon: RefreshCcw },
-  { href: "/settings", label: "Settings", icon: Settings },
+type NavItem = { href: string; label: string; icon: LucideIcon };
+
+// In the order they're used: home, then where the money is, then planning
+// this month, then looking back. Settings sits apart, at the bottom.
+const NAV_GROUPS: { label: string | null; items: NavItem[] }[] = [
+  { label: null, items: [{ href: "/", label: "Overview", icon: LayoutDashboard }] },
+  {
+    label: "Money",
+    items: [
+      { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
+      { href: "/accounts", label: "Accounts", icon: Landmark },
+    ],
+  },
+  {
+    label: "Plan",
+    items: [
+      { href: "/budgets", label: "Budgets", icon: Target },
+      { href: "/recurring", label: "Recurring", icon: RefreshCcw },
+      { href: "/goals", label: "Goals", icon: PiggyBank },
+    ],
+  },
+  { label: "Insights", items: [{ href: "/reports", label: "Reports", icon: PieChart }] },
 ];
+
+const SETTINGS_ITEM: NavItem = { href: "/settings", label: "Settings", icon: Settings };
 
 /** A label beside an icon: fades out as the sidebar collapses, back in once it has room again. */
 function RailLabel({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
@@ -56,35 +72,73 @@ export function Wordmark({ className, short = false }: { className?: string; sho
   );
 }
 
-/** The nav links, shared by the desktop sidebar and the mobile drawer. */
-export function NavLinks({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+function NavLink({ item, onNavigate, collapsed }: { item: NavItem; onNavigate?: () => void; collapsed: boolean }) {
   const pathname = usePathname();
+  const { href, label, icon: Icon } = item;
+  const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+  return (
+    <Link
+      href={href}
+      onClick={onNavigate}
+      aria-current={isActive ? "page" : undefined}
+      // Collapsed, the name shows on hover.
+      title={collapsed ? label : undefined}
+      className={cn(
+        "flex items-center gap-3 overflow-hidden rounded-r-md border-l-2 py-2 pr-2 pl-2.5 text-sm font-medium whitespace-nowrap transition-colors",
+        // The page you're on keeps its highlight, and brightens on hover like the rest.
+        isActive
+          ? "border-champagne bg-champagne/10 text-champagne hover:bg-champagne/15"
+          : "border-transparent text-ash-grey hover:bg-bone/6 hover:text-bone"
+      )}
+    >
+      <Icon className="size-4 shrink-0" aria-hidden />
+      <RailLabel collapsed={collapsed}>{label}</RailLabel>
+    </Link>
+  );
+}
 
+/**
+ * The nav links in their groups, shared by the desktop sidebar and the
+ * mobile drawer. A group's name shows above it; in the collapsed rail it
+ * turns into a thin rule, in the same space, so nothing shifts.
+ */
+export function NavLinks({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
   return (
     <nav className="flex flex-col gap-1" aria-label="Main">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-        const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            aria-current={isActive ? "page" : undefined}
-            // Collapsed, the name shows on hover.
-            title={collapsed ? label : undefined}
-            className={cn(
-              "flex items-center gap-3 overflow-hidden rounded-r-md border-l-2 py-2 pr-2 pl-2.5 text-sm font-medium whitespace-nowrap transition-colors",
-              // The page you're on keeps its highlight, and brightens on hover like the rest.
-              isActive
-                ? "border-champagne bg-champagne/10 text-champagne hover:bg-champagne/15"
-                : "border-transparent text-ash-grey hover:bg-bone/6 hover:text-bone"
-            )}
-          >
-            <Icon className="size-4 shrink-0" aria-hidden />
-            <RailLabel collapsed={collapsed}>{label}</RailLabel>
-          </Link>
-        );
-      })}
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label ?? "home"} className="flex flex-col gap-1">
+          {group.label && (
+            <div className="relative mt-3 flex h-5 items-center px-2.5" aria-hidden>
+              <span
+                className={cn(
+                  "text-[10px] font-medium tracking-[0.14em] whitespace-nowrap text-muted-foreground/70 uppercase transition-opacity",
+                  collapsed ? "opacity-0 duration-100" : "opacity-100 delay-100 duration-300"
+                )}
+              >
+                {group.label}
+              </span>
+              <span
+                className={cn(
+                  "absolute inset-x-3 top-1/2 h-px bg-border transition-opacity",
+                  collapsed ? "opacity-100 delay-100 duration-300" : "opacity-0 duration-100"
+                )}
+              />
+            </div>
+          )}
+          {group.items.map((item) => (
+            <NavLink key={item.href} item={item} onNavigate={onNavigate} collapsed={collapsed} />
+          ))}
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+/** Settings, kept apart at the bottom with Sign out. */
+export function SettingsNavLink({ onNavigate, collapsed = false }: { onNavigate?: () => void; collapsed?: boolean }) {
+  return (
+    <nav aria-label="Settings">
+      <NavLink item={SETTINGS_ITEM} onNavigate={onNavigate} collapsed={collapsed} />
     </nav>
   );
 }
@@ -148,7 +202,8 @@ export function Sidebar({ defaultCollapsed = false }: { defaultCollapsed?: boole
           </span>
         </Link>
         <NavLinks collapsed={collapsed} />
-        <div className="mt-auto border-t border-border pt-2">
+        <div className="mt-auto flex flex-col gap-1 border-t border-border pt-2">
+          <SettingsNavLink collapsed={collapsed} />
           <SignOutButton collapsed={collapsed} />
         </div>
       </aside>

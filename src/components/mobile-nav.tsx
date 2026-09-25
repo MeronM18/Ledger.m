@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Dialog as DialogPrimitive } from "radix-ui";
-import { NavLinks, Wordmark } from "@/components/sidebar";
+import { NavLinks, SettingsNavLink, Wordmark } from "@/components/sidebar";
 import { SignOutButton } from "@/components/sign-out-button";
 
 /**
@@ -46,7 +46,8 @@ export function MobileNav({ actions }: { actions?: React.ReactNode }) {
                 </DialogPrimitive.Close>
               </div>
               <NavLinks onNavigate={() => setOpen(false)} />
-              <div className="mt-auto border-t border-border pt-2">
+              <div className="mt-auto flex flex-col gap-1 border-t border-border pt-2">
+                <SettingsNavLink onNavigate={() => setOpen(false)} />
                 <SignOutButton />
               </div>
             </DialogPrimitive.Content>
