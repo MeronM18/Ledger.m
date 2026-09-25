@@ -10,6 +10,7 @@ import { incomeStats, isInterest } from "@/lib/income";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { loadManualAccounts } from "@/lib/manual-accounts";
 import { loadLedger } from "@/lib/spending-data";
+import { humanizeTransactionName } from "@/lib/transaction-display";
 import { calendarNow } from "@/lib/time";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -21,7 +22,14 @@ type AdminClient = ReturnType<typeof createAdminClient>;
  */
 export async function loadGoals(
   admin: AdminClient
-): Promise<{ rows: GoalRow[]; accounts: AccountChoice[]; pay: PaySummary | null; error: boolean }> {
+): Promise<{
+  rows: GoalRow[];
+  accounts: AccountChoice[];
+  pay: PaySummary | null;
+  // This month across every account a goal follows, each account once.
+  thisMonth: { added: number; interest: number; out: number } | null;
+  error: boolean;
+}> {
   const [{ data: goalRows, error: goalError }, { data: accountRows, error: accountError }, manual, accountSettings, ledger] = await Promise.all([
     admin
       .from("savings_goals")
@@ -41,7 +49,7 @@ export async function loadGoals(
 
   if (goalError) console.error("Failed to load savings goals", goalError);
   if (accountError) console.error("Failed to load accounts for goals", accountError);
-  if (goalError || accountError || manual.error) return { rows: [], accounts: [], pay: null, error: true };
+  if (goalError || accountError || manual.error) return { rows: [], accounts: [], pay: null, thisMonth: null, error: true };
 
   // Every account a goal can follow, connected or manual, keyed by a ref that
   // says which kind it is. Manual deposit accounts count once a balance is entered.
@@ -73,7 +81,7 @@ export async function loadGoals(
       txByRef.set(ref, []);
       historyTx.set(ref, []);
     }
-    txByRef.get(ref)!.push({ date, amount: t.amount, interest: t.amount < 0 && isInterest(t) });
+    txByRef.get(ref)!.push({ date, amount: t.amount, interest: t.amount < 0 && isInterest(t), id: t.id, name: humanizeTransactionName(t) });
     historyTx.get(ref)!.push({ date, amount: t.amount });
   }
   const historyStart = historyStartFor(historyTx, today, MAX_HISTORY_DAYS);
@@ -100,6 +108,7 @@ export async function loadGoals(
       savedManual: Number(g.saved_amount),
       accountRefs: refs,
       accountNames: followed.map((ref) => byId.get(ref)!.label),
+      accountLabels: Object.fromEntries(followed.map((ref) => [ref, byId.get(ref)!.label])),
       insight: goalInsight(
         progress,
         followed.map((ref) => ({
@@ -115,5 +124,24 @@ export async function loadGoals(
     };
   });
 
-  return { rows, accounts: accounts.map(({ id, label, balance }) => ({ id, label, balance })), pay, error: false };
+  const followedRefs = new Set(rows.flatMap((r) => (r.tracksAccount ? r.accountRefs.filter((ref) => balances.has(ref)) : [])));
+  const month = today.slice(0, 7);
+  const thisMonth = { added: 0, interest: 0, out: 0 };
+  for (const ref of followedRefs) {
+    for (const t of txByRef.get(ref) ?? []) {
+      if (t.date.slice(0, 7) !== month) continue;
+      if (t.amount < 0 && t.interest) thisMonth.interest -= t.amount;
+      else if (t.amount < 0) thisMonth.added -= t.amount;
+      else thisMonth.out += t.amount;
+    }
+  }
+  const cents = (n: number) => Math.round(n * 100) / 100;
+
+  return {
+    rows,
+    accounts: accounts.map(({ id, label, balance }) => ({ id, label, balance })),
+    pay,
+    thisMonth: followedRefs.size > 0 ? { added: cents(thisMonth.added), interest: cents(thisMonth.interest), out: cents(thisMonth.out) } : null,
+    error: false,
+  };
 }

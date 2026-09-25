@@ -32,9 +32,16 @@ export type GoalAccount = {
   ref: string; // "plaid:<id>" or "manual:<id>"
   balance: number; // today
   apy: number | null; // percent, 3.1 = 3.1%
-  // Posted transactions, Plaid's sign (positive is money out).
-  transactions: { date: string; amount: number; interest: boolean }[];
+  // Posted transactions, Plaid's sign (positive is money out), with the
+  // ledger's id and name when there's a row to point to.
+  transactions: { date: string; amount: number; interest: boolean; id?: string; name?: string }[];
 };
+
+/** One calendar month of a goal's accounts: money moved in, interest, money taken out. */
+export type GoalMonth = { month: string; added: number; interest: number; out: number };
+
+/** A recent movement in or out of a goal's accounts. */
+export type GoalActivity = { id: string | null; ref: string; date: string; amount: number; name: string; interest: boolean };
 
 export type PaySummary = {
   // What a typical complete month brought in from paychecks (or all income
@@ -90,7 +97,15 @@ export type GoalInsight = {
     moved: number | null;
   } | null;
   milestones: Milestone[];
+  // The last six calendar months (this one so far last), from the goal's
+  // own accounts; empty for a goal tracked by hand.
+  months: GoalMonth[];
+  // The latest money in and out, newest first.
+  recent: GoalActivity[];
 };
+
+const MONTHS_SHOWN = 6;
+const RECENT_SHOWN = 5;
 
 function median(values: number[]): number | null {
   if (values.length === 0) return null;
@@ -233,5 +248,38 @@ export function goalInsight(
     };
   });
 
-  return { history, pace, flows, apy, interestPerMonth, verdict, atTargetDate, reachDate, plan, nextMove, milestones };
+  // Month by month, from the month history starts in (a month before that
+  // would read as nothing saved, which isn't known).
+  const months: GoalMonth[] = [];
+  if (tracked) {
+    const [ty, tm] = todayIso.split("-").map(Number);
+    for (let i = MONTHS_SHOWN - 1; i >= 0; i--) {
+      const d = new Date(Date.UTC(ty, tm - 1 - i, 1));
+      const key = d.toISOString().slice(0, 7);
+      if (key < historyStart.slice(0, 7)) continue;
+      const m = { month: key, added: 0, interest: 0, out: 0 };
+      for (const a of accounts) {
+        for (const t of a.transactions) {
+          if (t.date.slice(0, 7) !== key || t.date > todayIso) continue;
+          if (t.amount < 0 && t.interest) m.interest -= t.amount;
+          else if (t.amount < 0) m.added -= t.amount;
+          else m.out += t.amount;
+        }
+      }
+      months.push({ month: key, added: round(m.added), interest: round(m.interest), out: round(m.out) });
+    }
+  }
+
+  const recent: GoalActivity[] = tracked
+    ? accounts
+        .flatMap((a) =>
+          a.transactions
+            .filter((t) => t.date <= todayIso)
+            .map((t) => ({ id: t.id ?? null, ref: a.ref, date: t.date, amount: round(-t.amount), name: t.name ?? (t.interest ? "Interest" : "Transfer"), interest: t.interest }))
+        )
+        .sort((x, y) => y.date.localeCompare(x.date))
+        .slice(0, RECENT_SHOWN)
+    : [];
+
+  return { history, pace, flows, apy, interestPerMonth, verdict, atTargetDate, reachDate, plan, nextMove, milestones, months, recent };
 }

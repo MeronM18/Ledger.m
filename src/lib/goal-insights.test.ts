@@ -146,6 +146,34 @@ describe("goalInsight", () => {
   });
 });
 
+describe("month by month and the latest activity", () => {
+  const insight = goalInsight(progress(15000, "2026-12-31"), [hysa, apple], pay, START, TODAY);
+
+  it("splits each month into money moved in, interest and money taken out, from the month history starts", () => {
+    expect(insight.months.map((m) => m.month)).toEqual(["2026-05", "2026-06", "2026-07", "2026-08", "2026-09"]);
+    expect(insight.months.find((m) => m.month === "2026-07")).toEqual({ month: "2026-07", added: 1000, interest: 19, out: 0 });
+    expect(insight.months.find((m) => m.month === "2026-08")).toEqual({ month: "2026-08", added: 0, interest: 20, out: 300 });
+    // This month so far, across both accounts.
+    expect(insight.months.at(-1)).toEqual({ month: "2026-09", added: 600, interest: 0, out: 0 });
+  });
+
+  it("lists the latest money in and out, newest first, signed as money in", () => {
+    expect(insight.recent.map((a) => [a.date, a.amount, a.interest])).toEqual([
+      ["2026-09-20", 500, false],
+      ["2026-09-01", 100, false],
+      ["2026-08-31", 20, true],
+      ["2026-08-10", -300, false],
+      ["2026-07-31", 19, true],
+    ]);
+  });
+
+  it("has nothing month by month for a goal tracked by hand", () => {
+    const byHand = goalInsight(progress(15000, "2026-12-31", [], 2000), [], pay, START, TODAY);
+    expect(byHand.months).toEqual([]);
+    expect(byHand.recent).toEqual([]);
+  });
+});
+
 describe("paySummary", () => {
   const month = (m: string, income: number, paychecks: number, complete = true) => ({
     month: m,

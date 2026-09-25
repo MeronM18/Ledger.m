@@ -2,7 +2,8 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
-import { Check, PiggyBank, Pencil, Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Check, PiggyBank, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Area, ComposedChart, CartesianGrid, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Money } from "@/components/money";
@@ -33,6 +34,8 @@ export type GoalRow = GoalProgress & {
   accountRefs: string[];
   // Names of the accounts it follows that have a balance, in the order chosen.
   accountNames: string[];
+  // The same names by account ref.
+  accountLabels: Record<string, string>;
   insight: GoalInsight;
 };
 export type AccountChoice = { id: string; label: string; balance: number | null };
@@ -479,6 +482,159 @@ function GoalChart({ goal, today }: { goal: GoalRow; today: string }) {
   );
 }
 
+// ---- Month by month ----------------------------------------------------------
+
+const monthName = (key: string, length: "short" | "long" = "short") =>
+  new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: length, timeZone: "UTC" });
+
+/** A ledger account id from a goal's account ref, for a link to its transactions. */
+const accountIdOf = (ref: string) => (ref.startsWith("plaid:") ? ref.slice(6) : ref);
+
+/**
+ * What went into the goal's accounts each of the last few months (money
+ * moved in less money taken out, with interest on top), against what the
+ * plan needs a month: the habit, month by month.
+ */
+function MonthByMonth({ goal, today }: { goal: GoalRow; today: string }) {
+  const { months, plan } = goal.insight;
+  const needed = plan && plan.perMonth > 0 && goal.status !== "complete" ? plan.perMonth : null;
+  const rows = months.map((m) => ({ ...m, moved: Math.round((m.added - m.out) * 100) / 100 }));
+  const scale = Math.max(needed ?? 0, ...rows.map((m) => Math.abs(m.moved) + m.interest), 1);
+  const current = rows.at(-1);
+  const thisMonth = today.slice(0, 7);
+  const toGo = needed !== null && current && current.month === thisMonth ? Math.round((needed - current.moved) * 100) / 100 : null;
+
+  return (
+    <section className="flex min-w-0 flex-col gap-3" aria-label={`${goal.name}, month by month`}>
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">Month by month</h3>
+        {current && current.month === thisMonth && (
+          <p className="text-sm text-muted-foreground">
+            {monthName(thisMonth, "long")} so far: {strong(dollars(current.moved))} moved in
+            {current.interest >= 0.5 ? <> and {strong(dollars(current.interest))} interest</> : null}.{" "}
+            {toGo === null ? null : toGo <= 0.5 ? (
+              <span className="inline-flex items-center gap-1 text-moss">
+                <Check className="size-3.5" aria-hidden />
+                This month&apos;s {dollars(needed!)} is in.
+              </span>
+            ) : (
+              <span className="text-champagne">{dollars(toGo)} more keeps it on plan.</span>
+            )}
+          </p>
+        )}
+      </div>
+      <div className="flex flex-col gap-1">
+        {/* The bars, drawn to one scale, with the monthly amount needed across them. */}
+        <div className="relative h-24">
+          {needed !== null && (
+            <div className="pointer-events-none absolute inset-x-0 border-t border-dashed border-bone/35" style={{ bottom: `${(needed / scale) * 100}%` }} aria-hidden>
+              <span className="absolute right-0 bottom-0.5 text-[10px] text-muted-foreground">needed {dollars(needed)}</span>
+            </div>
+          )}
+          <ol className="grid h-full items-end gap-2" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }}>
+            {rows.map((m) => {
+              const met = needed !== null && m.moved >= needed - 0.5;
+              return (
+                <li
+                  key={m.month}
+                  className="mx-auto flex h-full w-full max-w-10 flex-col justify-end"
+                  aria-label={`${monthName(m.month, "long")}: ${dollars(m.moved)} moved in${m.interest >= 0.5 ? `, ${dollars(m.interest)} interest` : ""}`}
+                >
+                  {m.interest >= 0.5 && <div className="w-full rounded-t-sm bg-moss/60" style={{ height: `${(m.interest / scale) * 100}%` }} />}
+                  {m.moved !== 0 && (
+                    <div
+                      className={cn("w-full", m.interest < 0.5 && "rounded-t-sm", m.moved < 0 ? "bg-oxblood/70" : met ? "bg-moss" : "bg-champagne")}
+                      style={{ height: `max(2px, ${(Math.abs(m.moved) / scale) * 100}%)` }}
+                    />
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        <div className="grid gap-2 border-t border-border pt-1" style={{ gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))` }} aria-hidden>
+          {rows.map((m) => (
+            <span key={m.month} className="text-center font-mono text-[10px] text-muted-foreground tabular-nums">
+              {m.month === thisMonth ? "now" : monthName(m.month)}
+            </span>
+          ))}
+        </div>
+      </div>
+      <p className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-sm bg-champagne" aria-hidden />
+          Moved in
+        </span>
+        {needed !== null && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-sm bg-moss" aria-hidden />
+            Met the plan
+          </span>
+        )}
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-sm bg-moss/60" aria-hidden />
+          Interest
+        </span>
+      </p>
+    </section>
+  );
+}
+
+/** The latest money in and out of the goal's accounts, each linking to where it happened. */
+function RecentActivity({ goal, today }: { goal: GoalRow; today: string }) {
+  const { recent } = goal.insight;
+  if (recent.length === 0) return null;
+  const first = goal.accountRefs.find((ref) => goal.accountLabels[ref]);
+  return (
+    <section className="flex min-w-0 flex-col gap-3" aria-label={`${goal.name}, latest activity`}>
+      <h3 className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">Latest activity</h3>
+      <ul className="flex flex-col">
+        {recent.map((a, i) => (
+          <li key={a.id ?? `${a.date}:${i}`} className="flex items-baseline justify-between gap-3 border-t border-border py-2 text-sm first:border-t-0 first:pt-0">
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate text-bone">{a.interest ? "Interest" : a.name}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                {shortDate(a.date, today)}
+                {goal.accountRefs.length > 1 && goal.accountLabels[a.ref] ? ` · ${goal.accountLabels[a.ref]}` : ""}
+              </span>
+            </span>
+            <span className={cn("shrink-0 font-mono tabular-nums", a.amount >= 0 ? "text-moss" : "text-oxblood-text")}>
+              {a.amount >= 0 ? "+" : "−"}
+              {formatCurrency(Math.abs(a.amount), "USD")}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {first && (
+        <Link href={`/transactions?account=${encodeURIComponent(accountIdOf(first))}`} className="inline-flex items-center gap-1 self-start text-xs text-champagne hover:underline">
+          All of {goal.accountLabels[first]} in Transactions <ArrowRight className="size-3" aria-hidden />
+        </Link>
+      )}
+    </section>
+  );
+}
+
+/** A quarter at a time: when each was reached, or when the pace gets there. */
+function Milestones({ goal, today }: { goal: GoalRow; today: string }) {
+  const { milestones } = goal.insight;
+  if (!goal.tracksAccount || goal.status === "complete") return null;
+  return (
+    <ol className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4" aria-label={`${goal.name} milestones`}>
+      {milestones.map((m) => (
+        <li key={m.share} className={cn("flex flex-col gap-0.5 border-l pl-2", m.reached ? "border-moss/60" : "border-border")}>
+          <span className={cn("inline-flex items-center gap-1 font-medium", m.reached ? "text-moss" : "text-muted-foreground")}>
+            {m.reached && <Check className="size-3" aria-hidden />}
+            {percent(m.share)} · {dollars(m.amount)}
+          </span>
+          <span className="text-muted-foreground">
+            {m.reached ? (m.date ? `Reached ${shortDate(m.date, today)}` : "Reached") : m.date ? `Around ${roughDate(m.date, today)}` : "Not at this pace"}
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 // ---- One goal -------------------------------------------------------------
 
 const TONE_TEXT = { good: "text-moss", bad: "text-oxblood-text", quiet: "text-muted-foreground" } as const;
@@ -716,6 +872,7 @@ function GoalPanel({
               </span>
             )}
           </div>
+          <Milestones goal={goal} today={today} />
         </div>
 
         {summary && <p className="text-sm leading-relaxed text-muted-foreground">{summary}</p>}
@@ -723,6 +880,13 @@ function GoalPanel({
         <Tiles goal={goal} today={today} />
 
         {goal.insight.history && <GoalChart goal={goal} today={today} />}
+
+        {goal.insight.months.length > 0 && (
+          <div className="grid gap-6 border-t border-border pt-5 lg:grid-cols-2">
+            <MonthByMonth goal={goal} today={today} />
+            <RecentActivity goal={goal} today={today} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
