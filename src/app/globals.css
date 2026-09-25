@@ -296,9 +296,28 @@
   animation-fill-mode: both;
 }
 
+/* An installment's device lights up to how much of it is paid, rising from
+   the bottom like the pill strips do. */
+@keyframes installment-fill {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.animate-installment-fill {
+  transform-box: fill-box;
+  transform-origin: bottom;
+  animation-name: installment-fill;
+  animation-duration: 1100ms;
+  animation-delay: 150ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-entrance,
-  .animate-page-in {
+  .animate-page-in,
+  .animate-installment-fill {
     animation-duration: 0.01ms !important;
     animation-delay: 0s !important;
   }

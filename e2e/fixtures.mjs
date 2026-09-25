@@ -147,6 +147,8 @@ export function buildFixtures(now = new Date()) {
     mtx(at(4), "Whole Foods", between(40, 110), "FOOD_AND_DRINK", IDS.appleCard);
     mtx(at(13), "Uber", between(12, 38), "TRANSPORTATION", IDS.appleCard);
     mtx(at(21), "Apple Store", between(20, 60), "GENERAL_MERCHANDISE", IDS.appleCard);
+    // A MacBook on Apple Card Monthly Installments: 12 payments from four months ago, on the last day of each month.
+    if (m >= 10) mtx(at(new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + m + 1, 0)).getUTCDate()), "Apple Online Store", 133.25, "GENERAL_MERCHANDISE", IDS.appleCard, { notes: "Apple Card Monthly Installment" });
     // As the Apple Card import files a payment: money transferred in.
     mtx(at(25), "Payment to Apple Card", -between(90, 200), "TRANSFER_IN", IDS.appleCard);
     mtx(at(26), "Daily Cash", -between(1.5, 4.5), "INCOME", IDS.appleSavings);

@@ -13,6 +13,7 @@ import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTit
 import { Switch } from "@/components/ui/switch";
 import { accountLabel, type AccountOption } from "@/components/filter-bar";
 import { InstitutionAvatar } from "@/components/institution-avatar";
+import { InstallmentsCard } from "@/components/installments-card";
 import { AddManualSubscriptionButton, ManualSubscriptionDialog, type ManualSubscription } from "@/components/manual-subscription-form";
 import { DetectedSubscriptionsCard } from "@/components/detected-subscriptions-card";
 import { SubscriptionCalendar, type CalendarEvent } from "@/components/subscription-calendar";
@@ -24,6 +25,7 @@ import type { DetectedSubscription } from "@/lib/recurring-detection";
 import { costShares, dueLabel, monthOutlook, nextCharges, type RecurringCharge } from "@/lib/recurring-board";
 import { cancelSearchUrl, effectiveNextDate, isNewSubscription, trialStart, type Insight } from "@/lib/subscription-insights";
 import { chargeChange, hasLapsed, hasPriceIncrease, projectNextOccurrence, type ChargeChange, type DatedAmount } from "@/lib/subscriptions-aggregation";
+import type { InstallmentPlan } from "@/lib/installments";
 import { streamDisplayName } from "@/lib/transaction-display";
 import { cn } from "@/lib/utils";
 
@@ -649,6 +651,7 @@ export function RecurringBoard({
   insights,
   suggestions,
   calendarEvents,
+  installments,
   todayIso,
 }: {
   streams: StreamRow[];
@@ -657,6 +660,7 @@ export function RecurringBoard({
   insights: Insight[];
   suggestions: DetectedSubscription[];
   calendarEvents: CalendarEvent[];
+  installments: InstallmentPlan[];
   todayIso: string;
 }) {
   const [status, setStatus] = useState<Status>("active");
@@ -724,6 +728,8 @@ export function RecurringBoard({
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-6">
+          <InstallmentsCard plans={installments} todayIso={todayIso} />
+
           <Card className="gap-0 overflow-hidden py-0">
             <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-4">
               <Segmented

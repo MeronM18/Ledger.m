@@ -8,6 +8,7 @@ import { resolveMonthlyBudget } from "@/lib/budgets";
 import { resolveDepositReviews, type DepositReviews } from "@/lib/deposit-review";
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
+import { resolveInstallmentPrefs, type InstallmentPrefs } from "@/lib/installments";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -106,4 +107,15 @@ export const loadDepositReviews = cache(async function loadDepositReviews(admin:
   const { data, error } = await admin.from("ui_preferences").select("value").eq("key", DEPOSIT_REVIEWS_KEY).maybeSingle();
   if (error) console.error("Failed to load deposit reviews", error);
   return { reviews: resolveDepositReviews(data?.value), error: Boolean(error) };
+});
+
+export const INSTALLMENTS_KEY = "installment_plans";
+
+/** Names, icons and lengths you've given installment plans, and plans you added. */
+export const loadInstallmentPrefs = cache(async function loadInstallmentPrefs(
+  admin: AdminClient
+): Promise<{ prefs: InstallmentPrefs; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", INSTALLMENTS_KEY).maybeSingle();
+  if (error) console.error("Failed to load installment plans", error);
+  return { prefs: resolveInstallmentPrefs(data?.value), error: Boolean(error) };
 });

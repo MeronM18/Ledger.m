@@ -10,7 +10,10 @@ import { subscriptionAccount } from "@/lib/subscription-accounts";
 import { detectRecurring, newDetections } from "@/lib/recurring-detection";
 import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { streamDisplayName } from "@/lib/transaction-display";
+import { effectiveCategory, streamDisplayName } from "@/lib/transaction-display";
+import { buildInstallmentPlans, installmentChargeIds, type InstallmentCharge } from "@/lib/installments";
+import { loadLedger } from "@/lib/spending-data";
+import { loadInstallmentPrefs } from "@/lib/ui-preferences";
 import { calendarNow, easternToday } from "@/lib/time";
 
 // How far ahead the renewal calendar looks: about three months of days.
@@ -28,16 +31,18 @@ export default async function SubscriptionsPage() {
   // Started now, used further down: they don't depend on the streams, so
   // they load alongside them instead of after.
   const importedPromise = Promise.all([
-    fetchAllRows<{ date: string; name: string; amount: number; pfc_primary: string; manual_account_id: string | null }>((from, to) =>
+    fetchAllRows<{ id: string; date: string; name: string; amount: number; pfc_primary: string; manual_account_id: string | null }>((from, to) =>
       admin
         .from("manual_transactions")
-        .select("date, name, amount, pfc_primary, manual_account_id")
+        .select("id, date, name, amount, pfc_primary, manual_account_id")
         .eq("source", "apple_card_csv")
         .order("date")
         .order("id")
         .range(from, to)
     ),
     loadManualAccounts(admin),
+    loadLedger(admin),
+    loadInstallmentPrefs(admin),
   ]);
 
   // Only outflow streams: inflow streams (payroll, interest credits) are
@@ -128,7 +133,23 @@ export default async function SubscriptionsPage() {
 
   // Recurring charges hiding in imported Apple Card transactions, minus
   // anything already tracked. A failed read just means no suggestions.
-  const [importedRes, manualAccounts] = await importedPromise;
+  const [importedRes, manualAccounts, ledger, { prefs: installmentPrefs }] = await importedPromise;
+
+  // Purchases paid off month by month, found among every charge (Apple Card
+  // Monthly Installments are noted as such when imported).
+  const charges: InstallmentCharge[] = ledger.transactions
+    .filter((t) => t.amount > 0 && !t.pending && !(effectiveCategory(t) ?? "").startsWith("TRANSFER") && t.pfc_detailed !== "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT")
+    .map((t) => ({
+      id: t.id,
+      date: t.date,
+      amount: t.amount,
+      name: t.name ?? t.merchant_name ?? "",
+      note: t.manualSource?.notes ?? t.notes ?? null,
+      accountId: t.account?.id ?? null,
+      accountName: t.account?.name ?? null,
+    }));
+  const installments = buildInstallmentPlans(charges, installmentPrefs, calendarNow().isoDate);
+  const inPlans = installmentChargeIds(installments);
   if (importedRes.error) console.error("Failed to load imported card transactions", importedRes.error);
 
   // A subscription you added that's charged to an imported card (Apple Card)
@@ -143,7 +164,8 @@ export default async function SubscriptionsPage() {
   const suggestions = newDetections(
     detectRecurring(
       (importedRes.data ?? [])
-        .filter((t) => !t.pfc_primary.startsWith("TRANSFER"))
+        // An installment isn't a subscription to cancel.
+        .filter((t) => !t.pfc_primary.startsWith("TRANSFER") && !inPlans.has(t.id))
         .map((t) => ({ date: t.date, name: t.name, amount: Number(t.amount) }))
     ),
     [...activeStreams.map(streamName), ...manualSubscriptions.map((m) => m.name)]
@@ -190,6 +212,7 @@ export default async function SubscriptionsPage() {
       insights={insights}
       suggestions={suggestions}
       calendarEvents={calendarEvents}
+      installments={installments}
       todayIso={calendarNow().isoDate}
     />
   );

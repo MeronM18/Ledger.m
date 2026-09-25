@@ -97,6 +97,13 @@ describe("parseAppleCardCsv", () => {
     const { transactions } = parseAppleCardCsv(csv('09/01/2026,09/01/2026,"APPLE CARD MONTHLY INSTALLMENTS","Apple Store","Other","Purchase","83.29","Me"'));
     expect(transactions[0].notes).toBe("Apple Card Monthly Installment");
   });
+
+  it("notes which installment payment it is, and knows one by its type", () => {
+    const { transactions } = parseAppleCardCsv(csv('07/31/2026,07/31/2026,"MONTHLY INSTALLMENTS (3 OF 12)","Apple Online Store","Other","Installment","133.25","Me"'));
+    expect(transactions[0].notes).toBe("Apple Card Monthly Installment 3 of 12");
+    const { transactions: byType } = parseAppleCardCsv(csv('07/31/2026,07/31/2026,"APPLE ONLINE STORE","Apple Online Store","Other","Installment","133.25","Me"'));
+    expect(byType[0].notes).toBe("Apple Card Monthly Installment");
+  });
 });
 
 const SAVINGS_HEADER = "Transaction Date,Posted Date,Activity Type,Transaction Type,Description,Currency Code,Amount";

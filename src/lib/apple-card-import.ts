@@ -1,6 +1,8 @@
-// Pure, dependency-free. Reads the CSV Apple's Wallet app exports for Apple
+// Pure. Reads the CSV Apple's Wallet app exports for Apple
 // Card and turns each row into a transaction in the shape the rest of the
 // app already uses (Plaid's sign convention: positive = money out).
+
+import { paymentNumber } from "@/lib/installments";
 
 export type ImportedTransaction = {
   date: string; // YYYY-MM-DD, the day it was made
@@ -112,6 +114,12 @@ export function cleanPayee(merchant: string, description: string): { name: strin
 
 const INSTALLMENT = /monthly installment|installment|apple card financing/i;
 
+/** "Apple Card Monthly Installment", with which payment it is when the export says ("3 of 12"). */
+function installmentNote(description: string): string {
+  const p = paymentNumber(description);
+  return p ? `Apple Card Monthly Installment ${p.n} of ${p.of}` : "Apple Card Monthly Installment";
+}
+
 /**
  * The app category for one row. Payments to the card and Daily Cash
  * adjustments are money moving, not spending, so they land in the transfer
@@ -175,7 +183,7 @@ export function parseAppleCardCsv(text: string): ImportResult {
     const { name, tag } = cleanPayee(merchant, description);
     const notes = [
       tag ? tag.charAt(0).toUpperCase() + tag.slice(1) : null,
-      INSTALLMENT.test(`${merchant} ${description}`) ? "Apple Card Monthly Installment" : null,
+      INSTALLMENT.test(`${merchant} ${description} ${type} ${category}`) ? installmentNote(description) : null,
     ]
       .filter(Boolean)
       .join(" · ");
