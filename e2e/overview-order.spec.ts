@@ -9,30 +9,30 @@ const gripLabels = (page: import("@playwright/test").Page) =>
 test("overview cards can be rearranged, and the order is kept", async ({ page }) => {
   await page.goto("/");
   await afterWelcome(page);
-  expect((await gripLabels(page)).slice(0, 4)).toEqual(["Left to spend", SPENT, `Income in ${MONTH}`, "Net worth"]);
+  expect((await gripLabels(page)).slice(0, 3)).toEqual(["Net worth", SPENT, `Income in ${MONTH}`]);
 
-  // Keyboard: lift Left to spend, move it right one, drop it. Each step waits
+  // Keyboard: lift Net worth, move it right one, drop it. Each step waits
   // for the last to land, as a person's key presses would: an arrow
   // pressed before the lifted card is on screen has nothing to move yet.
-  await page.getByRole("button", { name: "Move Left to spend" }).first().focus();
+  await page.getByRole("button", { name: "Move Net worth" }).first().focus();
   await page.keyboard.press("Space");
-  await expect(page.locator(".border-dashed")).toHaveCount(1);
+  await expect(page.locator(".rounded-xl.border-dashed")).toHaveCount(1);
   // The grid rearranges live, before the drop. dnd-kit starts listening for
   // arrows a tick after the lift, and one that lands before then only
   // scrolls the page, so press again, but only while the card hasn't moved.
   await expect(async () => {
-    if ((await gripLabels(page))[0] === "Left to spend") await page.keyboard.press("ArrowRight");
-    expect((await gripLabels(page)).slice(0, 2)).toEqual([SPENT, "Left to spend"]);
+    if ((await gripLabels(page))[0] === "Net worth") await page.keyboard.press("ArrowRight");
+    expect((await gripLabels(page)).slice(0, 2)).toEqual([SPENT, "Net worth"]);
   }).toPass({ intervals: [250, 500, 1000] });
   await page.keyboard.press("Space");
-  await expect(page.locator(".border-dashed")).toHaveCount(0);
-  await expect.poll(async () => (await gripLabels(page)).slice(0, 2)).toEqual([SPENT, "Left to spend"]);
+  await expect(page.locator(".rounded-xl.border-dashed")).toHaveCount(0);
+  await expect.poll(async () => (await gripLabels(page)).slice(0, 2)).toEqual([SPENT, "Net worth"]);
 
   await expect
     .poll(async () => (await mockWrites(page)).find((w) => w.table === "ui_preferences")?.body)
-    .toMatchObject({ key: "card_order:overview", value: expect.arrayContaining(["spent-this-month", "left-to-spend"]) });
+    .toMatchObject({ key: "card_order:overview", value: expect.arrayContaining(["spent-this-month", "net-worth-now"]) });
 
   await page.reload();
   await afterWelcome(page);
-  expect((await gripLabels(page)).slice(0, 2)).toEqual([SPENT, "Left to spend"]);
+  expect((await gripLabels(page)).slice(0, 2)).toEqual([SPENT, "Net worth"]);
 });

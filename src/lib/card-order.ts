@@ -1,7 +1,9 @@
 // Pure, shared by the server (to render cards in the saved order) and the
 // client (to keep a drag's result in sync with a refreshed card list).
 
-export const CARD_ORDER_PAGES = ["accounts", "overview"] as const;
+// The Overview keeps three orders: its headline tiles ("overview"), the main
+// column beneath them, and the column beside them.
+export const CARD_ORDER_PAGES = ["accounts", "overview", "overview-main", "overview-rail"] as const;
 export type CardOrderPage = (typeof CARD_ORDER_PAGES)[number];
 
 export function cardOrderKey(page: CardOrderPage): string {

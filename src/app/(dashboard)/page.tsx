@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { DepositReviewCard } from "@/components/deposit-review";
 import { GreetingHeader } from "@/components/greeting-header";
 import { MonthChart } from "@/components/overview/month-chart";
-import { AccountNotices, PanelSkeleton, RecentTransactionsCard, UpcomingCard, WhereItWentCard } from "@/components/overview/overview-cards";
+import { AccountNotices, BudgetCard, PanelSkeleton, RecentTransactionsCard, UpcomingCard, WhereItWentCard } from "@/components/overview/overview-cards";
 import { StatTile, type TileChange } from "@/components/overview/stat-tile";
 import { SortableCardGrid, type GridCard } from "@/components/sortable-card-grid";
-import { budgetPlan, monthCategorySpending } from "@/lib/budgets";
+import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
 import { applyCardOrder } from "@/lib/card-order";
 import { importStatus } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
@@ -18,8 +18,6 @@ import {
   dailySpending,
   incomeByMonth,
   incomeSoFar,
-  pillLevels,
-  pillLevelsInRange,
   shiftMonth,
   spendingByMonth,
   spendingSoFar,
@@ -29,7 +27,6 @@ import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadForecast } from "@/lib/forecast-data";
-import { loadGoals } from "@/lib/goals-data";
 import { calendarNow } from "@/lib/time";
 import { describeTransactions } from "@/lib/transaction-kind";
 import { loadCardOrder, loadDepositReviews, loadDisplayName, loadMonthlyBudget } from "@/lib/ui-preferences";
@@ -72,22 +69,11 @@ function movement(share: number | null, against: string): TileChange | null {
 // The newest charges sent along for "paid me back", to pick from or search.
 const CHARGES_SENT = 300;
 
-// Pills for "left to spend": the monthly budget in equal steps, lit for what's left of it.
-const BUDGET_PILLS = 24;
-// The site's own tones: budget status as on Budgets (moss, champagne, oxblood),
-// spending in champagne as on Spending, income in moss as on Reports → Income,
-// and net worth in champagne as its line on Accounts.
-const STATUS_COLOR = { ok: "var(--moss)", warning: "var(--champagne)", over: "var(--oxblood)" } as const;
-const SPENT_COLOR = "var(--champagne)";
-const INCOME_COLOR = "var(--moss)";
-const WORTH_COLOR = "var(--champagne)";
-
 export default async function OverviewPage() {
   const admin = createAdminClient();
-  // The Safe to spend and Goals cards load on their own (in Suspense);
-  // starting their reads now, beside the page's, means they're ready sooner.
+  // The Upcoming card loads its forecast on its own (in Suspense); starting
+  // that read now, beside the page's, means it's ready sooner.
   void loadForecast(admin);
-  void loadGoals(admin);
 
   const [
     { data: accountsData, error: acctError },
@@ -99,7 +85,9 @@ export default async function OverviewPage() {
     { data: budgetRows, error: budgetsError },
     { data: snapshotRows, error: snapshotsError },
     { data: itemRows },
-    savedOrder,
+    tileOrder,
+    mainOrder,
+    railOrder,
     monthlyBudget,
     displayName,
     depositReviews,
@@ -115,6 +103,8 @@ export default async function OverviewPage() {
     admin.from("net_worth_snapshots").select("date, net_worth").order("date", { ascending: true }),
     admin.from("items").select("id, institution_name, status, error_code"),
     loadCardOrder(admin, "overview"),
+    loadCardOrder(admin, "overview-main"),
+    loadCardOrder(admin, "overview-rail"),
     loadMonthlyBudget(admin),
     loadDisplayName(admin),
     loadDepositReviews(admin),
@@ -185,86 +175,19 @@ export default async function OverviewPage() {
 
   const m = plan.month;
   const daysLeft = daily.length - today;
-  const leftShare = m ? Math.max(0, 1 - m.percentUsed) : 0;
+  // The categories closest to (or past) their own budgets, for the budget card.
+  const watch = budgetProgress(categorySpending, budgetList, now)
+    .filter((p) => p.percentUsed >= 0.8)
+    .slice(0, 2)
+    .map((p) => ({ category: p.category, label: p.label, spent: p.spent, budget: p.budget, percentUsed: p.percentUsed, status: p.status }));
+  const incomeMonths = incomeByMonth(ledger.transactions, ref, 6);
+  const months = spendingByMonth(ledger.spending, ref, 6).map((mo, i) => ({ month: mo.month, spending: mo.amount, income: incomeMonths[i].amount }));
 
-  const cards: GridCard[] = [
-    {
-      id: "left-to-spend",
-      label: "Left to spend",
-      span: "quarter",
-      node:
-        m && plan.total !== null ? (
-          <StatTile
-            label="Left to spend"
-            href="/budgets"
-            value={<Amount value={m.remaining} />}
-            change={
-              m.status === "over"
-                ? { text: "Over", direction: null, tone: "bad", label: "Over budget" }
-                : { text: `${Math.round(leftShare * 100)}% left`, direction: null, tone: "quiet", label: `${Math.round(leftShare * 100)}% of the budget left` }
-            }
-            note={
-              m.remaining < 0
-                ? `Over your ${whole(plan.total)} budget`
-                : `of ${whole(plan.total)}${daysLeft > 0 ? ` · about ${whole(m.remaining / daysLeft)} a day for ${daysLeft} ${daysLeft === 1 ? "day" : "days"}` : ""}`
-            }
-            shortNote={m.remaining < 0 ? `Over ${whole(plan.total)}` : `of ${whole(plan.total)}${daysLeft > 0 ? ` · ${whole(m.remaining / daysLeft)}/day` : ""}`}
-            // Lit for what's left, so the bright part is the figure; over budget, all of it in red.
-            levels={Array.from({ length: BUDGET_PILLS }, (_, i) => (m.status === "over" || i < Math.round(leftShare * BUDGET_PILLS) ? 1 : null))}
-            color={STATUS_COLOR[m.status]}
-          />
-        ) : (
-          <StatTile
-            label="Left to spend"
-            href="/budgets"
-            value="No budget"
-            note="Set a monthly budget on Budgets to see what's left."
-            shortNote="Set one on Budgets"
-            levels={new Array(BUDGET_PILLS).fill(null)}
-            color={STATUS_COLOR.ok}
-          />
-        ),
-    },
-    {
-      id: "spent-this-month",
-      label: `Spent in ${monthName}`,
-      span: "quarter",
-      node: (
-        <StatTile
-          label={`Spent in ${monthName}`}
-          shortLabel="Spent"
-          href="/reports/spending"
-          value={spendingError ? "—" : <Amount value={monthTotal} />}
-          change={movement(spent.change, `${previousMonthName} at this point`)}
-          note={spendingError ? "Couldn't load spending." : `${previousMonthName} by the ${ordinal(today)}: ${whole(spent.before)}`}
-          shortNote={spendingError ? undefined : `${previousMonthName.slice(0, 3)}: ${whole(spent.before)}`}
-          levels={pillLevels(daily.map((v, i) => (i < today ? v : null)))}
-          color={SPENT_COLOR}
-        />
-      ),
-    },
-    {
-      id: "income-this-month",
-      label: `Income in ${monthName}`,
-      span: "quarter",
-      node: (
-        <StatTile
-          label={`Income in ${monthName}`}
-          shortLabel="Income"
-          href="/reports/income"
-          value={spendingError ? "—" : <Amount value={income.now} />}
-          change={movement(income.change, `${previousMonthName} at this point`)}
-          note={spendingError ? "Couldn't load income." : `${previousMonthName}: ${whole(income.beforeTotal)} in all`}
-          shortNote={spendingError ? undefined : `${previousMonthName.slice(0, 3)}: ${whole(income.beforeTotal)}`}
-          levels={pillLevels(incomeByMonth(ledger.transactions, ref, 12).map((mo) => mo.amount))}
-          color={INCOME_COLOR}
-        />
-      ),
-    },
+  // Three headline figures across the top of the main column.
+  const tiles: GridCard[] = [
     {
       id: "net-worth-now",
       label: "Net worth",
-      span: "quarter",
       node: (
         <StatTile
           label="Net worth"
@@ -278,16 +201,48 @@ export default async function OverviewPage() {
                 ? "Across every account and asset"
                 : `${trend.change >= 0 ? "+" : "−"}${whole(Math.abs(trend.change))} ${trend.since ? `since ${shortDate(trend.since)}` : "in 30 days"}`
           }
-          shortNote={netWorthError || trend.change === null ? undefined : `${trend.change >= 0 ? "+" : "−"}${whole(Math.abs(trend.change))}`}
-          levels={pillLevelsInRange(trend.values.slice(-30))}
-          color={WORTH_COLOR}
+          shortNote={netWorthError || trend.change === null ? undefined : `${trend.change >= 0 ? "+" : "−"}${whole(Math.abs(trend.change))} ${trend.since ? `since ${shortDate(trend.since)}` : "in 30 days"}`}
         />
       ),
     },
     {
+      id: "spent-this-month",
+      label: `Spent in ${monthName}`,
+      node: (
+        <StatTile
+          label={`Spent in ${monthName}`}
+          shortLabel="Spent"
+          href="/reports/spending"
+          value={spendingError ? "—" : <Amount value={monthTotal} />}
+          change={movement(spent.change, `${previousMonthName} at this point`)}
+          note={spendingError ? "Couldn't load spending." : `${previousMonthName} by the ${ordinal(today)}: ${whole(spent.before)}`}
+          shortNote={spendingError ? undefined : `${previousMonthName.slice(0, 3)}: ${whole(spent.before)}`}
+        />
+      ),
+    },
+    {
+      id: "income-this-month",
+      label: `Income in ${monthName}`,
+      node: (
+        <StatTile
+          label={`Income in ${monthName}`}
+          shortLabel="Income"
+          href="/reports/income"
+          value={spendingError ? "—" : <Amount value={income.now} />}
+          change={movement(income.change, `${previousMonthName} at this point`)}
+          // Measured the way the chip is: last month through the same day.
+          note={spendingError ? "Couldn't load income." : `${previousMonthName} by the ${ordinal(today)}: ${whole(income.before)}`}
+          shortNote={spendingError ? undefined : `${previousMonthName.slice(0, 3)}: ${whole(income.before)}`}
+        />
+      ),
+    },
+  ];
+
+  // Beneath them, the month's chart and the latest transactions.
+  const main: GridCard[] = [
+    {
       id: "month-spending",
       label: `Spending in ${monthName}`,
-      span: "wide",
       node: (
         <MonthChart
           monthName={monthName}
@@ -297,14 +252,37 @@ export default async function OverviewPage() {
           daily={cumulative(daily)}
           lastMonth={cumulative(dailySpending(ledger.spending, prev))}
           budget={plan.total}
-          months={spendingByMonth(ledger.spending, ref, 6)}
+          months={months}
+        />
+      ),
+    },
+    {
+      id: "recent-activity",
+      label: "Recent transactions",
+      node: <RecentTransactionsCard rows={ledger.transactions.slice(0, 7)} described={described} error={ledger.error} />,
+    },
+  ];
+
+  // Beside them: the month against the budget, what's due, and where the money went.
+  const rail: GridCard[] = [
+    {
+      id: "budget-now",
+      label: "Left to spend",
+      node: (
+        <BudgetCard
+          monthName={monthName}
+          total={plan.total}
+          remaining={m?.remaining ?? 0}
+          percentUsed={m?.percentUsed ?? 0}
+          status={m?.status ?? "ok"}
+          daysLeft={daysLeft}
+          watch={watch}
         />
       ),
     },
     {
       id: "upcoming-bills",
       label: "Upcoming",
-      span: "side",
       node: (
         <Suspense fallback={<PanelSkeleton />}>
           <UpcomingCard todayIso={now.isoDate} />
@@ -314,14 +292,7 @@ export default async function OverviewPage() {
     {
       id: "where-it-went",
       label: "Where it went",
-      span: "side",
       node: <WhereItWentCard monthName={monthName} top={where.top} rest={where.rest} error={spendingError} />,
-    },
-    {
-      id: "recent-activity",
-      label: "Recent transactions",
-      span: "full",
-      node: <RecentTransactionsCard rows={ledger.transactions.slice(0, 7)} described={described} error={ledger.error} />,
     },
   ];
 
@@ -330,7 +301,27 @@ export default async function OverviewPage() {
       <GreetingHeader name={displayName} />
       <AccountNotices items={notices} />
       <DepositReviewCard deposits={toReview} charges={charges} />
-      <SortableCardGrid page="overview" cards={applyCardOrder(cards, (c) => c.id, savedOrder)} />
+      {/*
+        Two columns on a wide screen, each a stack that ends level with the
+        other, so rearranging never leaves a hole. On anything narrower, one
+        column that leads with what's left to spend: the budget card, the
+        headline figures, the month's chart, what's due, where it went, and
+        the latest transactions (by position, so a rearranged column keeps
+        its own order).
+      */}
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
+        <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
+          <div className="order-2 min-w-0 xl:order-none">
+            <SortableCardGrid page="overview" layout="row" cards={applyCardOrder(tiles, (c) => c.id, tileOrder)} />
+          </div>
+          <div className="contents xl:block xl:min-w-0 xl:flex-1">
+            <SortableCardGrid page="overview-main" layout="column" narrowOrder={[3, 6, 7]} cards={applyCardOrder(main, (c) => c.id, mainOrder)} />
+          </div>
+        </div>
+        <div className="contents xl:block xl:min-w-0">
+          <SortableCardGrid page="overview-rail" layout="column" narrowOrder={[1, 4, 5]} cards={applyCardOrder(rail, (c) => c.id, railOrder)} />
+        </div>
+      </div>
     </div>
   );
 }

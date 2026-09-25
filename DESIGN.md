@@ -175,7 +175,7 @@ Ledger.m is a private book kept at night: an onyx ground, smoke pages ruled with
 
 Density is a working ledger's, not a dashboard's: enough on each screen and no more, figures first, context in a quiet line beneath them, detail one click away. Every tone and every typeface holds a single meaning across the whole app, so a green, a serif or a grey amount says the same thing on Overview, Budgets, Spending and Transactions. Accuracy is the aesthetic; decoration that doesn't carry a figure or a state is absent.
 
-The Overview is the freshest expression of the world: four headline tiles, each a serif figure with a quiet chip and a strip of rounded pills; a wide chart beside two stacked cards; and a full-width transactions table, all in cards the owner can lift and reorder.
+The Overview is the freshest expression of the world: two columns that always end level. The main column holds three headline tiles (a serif figure over a hairline footer with its comparison and chip), the month chart and the latest transactions; beside it, the month against the monthly budget (a strip of rounded pills and the limit), what's due and a ring of where the money went. Every card can be lifted by the grip at the middle of its top edge (shown on hover with a mouse) and reordered within its column; on a phone the columns interleave into one, led by what's left to spend.
 
 **Key Characteristics:**
 - Dark only: onyx ground, smoke cards, charcoal overlays, 1px slate-ash hairlines.
@@ -231,7 +231,7 @@ Twelve muted hues, one per spending category, each drawn as an icon over an 18% 
 
 ### Hierarchy
 - **Display** (Bodoni Moda 500, 2.5rem, line-height 1, -0.01em): The one headline reading on a chart card, such as the Overview's "$557 under an even pace", followed by a 1rem Switzer phrase in the state's tone.
-- **Headline** (Bodoni Moda 500, 1.625rem on phones to 2rem, line-height 1, -0.01em): Headline figures on stat tiles; 1.75rem for a panel's lead figure. Whole dollars at full size, cents at 0.55em in bone at 60%.
+- **Headline** (Bodoni Moda 500, 2rem, line-height 1, -0.01em): Headline figures on stat tiles once a tile is 16rem wide; a narrower tile and a panel's lead figure step down to the Title size, 1.5rem. Whole dollars at full size, cents at 0.55em in bone at 60%.
 - **Title** (Bodoni Moda 600, 1.5rem): Page titles ("Budgets", "Transactions") and the Overview greeting, with the date beneath in 14px ash-grey Switzer. The sidebar wordmark is Bodoni 600 with ".m" in champagne.
 - **Body** (Switzer 400, 0.875rem, line-height 1.43): Row names, card titles (in ash grey), sentences and notes.
 - **Caption** (Switzer 400, 0.75rem): The context line under a figure, secondary lines under a row name, segmented controls, "see all" links.
@@ -248,7 +248,7 @@ Twelve muted hues, one per spending category, each drawn as an icon over an 18% 
 
 Pages sit in a centered column up to 1280px wide with 16px of padding on phones and 24px from 768px up, beside a sticky sidebar rail on 768px and wider (a compact nav replaces it below). A page is a vertical stack with 24px between its title block and its content. A title block is the serif title and, where it applies, one ash-grey line beneath it.
 
-Card pages use a grid of two columns up to 1280px and twelve columns from 1280px, with 12px gaps (16px from 640px) and dense packing so shorter cards fill beside a tall one. Spans are fixed by role: a quarter (three columns at 1280px, half a row below), a wide chart (eight columns, two rows tall), a side card (four columns, stacked beside the wide chart), a half and a full row. Quarter tiles pair two to a row even on a phone, where they swap in short labels and short notes so all four keep the same shape.
+The Overview lays out as columns of stacks, never a grid of mixed spans: from 1280px, a flexible main column beside a 22rem side column (25rem from 1536px), with 12px gaps (16px from 640px). Inside a column, cards stack one above another and the last one stretches, so both columns end on the same line however the cards are rearranged. The headline tiles sit three to a row (on a phone the first takes the row and the other two pair beneath it); tiles size their figure, label and note by their own width, not the screen's. Below 1280px everything is one column: the tiles, then the side column, then the main column's chart and table.
 
 Inside a card, content stacks with 12px to 20px gaps (tiles 12px, panels 16px, the chart 20px). A table inside a card bleeds to the card's edges, with 20px of inset on its first and last columns. Columns that won't fit on a phone fold into one secondary line under the row name ("Card payment · Sep 12").
 
@@ -268,7 +268,7 @@ The system is flat and tonal. Depth is a step in lightness, not a shadow: onyx g
 
 Corners come from one 10px base: cards and tiles round at 14px, buttons and inputs at 10px, tooltips, segmented controls and navigation items at 8px (a segment inside at 5px). Anything that marks data or a label is fully round: pill strips, progress lines, category bars, kind chips and icon avatars. Month bars round at 6px. Borders are always 1px hairlines; a dashed hairline means "a place" (where a card will land, an empty slot to add something).
 
-The recurring data mark is the pill strip: a row of rounded tracks at bone 6%, each no wider than 10px and 36px tall (44px from 640px), filled from the bottom in the tile's tone to its level. An empty track is something that hasn't happened yet.
+The recurring data mark is the pill strip: a row of rounded tracks at bone 6%, each no wider than 10px and 48px tall, filled from the bottom in the card's tone to its level. An empty track is something that hasn't happened yet. It appears where a single figure has a limit to measure against (the budget card), not on every tile.
 
 ## Components
 
@@ -307,10 +307,13 @@ Compact and quiet; the fill is reserved for the one action that matters.
 - **Mobile:** A compact nav replaces the rail below 768px.
 
 ### Stat Tile (signature)
-The Overview's headline figure: an ash-grey title linked to its detail page (the whole tile is the link target), a Bodoni headline figure with small cents, an optional change chip beside it (under it on phones), one caption line of context, and a pill strip pinned to the bottom in the tile's tone. Minimum 160px tall (176px from 640px). Left to spend lights its pills for what's left, all of them in oxblood when over; spending, income and net worth draw their series in champagne, moss and champagne.
+The Overview's headline figure: an ash-grey title linked to its detail page (the whole tile is the link target), then a Bodoni headline figure with small cents, then a hairline footer holding one caption line of context on the left and its change chip on the right. The figure steps from 1.5rem to 2rem with the tile's own width, and a narrow tile swaps in a short label and a short note.
+
+### Budget Card (signature)
+The top of the Overview's side column: "Left to spend" as a 2.5rem Bodoni figure (oxblood text when over) with a chip ("28% left", or "Over" in oxblood), a caption of what that allows a day, a strip of thirty pills lit for what's left in the status tone (moss, champagne, all oxblood when over), up to two category budgets closest to their limit as thin status bars, and the monthly budget in a bone 4% well at the foot.
 
 ### Month Chart (signature)
-A wide card led by a Display reading of the month against an even pace ("$557 under an even pace" in moss, "ahead of an even pace" in champagne, "over your budget" in oxblood text), the mono spent figure beneath, then a running total drawn as a champagne step line over a champagne gradient (32% to 0), a dashed moss even-pace line at 70%, last month as an ash-grey step line at 55%, a dotted bone budget line at 30%, and dashed hairline gridlines. A segmented control switches to month bars: champagne for this month, champagne at 38% for the rest. Hovering or arrowing reads out the day in a charcoal tooltip with swatch rows and mono amounts.
+A wide card led by a Display reading of the month against an even pace ("$557 under an even pace" in moss, "ahead of an even pace" in champagne, "over your budget" in oxblood text), the mono spent figure beneath, then a running total drawn as a champagne step line over a champagne gradient (32% to 0), a dashed moss even-pace line at 70%, last month as a dashed 1px ash-grey step line at 45% (a second series, never a shadow of the first), a dotted bone budget line at 30%, and dashed hairline gridlines. A segmented control switches to money in against spending by month: paired rounded bars, moss for money in and champagne for spending, the month so far at full strength and earlier months at 55%, with the budget named in the legend rather than on its line. Hovering or arrowing reads out the day in a charcoal tooltip with swatch rows and mono amounts.
 
 ### Segmented Control
 A hairline-bordered group with 8px corners and 2px inset; options are 12px Switzer, ash grey, washing to bone 6% on hover. The selected option is bone text on a bone 12% wash with a bone 10% inset ring.

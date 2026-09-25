@@ -28,10 +28,6 @@ export type GridCard = {
   id: string;
   // Read out by screen readers while moving the card.
   label: string;
-  // How much of the row it takes on a wide screen: all of it, half, a
-  // quarter, two thirds and two rows tall ("wide", for a chart with two
-  // "side" cards stacked beside it), or a third. Below that, two columns.
-  span: "full" | "half" | "quarter" | "wide" | "side";
   node: React.ReactNode;
 };
 
@@ -93,17 +89,21 @@ const CARRIED_GRIP_ATTRIBUTES: GripWiring["attributes"] = {
 };
 const noRef = () => {};
 
-// Two columns up to a wide screen: quarters pair up, even on a phone; the
-// rest take both until there's room for halves and thirds.
-const SPAN: Record<GridCard["span"], string> = {
-  full: "col-span-2 xl:col-span-12",
-  half: "col-span-2 md:col-span-1 xl:col-span-6",
-  quarter: "col-span-1 xl:col-span-3",
-  wide: "col-span-2 xl:col-span-8 xl:row-span-2",
-  side: "col-span-2 md:col-span-1 xl:col-span-4",
-};
+// How a set of cards is laid out. Every card in a set is the same width,
+// so however they're rearranged there's never a gap:
+// - row: side by side, three across (the first takes the whole row on a phone);
+// - stack: one above another, the last stretching so the stack ends level
+//   with whatever stands beside it.
+// - column: a stack from 1280px; below that its cards join the page's single
+//   column one by one, the card in each position at that position's
+//   narrowOrder, so stacks side by side on a wide screen interleave on a phone.
+const LAYOUT = {
+  row: "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 [&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1",
+  stack: "flex h-full flex-col gap-3 sm:gap-4 [&>*:last-child]:flex-1",
+  column: "contents xl:flex xl:h-full xl:flex-col xl:gap-4 xl:[&>*:last-child]:flex-1",
+} as const;
 
-function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
+function Tile({ card, enabled, order }: { card: GridCard; enabled: boolean; order?: number }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
     disabled: !enabled,
@@ -115,13 +115,12 @@ function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
   return (
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn("group/card relative min-w-0", SPAN[card.span])}
+      style={{ transform: CSS.Translate.toString(transform), transition, order }}
+      className={cn("group/card relative min-w-0", order !== undefined && "xl:!order-none")}
     >
       {/* While it's being carried, its place in the grid shows as an outline
           of where it will land. Cards fill their tile, so two side by side
-          stay the same height. The grip (DragHandle) is in each card's
-          header, beside its title, as on Accounts. */}
+          stay the same height. The grip (DragHandle) is on each card. */}
       <GripProvider
         value={enabled ? { attributes, listeners, label: card.label, isDragging } : null}
         activatorRef={setActivatorNodeRef}
@@ -136,14 +135,25 @@ function Tile({ card, enabled }: { card: GridCard; enabled: boolean }) {
 }
 
 /**
- * A grid of cards (twelve columns on a wide screen, two below that) the user can rearrange
+ * A row or a stack of cards (see LAYOUT) the user can rearrange
  * by the grip beside each card's title, with the mouse, a finger, or the
  * keyboard (focus the grip, Space to lift, arrows to move, Space to drop).
  * The card being moved lifts and follows the pointer while the rest make
  * room for it, so what you see mid-drag is the layout you'll get. The order
  * is saved right away, like the cards on Accounts.
  */
-export function SortableCardGrid({ page, cards }: { page: CardOrderPage; cards: GridCard[] }) {
+export function SortableCardGrid({
+  page,
+  cards,
+  layout,
+  narrowOrder,
+}: {
+  page: CardOrderPage;
+  cards: GridCard[];
+  layout: keyof typeof LAYOUT;
+  // For a "column": where the card in each position falls on a narrow screen.
+  narrowOrder?: number[];
+}) {
   const { ordered, ids, setOrder, save } = useCardOrder(page, cards);
   const [activeId, setActiveId] = useState<string | null>(null);
   const startOrder = useRef<string[]>([]);
@@ -224,10 +234,9 @@ export function SortableCardGrid({ page, cards }: { page: CardOrderPage; cards: 
       }}
     >
       <SortableContext items={ids} strategy={noDisplacement}>
-        {/* Dense, so two side cards fill the rows beside a wide one wherever it's moved. */}
-        <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-flow-dense xl:grid-cols-12">
-          {ordered.map((card) => (
-            <Tile key={card.id} card={card} enabled={ordered.length > 1} />
+        <div className={LAYOUT[layout]}>
+          {ordered.map((card, i) => (
+            <Tile key={card.id} card={card} enabled={ordered.length > 1} order={layout === "column" ? narrowOrder?.[i] : undefined} />
           ))}
         </div>
       </SortableContext>

@@ -4,7 +4,7 @@ import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { GRIP_ON_HOVER } from "@/components/overview/stat-tile";
+import { CARD_GRIP } from "@/components/overview/stat-tile";
 import { Segmented } from "@/components/segmented";
 import { DragHandle } from "@/components/sortable-card-list";
 import { CHART_RESIZE, chartTooltipProps } from "@/lib/chart-style";
@@ -42,7 +42,8 @@ function Row({ label, value, swatch }: { label: string; value: string; swatch: R
 
 const SWATCH = {
   spent: <span className="h-0.5 w-3 rounded-full bg-champagne" />,
-  last: <span className="h-0.5 w-3 rounded-full bg-ash-grey/70" />,
+  income: <span className="h-0.5 w-3 rounded-full bg-moss" />,
+  last: <span className="w-3 border-t border-dashed border-ash-grey/70" />,
   pace: <span className="h-0.5 w-3 rounded-full bg-moss" />,
 };
 
@@ -72,7 +73,8 @@ export function MonthChart({
   lastMonth: number[];
   // The monthly budget, or null when none is set.
   budget: number | null;
-  months: { month: string; amount: number }[];
+  // Money in and spending, each of the last few months.
+  months: { month: string; spending: number; income: number }[];
 }) {
   const [view, setView] = useState<"days" | "months">("days");
   const days = daily.length;
@@ -91,7 +93,7 @@ export function MonthChart({
     [days, today, daily, lastMonth, budget]
   );
   const dayTicks = useMemo(() => valueTicks(0, Math.max(budget ?? 0, ...daily.slice(0, today), ...lastMonth), 4), [budget, daily, lastMonth, today]);
-  const monthTicks = useMemo(() => valueTicks(0, Math.max(budget ?? 0, ...months.map((m) => m.amount)), 4), [budget, months]);
+  const monthTicks = useMemo(() => valueTicks(0, Math.max(budget ?? 0, ...months.flatMap((m) => [m.spending, m.income])), 4), [budget, months]);
   const ticks = view === "days" ? dayTicks : monthTicks;
   const step = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
   const monthLabel = (key: string) => new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
@@ -99,21 +101,19 @@ export function MonthChart({
   const axis = { tick: { fontSize: 11, fill: "var(--muted-foreground)" }, axisLine: false, tickLine: false } as const;
 
   return (
-    <section aria-label={`Spending in ${monthName}`} className="flex h-full flex-col gap-5 rounded-xl border border-border bg-card px-5 pt-4 pb-5">
+    <section aria-label={`Spending in ${monthName}`} className="relative flex h-full flex-col gap-5 rounded-xl border border-border bg-card px-5 pt-4 pb-5">
+      <DragHandle className={CARD_GRIP} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm text-muted-foreground">Spending in {monthName}</h2>
-        <div className="flex items-center gap-2">
-          <Segmented
-            label="Show spending"
-            value={view}
-            onChange={setView}
-            options={[
-              { value: "days", label: "Day by day" },
-              { value: "months", label: "Month by month" },
-            ]}
-          />
-          <DragHandle className={cn("-mr-1.5 ml-0", GRIP_ON_HOVER)} />
-        </div>
+        <Segmented
+          label="Show spending"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "days", label: "Day by day" },
+            { value: "months", label: "Month by month" },
+          ]}
+        />
       </div>
 
       {/* The headline is how the month is going against the budget; what's been spent is its note. */}
@@ -158,15 +158,15 @@ export function MonthChart({
       </div>
 
       <div
-        className="min-h-56 flex-1"
+        className="h-72 sm:h-80"
         role="group"
         aria-label={
           view === "days"
             ? `${monthName} spending day by day: ${usd(spent)} by the ${today}${budget !== null ? `, against a ${whole(budget)} budget` : ""}.`
-            : `Spending by month, the last ${months.length} months.`
+            : `Money in and spending by month, the last ${months.length} months.`
         }
       >
-        <ResponsiveContainer {...CHART_RESIZE} width="100%" height="100%" minHeight={224}>
+        <ResponsiveContainer {...CHART_RESIZE} width="100%" height="100%">
           {view === "days" ? (
             <ComposedChart data={dayData} margin={{ top: 8, right: 4, bottom: 0, left: 0 }}>
               <defs>
@@ -210,7 +210,8 @@ export function MonthChart({
                 <Line type="linear" dataKey="pace" stroke="var(--moss)" strokeOpacity={0.7} strokeWidth={1.25} strokeDasharray="4 4" dot={false} activeDot={false} isAnimationActive={false} />
               )}
               {/* Running totals move in steps: each day's purchases land on that day. */}
-              <Line type="stepAfter" dataKey="last" stroke="var(--ash-grey)" strokeOpacity={0.55} strokeWidth={1.25} dot={false} activeDot={false} isAnimationActive={false} />
+              {/* Last month dashed and faint, so it reads as a second series rather than a shadow of this one. */}
+              <Line type="stepAfter" dataKey="last" stroke="var(--ash-grey)" strokeOpacity={0.45} strokeWidth={1} strokeDasharray="2 3" dot={false} activeDot={false} isAnimationActive={false} />
               <Area
                 type="stepAfter"
                 dataKey="spent"
@@ -223,45 +224,45 @@ export function MonthChart({
               />
             </ComposedChart>
           ) : (
-            <BarChart data={months} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap="28%">
+            <BarChart data={months} margin={{ top: 8, right: 4, bottom: 0, left: 0 }} barCategoryGap="24%" barGap={3}>
               <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="2 4" />
               <XAxis dataKey="month" tickFormatter={monthLabel} {...axis} />
               <YAxis domain={[ticks[0], ticks[ticks.length - 1]]} ticks={ticks} interval={0} tickFormatter={(v: number) => formatTickMoney(v, step)} width={52} {...axis} />
-              {budget !== null && (
-                <ReferenceLine
-                  y={budget}
-                  stroke="var(--bone)"
-                  strokeOpacity={0.35}
-                  strokeDasharray="1 3"
-                  label={{ value: `Budget ${whole(budget)}`, position: "insideTopLeft", fill: "var(--muted-foreground)", fontSize: 11, dy: -12 }}
-                />
-              )}
+              {/* Named in the legend rather than on the line, where it would sit over the first bars. */}
+              {budget !== null && <ReferenceLine y={budget} stroke="var(--bone)" strokeOpacity={0.35} strokeDasharray="1 3" />}
               <Tooltip
                 {...chartTooltipProps}
                 cursor={{ fill: "var(--bone)", fillOpacity: 0.04 }}
                 content={({ active, payload }) => {
-                  const p = payload?.[0]?.payload as { month: string; amount: number } | undefined;
+                  const p = payload?.[0]?.payload as { month: string; spending: number; income: number } | undefined;
                   if (!active || !p) return null;
-                  const over = budget !== null ? p.amount - budget : null;
+                  const kept = p.income - p.spending;
                   return (
                     <div style={tooltipStyle} className="flex flex-col gap-1">
                       <p className="text-bone">
                         {new Date(`${p.month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" })}
                         {p.month === monthKey ? ", so far" : ""}
                       </p>
-                      <Row label="Spent" value={usd(p.amount)} swatch={SWATCH.spent} />
-                      {over !== null && (
-                        <p className={cn("text-right", over > 0 ? "text-oxblood-text" : "text-moss")}>
-                          {over > 0 ? `${whole(over)} over budget` : `${whole(-over)} under budget`}
-                        </p>
-                      )}
+                      <Row label="Money in" value={usd(p.income)} swatch={SWATCH.income} />
+                      <Row label="Spent" value={usd(p.spending)} swatch={SWATCH.spent} />
+                      <p className="flex items-center justify-between gap-4 border-t border-border pt-1">
+                        <span className="text-muted-foreground">{kept >= 0 ? "Kept" : "Spent more than came in"}</span>
+                        <span className="font-mono tabular-nums">{usd(Math.abs(kept))}</span>
+                      </p>
+                      {budget !== null && p.spending > budget && <p className="text-right text-oxblood-text">{whole(p.spending - budget)} over budget</p>}
                     </div>
                   );
                 }}
               />
-              <Bar dataKey="amount" radius={[6, 6, 6, 6]} maxBarSize={56} isAnimationActive={false}>
+              {/* Money in beside what was spent, each month; the month so far at full strength. */}
+              <Bar dataKey="income" radius={[5, 5, 5, 5]} maxBarSize={28} isAnimationActive={false}>
                 {months.map((m) => (
-                  <Cell key={m.month} fill={m.month === monthKey ? "var(--champagne)" : "color-mix(in oklab, var(--champagne) 38%, transparent)"} />
+                  <Cell key={m.month} fill={m.month === monthKey ? "var(--moss)" : "color-mix(in oklab, var(--moss) 55%, transparent)"} />
+                ))}
+              </Bar>
+              <Bar dataKey="spending" radius={[5, 5, 5, 5]} maxBarSize={28} isAnimationActive={false}>
+                {months.map((m) => (
+                  <Cell key={m.month} fill={m.month === monthKey ? "var(--champagne)" : "color-mix(in oklab, var(--champagne) 55%, transparent)"} />
                 ))}
               </Bar>
             </BarChart>
@@ -269,16 +270,29 @@ export function MonthChart({
         </ResponsiveContainer>
       </div>
 
-      {view === "days" && (
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5">{SWATCH.spent}This month</span>
-          {budget !== null && <span className="inline-flex items-center gap-1.5">{SWATCH.pace}Even pace to your budget</span>}
-          <span className="inline-flex items-center gap-1.5">
-            {SWATCH.last}
-            {previousMonthName}
-          </span>
-        </p>
-      )}
+      <p className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+        {view === "days" ? (
+          <>
+            <span className="inline-flex items-center gap-1.5">{SWATCH.spent}This month</span>
+            {budget !== null && <span className="inline-flex items-center gap-1.5">{SWATCH.pace}Even pace to your budget</span>}
+            <span className="inline-flex items-center gap-1.5">
+              {SWATCH.last}
+              {previousMonthName}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className="inline-flex items-center gap-1.5">{SWATCH.income}Money in</span>
+            <span className="inline-flex items-center gap-1.5">{SWATCH.spent}Spent</span>
+            {budget !== null && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-3 border-t border-dotted border-bone/60" />
+                Budget {whole(budget)}
+              </span>
+            )}
+          </>
+        )}
+      </p>
     </section>
   );
 }
