@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  hasLapsed,
-  hasPriceIncrease,
-  isWithinNextDays,
-  projectNextOccurrence,
-  summarizeSubscriptions,
-} from "@/lib/subscriptions-aggregation";
+import { chargeChange, hasLapsed, hasPriceIncrease, isWithinNextDays, projectNextOccurrence, summarizeSubscriptions } from "@/lib/subscriptions-aggregation";
 
 const today = new Date(2026, 8, 23); // Sep 23, 2026
 
@@ -74,5 +68,26 @@ describe("summarizeSubscriptions", () => {
     expect(r.inactive).toHaveLength(1);
     expect(r.monthlyTotal).toBeCloseTo(20);
     expect(r.annualTotal).toBeCloseTo(240);
+  });
+});
+
+describe("chargeChange", () => {
+  const aug = { amount: 15.49, date: "2026-08-12" };
+
+  it("says how much the latest charge went up from the one before", () => {
+    const up = chargeChange(aug, { amount: 17.99, date: "2026-09-12" })!;
+    expect(up.diff).toBe(2.5);
+    expect(up.share).toBeCloseTo(2.5 / 15.49, 6);
+    expect(up.from).toBe(aug);
+  });
+
+  it("and how much it went down", () => {
+    expect(chargeChange(aug, { amount: 12.99, date: "2026-09-12" })!.diff).toBe(-2.5);
+  });
+
+  it("is nothing when the price held, or either charge is unknown", () => {
+    expect(chargeChange(aug, { amount: 15.49, date: "2026-09-12" })).toBeNull();
+    expect(chargeChange(null, aug)).toBeNull();
+    expect(chargeChange(aug, null)).toBeNull();
   });
 });

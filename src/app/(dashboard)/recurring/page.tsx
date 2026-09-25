@@ -14,7 +14,7 @@ import { calendarNow, easternToday } from "@/lib/time";
 // How far ahead the renewal calendar looks: about three months of days.
 const CALENDAR_DAYS = 92;
 
-type StreamQueryRow = Omit<StreamRow, "firstChargeAmount" | "institution" | "logoUrl"> & {
+type StreamQueryRow = Omit<StreamRow, "firstChargeAmount" | "institution" | "logoUrl" | "lastCharge" | "previousCharge"> & {
   transaction_ids: string[] | null;
 };
 
@@ -49,7 +49,7 @@ export default async function SubscriptionsPage() {
 
   // Trial detection is a bonus: if it can't load, the page still works
   // without it (loadFirstChargeAmounts logs the failure).
-  const { amounts: firstCharges, logos } = await loadFirstChargeAmounts(
+  const { amounts: firstCharges, logos, recent } = await loadFirstChargeAmounts(
     admin,
     rawStreams.map((s) => ({ id: s.id, transaction_ids: s.transaction_ids }))
   );
@@ -80,6 +80,8 @@ export default async function SubscriptionsPage() {
     institution: s.account ? (institutionByAccount.get(s.account.id) ?? null) : null,
     logoUrl: logos.get(s.id) ?? null,
     firstChargeAmount: firstCharges.get(s.id) ?? null,
+    lastCharge: recent.get(s.id)?.last ?? null,
+    previousCharge: recent.get(s.id)?.previous ?? null,
   }));
 
   const streamName = (s: StreamRow) => streamDisplayName(s);

@@ -150,6 +150,12 @@ export function buildFixtures(now = new Date()) {
   }
   mtx(addDays(today, -6), "Farmers market", 24, "FOOD_AND_DRINK");
 
+  // Spotify's price went up with its latest charge.
+  const spotify = transactions.filter((t) => t.merchant_name === "Spotify").sort((a, b) => a.date.localeCompare(b.date));
+  if (spotify.length > 0) spotify[spotify.length - 1].amount = 12.99;
+  // Each stream is made of its charges, as Plaid reports them.
+  const chargesOf = (merchant) => transactions.filter((t) => t.merchant_name === merchant).sort((a, b) => a.date.localeCompare(b.date));
+
   const recurring_streams = [
     ["Netflix", 15.49, IDS.freedom, 12],
     ["Spotify", 11.99, IDS.freedom, 18],
@@ -159,7 +165,8 @@ export function buildFixtures(now = new Date()) {
   ].map(([merchant, amount, accountId, day]) => {
     const next = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + (today.getUTCDate() >= day ? 1 : 0), day));
     const last = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() - 1, day));
-    return { id: uuid("rs"), stream_id: `stream-${merchant}`, account_id: accountId, direction: "outflow", description: merchant.toUpperCase(), merchant_name: merchant, frequency: "MONTHLY", average_amount: amount, last_amount: amount, first_date: iso(start), last_date: iso(last), predicted_next_date: iso(next), status: "MATURE", is_active: true, pfc_primary: "ENTERTAINMENT", pfc_detailed: null, transaction_ids: [], user_marked_cancelled: false };
+    const charges = chargesOf(merchant);
+    return { id: uuid("rs"), stream_id: `stream-${merchant}`, account_id: accountId, direction: "outflow", description: merchant.toUpperCase(), merchant_name: merchant, frequency: "MONTHLY", average_amount: amount, last_amount: charges.at(-1)?.amount ?? amount, first_date: iso(start), last_date: iso(last), predicted_next_date: iso(next), status: "MATURE", is_active: true, pfc_primary: "ENTERTAINMENT", pfc_detailed: null, transaction_ids: charges.map((t) => t.plaid_transaction_id), user_marked_cancelled: false };
   });
   recurring_streams.push({ id: uuid("rs"), stream_id: "stream-payroll", account_id: IDS.checking, direction: "inflow", description: "UNITED MORTGAGE PAYROLL", merchant_name: null, frequency: "SEMI_MONTHLY", average_amount: -3400, last_amount: -2900, first_date: iso(start), last_date: iso(addDays(today, -8)), predicted_next_date: iso(addDays(today, 7)), status: "MATURE", is_active: true, pfc_primary: "INCOME", pfc_detailed: "INCOME_WAGES", transaction_ids: [], user_marked_cancelled: false });
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ChevronRight, ExternalLink, Pencil, Repeat, Search, Sparkles, Trash2, TrendingUp, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, ChevronRight, ExternalLink, Pencil, Repeat, Search, Sparkles, Trash2, TrendingUp, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ import { humanizeFrequency, monthlyFactorForFrequency } from "@/lib/plaid-catego
 import type { DetectedSubscription } from "@/lib/recurring-detection";
 import { costShares, dueLabel, monthOutlook, nextCharges, type RecurringCharge } from "@/lib/recurring-board";
 import { cancelSearchUrl, effectiveNextDate, isNewSubscription, trialStart, type Insight } from "@/lib/subscription-insights";
-import { hasLapsed, hasPriceIncrease, projectNextOccurrence } from "@/lib/subscriptions-aggregation";
+import { chargeChange, hasLapsed, hasPriceIncrease, projectNextOccurrence, type ChargeChange, type DatedAmount } from "@/lib/subscriptions-aggregation";
 import { streamDisplayName } from "@/lib/transaction-display";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +39,9 @@ export type StreamRow = {
   first_date: string | null;
   // Amount of the stream's earliest charge, when its transactions are known.
   firstChargeAmount: number | null;
+  // Its latest charge and the one before, when its transactions are known.
+  lastCharge: DatedAmount | null;
+  previousCharge: DatedAmount | null;
   is_active: boolean;
   user_marked_cancelled: boolean;
   pfc_primary: string | null;
@@ -72,7 +75,10 @@ type Item = {
   pfcPrimary: string | null;
   pfcDetailed: string | null;
   notes: string | null;
+  // Up only, from the average, when the charge before the last isn't known.
   priceIncrease: boolean;
+  // The latest charge against the one before it, up or down.
+  change: ChargeChange | null;
   lapsed: boolean;
   isNew: boolean;
   trial: { firstAmount: number } | null;
@@ -86,6 +92,7 @@ function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: s
   const fromBank = streams.map<Item>((s) => {
     const active = s.is_active && !s.user_marked_cancelled;
     const storedNext = effectiveNextDate(s.predicted_next_date, s.last_date, s.frequency);
+    const change = active ? chargeChange(s.previousCharge, s.lastCharge) : null;
     return {
       key: `plaid-${s.id}`,
       source: "plaid",
@@ -105,7 +112,8 @@ function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: s
       pfcPrimary: s.pfc_primary,
       pfcDetailed: s.pfc_detailed,
       notes: null,
-      priceIncrease: active && hasPriceIncrease(s.average_amount, s.last_amount),
+      priceIncrease: active && !s.previousCharge && hasPriceIncrease(s.average_amount, s.last_amount),
+      change,
       lapsed: active && hasLapsed(storedNext),
       isNew: s.is_active && isNewSubscription(s.first_date, todayIso),
       trial: trialStart(s.firstChargeAmount, s.average_amount),
@@ -132,6 +140,7 @@ function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: s
     pfcDetailed: null,
     notes: m.notes,
     priceIncrease: false,
+    change: null,
     lapsed: m.is_active && hasLapsed(m.next_billing_date),
     isNew: false,
     trial: null,
@@ -174,6 +183,22 @@ function Avatar({ item, className }: { item: Item; className?: string }) {
 function AccountMark({ item }: { item: Item }) {
   if (item.source === "manual") return <InstitutionAvatar icon="wallet" size="sm" />;
   return <InstitutionAvatar institution={item.institution ?? item.account} size="sm" />;
+}
+
+/** "↑ $2.00": the latest charge against the one before, red when it went up. */
+function ChangeNote({ change }: { change: ChargeChange }) {
+  const up = change.diff > 0;
+  const Arrow = up ? ArrowUp : ArrowDown;
+  return (
+    <span
+      className={cn(MONEY, "inline-flex items-center gap-0.5 text-[11px]", up ? "text-oxblood-text" : "text-moss")}
+      title={`${formatCurrency(change.to.amount, "USD")} on ${shortDate(change.to.date)}, ${up ? "up" : "down"} from ${formatCurrency(change.from.amount, "USD")} on ${shortDate(change.from.date)}`}
+    >
+      <Arrow className="size-3" aria-hidden />
+      <span className="sr-only">{up ? "Up" : "Down"} </span>
+      {formatCurrency(Math.abs(change.diff), "USD")}
+    </span>
+  );
 }
 
 function Flags({ item }: { item: Item }) {
@@ -293,7 +318,10 @@ function Row({ item, todayIso, onOpen }: { item: Item; todayIso: string; onOpen:
             <span className="text-sm text-muted-foreground">—</span>
           )}
         </span>
-        <span className={cn(MONEY, "text-right text-sm text-bone")}>{formatCurrency(item.amount, "USD")}</span>
+        <span className="flex flex-col items-end">
+          <span className={cn(MONEY, "text-right text-sm text-bone")}>{formatCurrency(item.amount, "USD")}</span>
+          {item.change && <ChangeNote change={item.change} />}
+        </span>
         <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
       </button>
     </li>
@@ -382,8 +410,24 @@ function Panel({ item, todayIso, onClose }: { item: Item; todayIso: string; onCl
           </div>
         </div>
 
-        {(item.priceIncrease || item.lapsed || item.trial) && (
+        {item.change && item.change.diff < 0 && (
+          <p className="rounded-lg border border-moss/30 bg-moss/8 px-3 py-2.5 text-xs text-bone/90">
+            The last charge went down <span className={MONEY}>{formatCurrency(-item.change.diff, "USD")}</span> (
+            {Math.round(-item.change.share * 100)}%): <span className={MONEY}>{formatCurrency(item.change.to.amount, "USD")}</span> on{" "}
+            {shortDate(item.change.to.date)}, after <span className={MONEY}>{formatCurrency(item.change.from.amount, "USD")}</span> on{" "}
+            {shortDate(item.change.from.date)}.
+          </p>
+        )}
+        {((item.change && item.change.diff > 0) || item.priceIncrease || item.lapsed || item.trial) && (
           <div className="flex flex-col gap-2 rounded-lg border border-oxblood/30 bg-oxblood/8 px-3 py-2.5 text-xs text-bone/90">
+            {item.change && item.change.diff > 0 && (
+              <p>
+                The last charge went up <span className={MONEY}>{formatCurrency(item.change.diff, "USD")}</span> (
+                {Math.round(item.change.share * 100)}%): <span className={MONEY}>{formatCurrency(item.change.to.amount, "USD")}</span> on{" "}
+                {shortDate(item.change.to.date)}, after <span className={MONEY}>{formatCurrency(item.change.from.amount, "USD")}</span> on{" "}
+                {shortDate(item.change.from.date)}.
+              </p>
+            )}
             {item.priceIncrease && item.lastAmount !== null && (
               <p>
                 The last charge was <span className={MONEY}>{formatCurrency(item.lastAmount, "USD")}</span>, above its usual{" "}

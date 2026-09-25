@@ -1,5 +1,6 @@
 import "server-only";
 import type { createAdminClient } from "@/lib/supabase/admin";
+import type { DatedAmount } from "@/lib/subscriptions-aggregation";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -10,13 +11,20 @@ const CHUNK_SIZE = 150;
  * The amount of each stream's earliest charge, keyed by stream id, from the
  * transactions a stream is made of. Used to spot a trial that converted (a
  * token first charge, then the real price). Also the merchant logo the bank
- * sent with its latest charge, for the row's avatar. A stream whose
+ * sent with its latest charge, for the row's avatar, and its last two
+ * charges, to show when the price changed. A stream whose
  * transactions aren't available simply has no entry.
  */
 export async function loadFirstChargeAmounts(
   admin: AdminClient,
   streams: { id: string; transaction_ids: string[] | null }[]
-): Promise<{ amounts: Map<string, number>; logos: Map<string, string>; error: boolean }> {
+): Promise<{
+  amounts: Map<string, number>;
+  logos: Map<string, string>;
+  // The latest charge and the one before it, to show a price going up or down.
+  recent: Map<string, { last: DatedAmount; previous: DatedAmount | null }>;
+  error: boolean;
+}> {
   const allIds = Array.from(new Set(streams.flatMap((s) => s.transaction_ids ?? [])));
   type Charge = { amount: number; date: string; logo: string | null };
   const byPlaidId = new Map<string, Charge>();
@@ -37,14 +45,20 @@ export async function loadFirstChargeAmounts(
 
   const amounts = new Map<string, number>();
   const logos = new Map<string, string>();
+  const recent = new Map<string, { last: DatedAmount; previous: DatedAmount | null }>();
   for (const s of streams) {
     const txs = (s.transaction_ids ?? []).map((id) => byPlaidId.get(id)).filter((t): t is Charge => Boolean(t));
     if (txs.length === 0) continue;
     const first = txs.reduce((min, t) => (t.date < min.date ? t : min), txs[0]);
     amounts.set(s.id, first.amount);
-    const logo = [...txs].sort((a, b) => b.date.localeCompare(a.date)).find((t) => t.logo)?.logo;
+    const newest = [...txs].sort((a, b) => b.date.localeCompare(a.date));
+    const logo = newest.find((t) => t.logo)?.logo;
     if (logo) logos.set(s.id, logo);
+    recent.set(s.id, {
+      last: { amount: newest[0].amount, date: newest[0].date },
+      previous: newest[1] ? { amount: newest[1].amount, date: newest[1].date } : null,
+    });
   }
 
-  return { amounts, logos, error };
+  return { amounts, logos, recent, error };
 }

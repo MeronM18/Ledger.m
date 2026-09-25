@@ -47,6 +47,22 @@ export function hasPriceIncrease(averageAmount: number | null, lastAmount: numbe
   return lastAmount > averageAmount * PRICE_INCREASE_THRESHOLD;
 }
 
+export type DatedAmount = { amount: number; date: string };
+
+export type ChargeChange = { from: DatedAmount; to: DatedAmount; diff: number; share: number };
+
+/**
+ * How the latest charge compares with the one before it: up or down, by
+ * how much and by what share. Null when either is unknown or they match to
+ * the cent.
+ */
+export function chargeChange(previous: DatedAmount | null, last: DatedAmount | null): ChargeChange | null {
+  if (!previous || !last || previous.amount <= 0) return null;
+  const diff = Math.round((last.amount - previous.amount) * 100) / 100;
+  if (Math.abs(diff) < 0.01) return null;
+  return { from: previous, to: last, diff, share: diff / previous.amount };
+}
+
 // A week-plus past the predicted date is a real gap, not just Plaid's own
 // prediction being a day or two off from the actual billing date (a
 // monthly subscription billed on the 3rd one month and the 5th the next is
