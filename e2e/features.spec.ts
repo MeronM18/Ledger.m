@@ -81,8 +81,8 @@ test("reports: cash flow shows where the money came from and went", async ({ pag
   await page.getByRole("combobox", { name: "Period" }).click();
   await page.getByRole("option", { name: "This year" }).click();
   await expect(page.getByText(/^Jan 1 – /)).toBeVisible();
-  // The forecast is still below.
-  await expect(page.getByText("Looking ahead")).toBeVisible();
+  // Just the report: no forecast below it.
+  await expect(page.getByText("Looking ahead")).toHaveCount(0);
 
   // The same money as a treemap, and month by month.
   await page.getByRole("radio", { name: "Treemap" }).click();

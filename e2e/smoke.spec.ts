@@ -9,7 +9,7 @@ const PAGES = [
   { path: "/reports/spending", heading: "Reports", shows: "Spending by category" },
   { path: "/reports/income", heading: "Reports", shows: "What you can count on" },
   { path: "/budgets", heading: "Budgets", shows: "Food & Drink" },
-  { path: "/reports/cash-flow", heading: "Reports", shows: "Coming up" },
+  { path: "/reports/cash-flow", heading: "Reports", shows: "Total expenses" },
   { path: "/goals", heading: "Goals", shows: "Emergency fund" },
   { path: "/reports/year", heading: "Reports", shows: "Where it went" },
   { path: "/accounts", heading: "Accounts", shows: "Honda Civic" },
