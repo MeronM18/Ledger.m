@@ -15,7 +15,8 @@ import { loadTransactionEdits, UNDEFINED_COLUMN } from "@/lib/transaction-edits-
 import { accountName } from "@/lib/account-settings";
 import { cardProgramFor, programForAccount, rewardsFor, type ProgramId, type Reward } from "@/lib/card-rewards";
 import type { Card } from "@/lib/card-statements";
-import { loadAccountSettings } from "@/lib/ui-preferences";
+import { incomeOf, reviewSummary } from "@/lib/deposit-review";
+import { loadAccountSettings, loadDepositReviews } from "@/lib/ui-preferences";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -33,6 +34,8 @@ export type LedgerTransaction = SpendingTransaction &
     manualSource?: ManualTransaction;
     // What it earned on a rewards card, estimated (card-rewards.ts).
     reward?: Reward;
+    // A deposit you said was income, money paid back or your own, in a few words.
+    depositReview?: string;
   };
 
 export type Ledger = {
@@ -94,7 +97,7 @@ function readManualTransactions(admin: AdminClient, withPaidBack: boolean) {
  * per component. Outside a render (a cron or webhook) it simply runs.
  */
 export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
-  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits, accountSettings] = await Promise.all([
+  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits, accountSettings, depositReviews] = await Promise.all([
     fetchAllRows((from, to) =>
       admin
         .from("transactions")
@@ -111,6 +114,7 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     loadManualAccounts(admin),
     loadTransactionEdits(admin),
     loadAccountSettings(admin),
+    loadDepositReviews(admin),
   ]);
 
   // Before migration 0015 there's no paid-back column: read without it.
@@ -142,10 +146,18 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     const named = t.account ? accountById.get(t.account.id) : undefined;
     return named ? { ...dated, account: { id: named.id, name: named.name, mask: named.mask } } : dated;
   });
-  const plaid: LedgerTransaction[] = applyEditsToAll(plaidRows, edits.overrides, edits.rules).map((t) => ({
-    ...t,
-    isManual: false,
-  }));
+  const plaid: LedgerTransaction[] = applyEditsToAll(plaidRows, edits.overrides, edits.rules).map((t) => {
+    const review = depositReviews.reviews[t.id];
+    if (!review) return { ...t, isManual: false };
+    // Split between income and something else: only the income part counts as income.
+    const income = incomeOf(review);
+    return {
+      ...t,
+      isManual: false,
+      depositReview: reviewSummary(review),
+      income_share: income > 0 && income < -t.amount - 0.005 ? income : null,
+    };
+  });
   const manual: LedgerTransaction[] = (manualRes.data ?? []).map((m) => {
     const { manual_account_id, reimbursed_amount, ...source } = m;
     return {

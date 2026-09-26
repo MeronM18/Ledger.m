@@ -23,6 +23,9 @@ export type SpendingTransaction = {
   pending: boolean;
   // Paid back in cash by someone this was paid for. Only the rest is spending.
   paid_back?: number | null;
+  // Of a deposit split into parts, how much was income (the rest was money
+  // paid back or your own). Unset: all of it, when it's income at all.
+  income_share?: number | null;
 };
 
 export type CategoryTotal = { category: string; label: string; amount: number; colorSlot: number };
@@ -131,6 +134,12 @@ export function displayCategoryKey(t: SpendingTransaction): string {
 export function paidBackShare(t: SpendingTransaction): number {
   if (!t.paid_back || t.amount <= 0) return 0;
   return Math.min(t.paid_back, t.amount);
+}
+
+/** Money in counted as income: all of it, or the part of a split deposit that was. */
+export function incomeAmount(t: SpendingTransaction): number {
+  const full = -t.amount;
+  return t.income_share != null && full > 0 ? Math.min(t.income_share, full) : full;
 }
 
 /**
@@ -338,7 +347,7 @@ export function incomeBySourceForMonth(
     if (!isInCalendarMonth(t.date, year, month)) continue;
 
     const source = detectPayrollCompany(t.name ?? "") || t.pfc_detailed === "INCOME_WAGES" ? "Paycheck" : "Other income";
-    totals.set(source, (totals.get(source) ?? 0) - t.amount);
+    totals.set(source, (totals.get(source) ?? 0) + incomeAmount(t));
   }
 
   return Array.from(totals.entries())
@@ -374,7 +383,7 @@ export function monthlyIncomeVsSpending(
 
     const category = effectiveCategory(t);
     if (category === "INCOME") {
-      income += -t.amount;
+      income += incomeAmount(t);
     } else if (isSpendingCategory(category)) {
       spending += t.amount - paidBackShare(t);
     }

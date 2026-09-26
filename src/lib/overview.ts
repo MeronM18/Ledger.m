@@ -1,5 +1,5 @@
 import type { ForecastEvent } from "@/lib/forecast";
-import type { CategoryTotal, SpendingTransaction } from "@/lib/spending-aggregation";
+import { incomeAmount, type CategoryTotal, type SpendingTransaction } from "@/lib/spending-aggregation";
 import { effectiveCategory } from "@/lib/transaction-display";
 
 // Pure. The Overview's figures: this month day by day, the same point last
@@ -39,7 +39,7 @@ function dailyIncome(all: SpendingTransaction[], ref: MonthRef): number[] {
   const days = new Array<number>(daysIn(ref)).fill(0);
   for (const t of all) {
     if (t.pending || t.date.slice(0, 7) !== key || effectiveCategory(t) !== "INCOME") continue;
-    days[Number(t.date.slice(8, 10)) - 1] -= t.amount;
+    days[Number(t.date.slice(8, 10)) - 1] += incomeAmount(t);
   }
   return days;
 }

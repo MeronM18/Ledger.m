@@ -21,47 +21,98 @@ export const CHARGE_LOOKBACK_DAYS = 60;
 
 export type DepositAnswer = "income" | "paid-back" | "paid-back-cash" | "own-money";
 
-/** What was done for an answer, kept so it can be undone exactly. */
-export type DepositReview = {
+/** One part of a deposit and what was done for it, kept so it can be undone exactly. */
+export type ReviewPart = {
   answer: DepositAnswer;
+  amount: number;
+  // What it was, as it reads in the list of reviewed deposits ("Kroger").
+  label?: string;
+  // Own money: from cash (the Cash asset went down) or another account.
+  from?: "cash" | "account";
+  // The charge it paid back, and how much of the charge that covered.
+  charge?: { id: string; manual: boolean; applied: number };
+  // The cash purchase it paid back, recorded by hand.
+  purchaseId?: string;
+  // How much the Cash asset moved.
+  cashDelta?: number;
+};
+
+/** What a deposit was said to be: one part, or several adding up to it. */
+export type DepositReview = {
   // The deposit, as money in.
   amount: number;
   at: string;
   // The deposit's own category before the answer (null: none set by hand).
   previousCategory: string | null;
-  // The charge it paid back, and how much of the charge that covered.
-  charge?: { id: string; manual: boolean; applied: number };
-  // The cash purchase it paid back, recorded by hand.
-  purchaseId?: string;
-  // How much the Cash asset moved (money deposited from cash lowers it).
-  cashDelta?: number;
+  parts: ReviewPart[];
 };
 
 export type DepositReviews = Record<string, DepositReview>;
 
 const ANSWERS = new Set<DepositAnswer>(["income", "paid-back", "paid-back-cash", "own-money"]);
 
-/** Stored answers (possibly partial or malformed), the good ones kept. */
+function resolvePart(raw: unknown): ReviewPart | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  if (!ANSWERS.has(r.answer as DepositAnswer) || typeof r.amount !== "number") return null;
+  const part: ReviewPart = { answer: r.answer as DepositAnswer, amount: r.amount };
+  if (typeof r.label === "string") part.label = r.label;
+  if (r.from === "cash" || r.from === "account") part.from = r.from;
+  const c = r.charge as Record<string, unknown> | undefined;
+  if (c && typeof c.id === "string" && typeof c.applied === "number") part.charge = { id: c.id, manual: c.manual === true, applied: c.applied };
+  if (typeof r.purchaseId === "string") part.purchaseId = r.purchaseId;
+  if (typeof r.cashDelta === "number") part.cashDelta = r.cashDelta;
+  return part;
+}
+
+/**
+ * Stored answers (possibly partial or malformed), the good ones kept. An
+ * answer saved before deposits could be split is one part of all of it.
+ */
 export function resolveDepositReviews(stored: unknown): DepositReviews {
   if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
   const out: DepositReviews = {};
   for (const [id, raw] of Object.entries(stored as Record<string, unknown>)) {
     if (!raw || typeof raw !== "object") continue;
     const r = raw as Record<string, unknown>;
-    if (!ANSWERS.has(r.answer as DepositAnswer) || typeof r.amount !== "number") continue;
-    const review: DepositReview = {
-      answer: r.answer as DepositAnswer,
+    if (typeof r.amount !== "number") continue;
+    const parts = Array.isArray(r.parts) ? r.parts.map(resolvePart).filter((p): p is ReviewPart => p !== null) : [resolvePart(r)].filter((p): p is ReviewPart => p !== null);
+    if (parts.length === 0) continue;
+    // Before own money said where it came from, only cash moved the Cash asset.
+    for (const p of parts) if (p.answer === "own-money" && !p.from) p.from = p.cashDelta ? "cash" : "account";
+    out[id] = {
       amount: r.amount,
       at: typeof r.at === "string" ? r.at : "",
       previousCategory: typeof r.previousCategory === "string" ? r.previousCategory : null,
+      parts,
     };
-    const c = r.charge as Record<string, unknown> | undefined;
-    if (c && typeof c.id === "string" && typeof c.applied === "number") review.charge = { id: c.id, manual: c.manual === true, applied: c.applied };
-    if (typeof r.purchaseId === "string") review.purchaseId = r.purchaseId;
-    if (typeof r.cashDelta === "number") review.cashDelta = r.cashDelta;
-    out[id] = review;
   }
   return out;
+}
+
+/** How much of a reviewed deposit was income. */
+export function incomeOf(review: DepositReview): number {
+  return Math.round(review.parts.reduce((s, p) => s + (p.answer === "income" ? p.amount : 0), 0) * 100) / 100;
+}
+
+/** A part in a few words: "Income", "Paid back · Kroger", "From my cash". */
+export function partLabel(p: ReviewPart): string {
+  switch (p.answer) {
+    case "income":
+      return "Income";
+    case "own-money":
+      return p.from === "cash" ? "From my cash" : "From my other account";
+    case "paid-back":
+      return p.label ? `Paid back · ${p.label}` : "Paid back";
+    case "paid-back-cash":
+      return p.label ? `Paid back · ${p.label} (cash)` : "Paid back, cash purchase";
+  }
+}
+
+/** A reviewed deposit's answer on one line: "$100.00 from my cash · $50.00 income" for a split one. */
+export function reviewSummary(review: DepositReview, currency = "USD"): string {
+  if (review.parts.length === 1) return partLabel(review.parts[0]);
+  return review.parts.map((p) => `${formatCurrency(p.amount, currency)} ${partLabel(p).replace(/^[A-Z]/, (c) => c.toLowerCase())}`).join(" · ");
 }
 
 export type ReviewableTx = SpendingTransaction & {
@@ -123,18 +174,59 @@ export function depositsToReview(
     const mirror = outByCents.get(Math.round(-t.amount * 100)) ?? [];
     if (mirror.some((m) => m.account!.id !== t.account!.id && Math.abs(dayOf(m.date) - dayOf(t.date)) <= TRANSFER_PAIR_DAYS)) continue;
 
-    const name = humanizeTransactionName(t);
-    const raw = (t.name ?? "").trim();
-    out.push({
-      id: t.id,
-      date: t.date,
-      amount: -t.amount,
-      name,
-      detail: raw && raw.toLowerCase() !== name.toLowerCase() ? raw : null,
-      account: t.account,
-    });
+    out.push(asDeposit(t));
   }
   return out.sort((a, b) => b.date.localeCompare(a.date) || b.amount - a.amount);
+}
+
+function asDeposit(t: ReviewableTx): DepositToReview {
+  const name = humanizeTransactionName(t);
+  const raw = (t.name ?? "").trim();
+  return {
+    id: t.id,
+    date: t.date,
+    amount: -t.amount,
+    name,
+    detail: raw && raw.toLowerCase() !== name.toLowerCase() ? raw : null,
+    account: t.account,
+  };
+}
+
+export type ReviewedDeposit = DepositToReview & {
+  summary: string;
+  // Each part as it reads, and what it was, so it can be changed.
+  // A charge paid back reads with what it had left before this deposit, as it will once the answer is changed.
+  parts: { label: string; amount: number; answer: DepositAnswer; from?: "cash" | "account"; charge?: ChargeOption; name?: string }[];
+};
+
+/** Deposits already answered, newest first, with what each was said to be. */
+export function reviewedDeposits(transactions: (ReviewableTx & { paid_back?: number | null })[], reviews: DepositReviews, limit = 30): ReviewedDeposit[] {
+  const byId = new Map(transactions.map((t) => [t.id, t]));
+  const chargeBefore = (c: { id: string; applied: number }): ChargeOption | undefined => {
+    const t = byId.get(c.id);
+    if (!t || t.amount <= 0) return undefined;
+    const paid = Math.max(0, Math.min(t.paid_back ?? 0, t.amount) - c.applied);
+    return asChargeOption(t, Math.round((t.amount - paid) * 100) / 100);
+  };
+  return transactions
+    .filter((t) => reviews[t.id] && t.amount < 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, limit)
+    .map((t) => {
+      const review = reviews[t.id];
+      return {
+        ...asDeposit(t),
+        summary: reviewSummary(review),
+        parts: review.parts.map((p) => ({
+          label: partLabel(p),
+          amount: p.amount,
+          answer: p.answer,
+          ...(p.from ? { from: p.from } : {}),
+          ...(p.charge && chargeBefore(p.charge) ? { charge: chargeBefore(p.charge) } : {}),
+          ...(p.label ? { name: p.label } : {}),
+        })),
+      };
+    });
 }
 
 export type ChargeOption = {
@@ -165,17 +257,21 @@ export function chargeOptions(
     if (!countsAsSpending(t, connectedCardIssuers)) continue;
     const remaining = Math.round((t.amount - Math.min(t.paid_back ?? 0, t.amount)) * 100) / 100;
     if (remaining <= 0) continue;
-    out.push({
-      id: t.id,
-      manual: t.isManual,
-      date: t.date,
-      name: humanizeTransactionName(t),
-      amount: t.amount,
-      remaining,
-      account: t.account ? `${t.account.name}${t.account.mask ? ` ••${t.account.mask}` : ""}` : t.isManual ? "Cash" : null,
-    });
+    out.push(asChargeOption(t, remaining));
   }
   return out.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function asChargeOption(t: ReviewableTx, remaining: number): ChargeOption {
+  return {
+    id: t.id,
+    manual: t.isManual,
+    date: t.date,
+    name: humanizeTransactionName(t),
+    amount: t.amount,
+    remaining,
+    account: t.account ? `${t.account.name}${t.account.mask ? ` ••${t.account.mask}` : ""}` : t.isManual ? "Cash" : null,
+  };
 }
 
 /**

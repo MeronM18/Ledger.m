@@ -1,4 +1,4 @@
-import type { SpendingTransaction } from "@/lib/spending-aggregation";
+import { incomeAmount, type SpendingTransaction } from "@/lib/spending-aggregation";
 import { detectPayrollCompany, effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure. Income for someone paid on commission: no forecast, because the
@@ -90,7 +90,7 @@ export function isInterest(t: Pick<SpendingTransaction, "pfc_detailed" | "mercha
 export function incomeDeposits(transactions: SpendingTransaction[]): IncomeDeposit[] {
   return transactions
     .filter(isIncomeDeposit)
-    .map((t) => ({ date: t.date, amount: -t.amount, source: humanizeTransactionName(t), kind: incomeKind(t) }))
+    .map((t) => ({ date: t.date, amount: incomeAmount(t), source: humanizeTransactionName(t), kind: incomeKind(t) }))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 

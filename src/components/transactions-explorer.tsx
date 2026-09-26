@@ -56,6 +56,10 @@ export type TransactionRow = {
   manualSource?: ManualTransaction;
   // What it earned on a rewards card, estimated.
   reward?: Reward;
+  // A deposit you said was income, money paid back or your own, in a few words.
+  depositReview?: string;
+  // Of a split deposit, how much was income.
+  income_share?: number | null;
 };
 
 /**
@@ -213,6 +217,11 @@ function Badges({ t }: { t: TransactionRow }) {
           {t.paid_back >= t.amount - 0.005 ? "Paid back in full" : `Paid back ${formatCurrency(t.paid_back, t.iso_currency_code)}`}
         </Badge>
       ) : null}
+      {t.depositReview && (
+        <Badge variant="secondary" className="max-w-64 truncate text-[10px] text-champagne" title={`You said: ${t.depositReview}. Change it under Reviewed on the Overview.`}>
+          {t.depositReview}
+        </Badge>
+      )}
       {(t.notes ?? t.manualSource?.notes) && (
         <span title={t.notes ?? t.manualSource?.notes ?? ""} className="text-muted-foreground">
           <StickyNote className="size-3.5" aria-label={`Note: ${t.notes ?? t.manualSource?.notes}`} />

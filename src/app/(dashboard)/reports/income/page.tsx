@@ -7,6 +7,7 @@ import { incomeKind, incomeStats, isIncomeDeposit, type IncomeMonth } from "@/li
 import type { IncomeEntry } from "@/lib/income-report";
 import { humanizeTransactionName, prettyName } from "@/lib/transaction-display";
 import { loadLedger } from "@/lib/spending-data";
+import { incomeAmount } from "@/lib/spending-aggregation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calendarNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -151,7 +152,7 @@ export default async function IncomePage() {
   const entries: IncomeEntry[] = ledger.transactions.filter(isIncomeDeposit).map((t) => ({
     id: t.id,
     date: t.date,
-    amount: -t.amount,
+    amount: incomeAmount(t),
     source: humanizeTransactionName(t),
     kind: incomeKind(t),
     accountId: t.account?.id ?? null,

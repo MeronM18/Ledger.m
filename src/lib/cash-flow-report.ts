@@ -11,7 +11,7 @@
 // difference from "Savings used", so the diagram always balances.
 
 import { categoryColorSlot, humanizeCategory, OTHER_CATEGORY_COLOR_SLOT } from "@/lib/plaid-categories";
-import { displayCategoryKey, filterSpendingTransactions, type SpendingTransaction } from "@/lib/spending-aggregation";
+import { displayCategoryKey, filterSpendingTransactions, incomeAmount, type SpendingTransaction } from "@/lib/spending-aggregation";
 import { inRange, type DateRange } from "@/lib/spending-report";
 import { effectiveCategory, humanizeTransactionName } from "@/lib/transaction-display";
 
@@ -80,7 +80,7 @@ export function cashFlowReport(
   for (const t of inPeriod) {
     if (t.pending || effectiveCategory(t) !== "INCOME") continue;
     const name = humanizeTransactionName(t);
-    sources.set(name, (sources.get(name) ?? 0) - t.amount);
+    sources.set(name, (sources.get(name) ?? 0) + incomeAmount(t));
   }
   // A source that netted below zero (income reversed) isn't a source.
   const income = round(Array.from(sources.values()).reduce((s, v) => s + Math.max(0, v), 0));
@@ -308,7 +308,7 @@ export function cashFlowSeries(
   const income = new Map<string, number>();
   for (const t of inPeriod) {
     if (t.pending || effectiveCategory(t) !== "INCOME") continue;
-    income.set(bucketOf(t.date), (income.get(bucketOf(t.date)) ?? 0) - t.amount);
+    income.set(bucketOf(t.date), (income.get(bucketOf(t.date)) ?? 0) + incomeAmount(t));
   }
   const cells = new Map<string, Map<string, number>>();
   const totals = new Map<string, number>();

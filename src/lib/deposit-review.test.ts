@@ -3,11 +3,15 @@ import {
   chargeOptions,
   depositReviewAlerts,
   depositsToReview,
+  incomeOf,
   resolveDepositReviews,
+  reviewedDeposits,
+  reviewSummary,
   suggestCharges,
   type ChargeOption,
   type ReviewableTx,
 } from "@/lib/deposit-review";
+import { incomeAmount } from "@/lib/spending-aggregation";
 
 const checking = { id: "checking", name: "Total Checking", mask: "1234" };
 const savings = { id: "savings", name: "Savings", mask: "0042" };
@@ -120,7 +124,48 @@ describe("resolveDepositReviews", () => {
       c: "bad",
     });
     expect(Object.keys(reviews)).toEqual(["a"]);
-    expect(reviews.a.charge).toEqual({ id: "c", manual: true, applied: 25 });
+    // An answer saved before splits is one part of all of it.
+    expect(reviews.a.parts).toEqual([{ answer: "paid-back", amount: 25, charge: { id: "c", manual: true, applied: 25 } }]);
     expect(resolveDepositReviews(null)).toEqual({});
+  });
+
+  it("reads a split answer", () => {
+    const reviews = resolveDepositReviews({
+      a: {
+        amount: 150,
+        at: "x",
+        previousCategory: null,
+        parts: [
+          { answer: "own-money", amount: 100, from: "cash", cashDelta: -100 },
+          { answer: "income", amount: 50 },
+          { answer: "bogus", amount: 1 },
+        ],
+      },
+    });
+    expect(reviews.a.parts).toHaveLength(2);
+    expect(incomeOf(reviews.a)).toBe(50);
+    expect(reviewSummary(reviews.a)).toBe("$100.00 from my cash · $50.00 income");
+  });
+});
+
+describe("reviewedDeposits", () => {
+  it("lists answered deposits with what they were", () => {
+    const zelle = tx({ amount: -150, date: "2026-09-21" });
+    const reviews = resolveDepositReviews({
+      [zelle.id]: { amount: 150, at: "", previousCategory: null, parts: [{ answer: "own-money", amount: 100, from: "cash" }, { answer: "income", amount: 50 }] },
+    });
+    const [r] = reviewedDeposits([zelle, tx({})], reviews);
+    expect(r).toMatchObject({ id: zelle.id, amount: 150, name: "Zelle Transfer", summary: "$100.00 from my cash · $50.00 income" });
+    expect(r.parts).toEqual([
+      { label: "From my cash", amount: 100, answer: "own-money", from: "cash" },
+      { label: "Income", amount: 50, answer: "income" },
+    ]);
+  });
+});
+
+describe("incomeAmount", () => {
+  it("counts only the income part of a split deposit", () => {
+    expect(incomeAmount(tx({ amount: -150, income_share: 50 }))).toBe(50);
+    expect(incomeAmount(tx({ amount: -150 }))).toBe(150);
   });
 });

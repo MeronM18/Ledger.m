@@ -34,12 +34,13 @@ test("a Zelle paying back a charge comes off that charge, and can be undone", as
   await card.getByRole("group", { name: /\$45\.00/ }).getByRole("button", { name: "Paid me back" }).click();
 
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Someone paid you back" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "What was this deposit?" })).toBeVisible();
+  await expect(dialog.getByRole("radio", { name: "Paid back a charge" })).toHaveAttribute("aria-checked", "true");
   await dialog.getByRole("textbox", { name: "Search charges" }).fill("kroger");
   await dialog.getByRole("radiogroup", { name: "The charge they paid back" }).getByRole("radio").first().click();
   await expect(dialog.getByText(/is what counts as spending|won't count as your spending/)).toBeVisible();
   await dialog.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByText(/comes off that charge/)).toBeVisible();
+  await expect(page.getByText(/comes off Kroger/)).toBeVisible();
 
   let writes = await mockWrites(page);
   expect(writes.some((w) => w.table === "transaction_overrides" && body(w).reimbursed_amount === 45)).toBe(true);
@@ -59,10 +60,10 @@ test("paid back for something paid in cash records the cash purchase", async ({ 
   await card.getByRole("group", { name: /\$45\.00/ }).getByRole("button", { name: "Paid me back" }).click();
 
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("radio", { name: "Something I paid in cash" }).click();
+  await dialog.getByRole("radio", { name: "Paid back cash I spent" }).click();
   await dialog.getByLabel("What you paid for").fill("Dinner at Olive Garden");
   await dialog.getByLabel("You paid, in all").fill("90");
-  await expect(dialog.getByText("Your share, $45.00, counts as spending.")).toBeVisible();
+  await expect(dialog.getByText(/Your share, \$45\.00, counts as spending\./)).toBeVisible();
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(/Dinner at Olive Garden added as a cash purchase/)).toBeVisible();
 
@@ -82,10 +83,56 @@ test("your own money from cash comes out of Cash, and a new deposit is an alert"
   await afterWelcome(page);
   const card = page.getByRole("region", { name: "Deposits to review" });
   await card.getByRole("group", { name: /\$45\.00/ }).getByRole("button", { name: "My own money" }).click();
-  await page.getByRole("dialog").getByRole("radio", { name: /Cash I deposited/ }).click();
-  await expect(page.getByText("$45.00 moved from your cash to the bank")).toBeVisible();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("radio", { name: "From my cash" })).toHaveAttribute("aria-checked", "true");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("$45.00 came from your cash")).toBeVisible();
   const writes = await mockWrites(page);
   expect(writes.some((w) => w.table === "manual_assets" && w.method === "PATCH")).toBe(true);
+});
+
+test("a deposit split between cash handed over and income, then changed and undone from Reviewed", async ({ page }) => {
+  await page.goto("/");
+  await afterWelcome(page);
+  const card = page.getByRole("region", { name: "Deposits to review" });
+  await card.getByRole("group", { name: /\$45\.00/ }).getByRole("button", { name: "Split" }).click();
+
+  // $30 was cash handed over for it, the rest is income.
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("heading", { name: "Split this deposit" })).toBeVisible();
+  await dialog.getByLabel("Part 1 amount").fill("30");
+  await expect(dialog.getByLabel("Part 2 amount")).toHaveValue("15");
+  await expect(dialog.getByText("Adds up to $45.00")).toBeVisible();
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("Split into 2 parts")).toBeVisible();
+
+  let writes = await mockWrites(page);
+  expect(writes.some((w) => w.table === "transaction_overrides" && body(w).category === "INCOME")).toBe(true);
+  expect(writes.some((w) => w.table === "manual_assets" && w.method === "PATCH")).toBe(true);
+
+  // It's under Reviewed, with both parts.
+  await card.getByRole("radio", { name: /^Reviewed/ }).click();
+  const reviewed = card.getByRole("list", { name: "Reviewed" });
+  const row = reviewed.getByRole("listitem").filter({ hasText: "Zelle Transfer" });
+  await expect(row).toContainText("From my cash");
+  await expect(row).toContainText("$30.00");
+  await expect(row).toContainText("Income");
+  await expect(row).toContainText("$15.00");
+
+  // Change it to all income.
+  await row.getByRole("button", { name: "Change" }).click();
+  await expect(dialog.getByRole("heading", { name: "Change what this deposit was" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Remove part 1" }).click();
+  await expect(dialog.getByRole("radio", { name: "Income" })).toHaveAttribute("aria-checked", "true");
+  await dialog.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByText("$45.00 counted as income")).toBeVisible();
+  await expect(row).not.toContainText("From my cash");
+
+  // And undo it: it goes back to be reviewed.
+  await row.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByText("Zelle Transfer is back in Deposits to review")).toBeVisible();
+  writes = await mockWrites(page);
+  expect(writes.filter((w) => w.table === "manual_assets" && w.method === "PATCH").length).toBeGreaterThanOrEqual(2);
 });
 
 test("adding a transaction by hand picks how it was paid", async ({ page }) => {
