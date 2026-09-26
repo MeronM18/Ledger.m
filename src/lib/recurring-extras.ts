@@ -91,6 +91,7 @@ export const loadSubscriptions = cache(async function loadSubscriptions(admin: A
       id: t.id,
       date: t.date,
       name: humanizeTransactionName(t),
+      raw: t.name,
       amount: t.amount,
       pending: t.pending,
       accountId: t.account?.id ?? null,

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isKnownService, sameName } from "@/lib/recurring-detection";
+import { normalizeName } from "@/lib/subscription-insights";
 
 // Pure. How the three places a subscription can come from fit together, so
 // each service is one entry, counted once, with one answer to "is it still
@@ -38,6 +39,8 @@ export type ReviewCharge = {
   id: string;
   date: string;
   name: string;
+  // The bank's own description ("AMAZON PRIME*RT4K2"), which can say more than the merchant's name.
+  raw?: string | null;
   amount: number;
   pending: boolean;
   accountId: string | null;
@@ -106,9 +109,24 @@ const DAY_MS = 86_400_000;
 const dayGap = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / DAY_MS;
 const cents = (x: number) => Math.round(x * 100);
 
-/** A charge that's this subscription: its name, and about its price (within 35%, or $2 for a cheap one). */
-export function chargeMatches(charge: { name: string; amount: number }, entry: { name: string; amount: number }): boolean {
-  if (!(charge.amount > 0) || !sameName(charge.name, entry.name)) return false;
+// "Walmart+" is Walmart Plus, not Walmart.
+const spelled = (name: string) => normalizeName(name.replace(/\+/g, " plus "));
+
+/**
+ * A charge named for this subscription. Its name can say more than the
+ * subscription's ("Amazon Prime*RT4K2"), but one that says less has to be
+ * a subscription service on its own: a plain "Amazon" is an order from the
+ * store, not Amazon Prime, and "Costco" isn't the Costco membership.
+ */
+function namedFor(chargeName: string, entryName: string): boolean {
+  if (!sameName(chargeName, entryName)) return false;
+  return spelled(chargeName).includes(spelled(entryName)) || isKnownService(chargeName);
+}
+
+/** A charge that's this subscription: named for it, and about its price (within 35%, or $2 for a cheap one). */
+export function chargeMatches(charge: { name: string; raw?: string | null; amount: number }, entry: { name: string; amount: number }): boolean {
+  if (!(charge.amount > 0)) return false;
+  if (!namedFor(charge.name, entry.name) && !(charge.raw && namedFor(charge.raw, entry.name))) return false;
   return Math.abs(charge.amount - entry.amount) <= Math.max(entry.amount * 0.35, 2);
 }
 

@@ -46,6 +46,20 @@ describe("chargeMatches", () => {
     expect(chargeMatches({ name: "Amazon", amount: 64.2 }, { name: "Amazon Prime", amount: 7.94 })).toBe(false);
     expect(chargeMatches({ name: "Netflix", amount: 7.94 }, { name: "Amazon Prime", amount: 7.94 })).toBe(false);
   });
+
+  it("never takes a store's own name for its subscription, even at about the price", () => {
+    expect(chargeMatches({ name: "Amazon", raw: "AMAZON MKTPL*BB4TY81Q2", amount: 13.75 }, { name: "Amazon Prime", amount: 14.99 })).toBe(false);
+    expect(chargeMatches({ name: "Costco", amount: 61.2 }, { name: "Costco Membership", amount: 65 })).toBe(false);
+    expect(chargeMatches({ name: "Walmart", amount: 12.4 }, { name: "Walmart+", amount: 12.95 })).toBe(false);
+    expect(chargeMatches({ name: "Apple", amount: 10.99 }, { name: "Apple Music", amount: 10.99 })).toBe(false);
+  });
+
+  it("still knows the subscription by a longer name, the bank's description, or a service's own name", () => {
+    expect(chargeMatches({ name: "Amazon Prime*RT4K2", amount: 14.99 }, { name: "Amazon Prime", amount: 14.99 })).toBe(true);
+    expect(chargeMatches({ name: "Amazon", raw: "AMAZON PRIME*RT4K2", amount: 14.99 }, { name: "Amazon Prime", amount: 14.99 })).toBe(true);
+    expect(chargeMatches({ name: "WALMART PLUS", amount: 12.95 }, { name: "Walmart+", amount: 12.95 })).toBe(true);
+    expect(chargeMatches({ name: "Netflix", amount: 22.99 }, { name: "Netflix Premium", amount: 22.99 })).toBe(true);
+  });
 });
 
 describe("reconcileSubscriptions: one entry per service", () => {
@@ -111,6 +125,12 @@ describe("reconcileSubscriptions: charges after a cancel", () => {
   it("stops flagging a charge you expected, including once it posts a day or two later", () => {
     const prefs = applyReviewAction(none, { action: "acknowledge", key: "manual-1", date: "2026-09-13", amount: 7.94 });
     expect(reconcileSubscriptions([cancelled], [charge("2026-09-15", "Amazon Prime", 7.94)], prefs, TODAY).afterCancel).toEqual([]);
+  });
+
+  it("doesn't flag an Amazon order after Prime was cancelled", () => {
+    const prime = { ...cancelled, amount: 14.99, cancelledOn: "2026-09-25" };
+    const order = charge("2026-09-26", "Amazon", 13.75, { raw: "AMAZON MKTPL*BB4TY81Q2", pending: true, category: "GENERAL_MERCHANDISE" });
+    expect(reconcileSubscriptions([prime], [order], none, "2026-09-26").afterCancel).toEqual([]);
   });
 
   it("says nothing for one cancelled without a day", () => {
