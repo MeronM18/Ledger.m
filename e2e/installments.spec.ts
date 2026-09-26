@@ -51,3 +51,25 @@ test("installments: a plan of your own can be added", async ({ page }) => {
   await card.getByRole("button", { name: "Paid off (1)" }).click();
   await expect(card.getByRole("heading", { name: "Couch" })).toBeVisible();
 });
+
+test("installments: the add form's hints follow what it is, and point at the field to fix", async ({ page }) => {
+  await page.goto("/recurring");
+  await afterWelcome(page);
+  await page.getByRole("region", { name: "Installments" }).getByRole("button", { name: "Add a plan" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: "iPad" }).click();
+  await expect(dialog.getByLabel("Name")).toHaveAttribute("placeholder", "e.g. iPad Air");
+  await dialog.getByRole("button", { name: "Add plan" }).click();
+  await expect(page.getByText("Give it a name, like iPad Air")).toBeVisible();
+  await expect(dialog.getByLabel("Name")).toHaveAttribute("aria-invalid", "true");
+  await expect(dialog.getByLabel("Name")).toBeFocused();
+
+  // An iPhone is usually 24 payments; typing a name clears the mark.
+  await dialog.getByRole("radio", { name: "iPhone" }).click();
+  await expect(dialog.getByLabel("Payments")).toHaveValue("24");
+  await dialog.getByLabel("Name").fill("iPhone 17 Pro");
+  await expect(dialog.getByLabel("Name")).not.toHaveAttribute("aria-invalid", "true");
+  await dialog.getByRole("button", { name: "Add plan" }).click();
+  await expect(page.getByText("Enter the monthly payment")).toBeVisible();
+  await expect(dialog.getByLabel("Monthly payment")).toBeFocused();
+});

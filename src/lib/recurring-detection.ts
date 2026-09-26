@@ -199,9 +199,12 @@ export function detectRecurring(charges: Charge[], todayIso: string = new Date()
       const latest = run[0];
       const samePrice = run.filter((c) => Math.abs(cents(c.amount) - cents(latest.amount)) <= 1).length;
       const prices = new Set(run.map((c) => cents(c.amount)));
-      // Two charges are only a subscription at one price.
-      const steady = run.length === 2 ? prices.size === 1 : samePrice / run.length >= 0.6 || prices.size <= 2;
-      if (!steady && !bill) continue;
+      // Two charges are only a subscription at one price (a known service's
+      // yearly renewal may have gone up). A price that moves every time is
+      // only a bill charged monthly: two pharmacy visits a year apart aren't a plan.
+      const steady =
+        run.length === 2 ? prices.size === 1 || (known && frequency === "ANNUALLY") : samePrice / run.length >= 0.6 || prices.size <= 2;
+      if (!steady && !(bill && frequency === "MONTHLY")) continue;
 
       const oldest = run[run.length - 1];
       const earlier = group.some((c) => c.amount > 0 && c.date < oldest.date && days(c.date, oldest.date) > CADENCE[frequency].hi * 1.5);

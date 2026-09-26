@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { DeviceArt } from "@/components/device-art";
 import { PillStrip } from "@/components/overview/stat-tile";
 import { formatCurrency } from "@/lib/format";
-import { ICON_LABELS, INSTALLMENT_ICONS, type InstallmentIcon, type InstallmentPlan } from "@/lib/installments";
+import { DEFAULT_PAYMENTS_FOR, EXAMPLE_NAMES, ICON_LABELS, INSTALLMENT_ICONS, type InstallmentIcon, type InstallmentPlan } from "@/lib/installments";
 import { cn } from "@/lib/utils";
 
 const MONEY = "font-mono tabular-nums";
@@ -153,6 +153,7 @@ function PlanRow({ plan, todayIso, onEdit }: { plan: InstallmentPlan; todayIso: 
 }
 
 type Form = { name: string; icon: InstallmentIcon; monthly: string; payments: string; start: string; price: string };
+type Field = "name" | "monthly" | "start" | "payments" | "price";
 
 function PlanDialog({
   plan,
@@ -175,7 +176,22 @@ function PlanDialog({
     start: plan?.schedule[0]?.date ?? "",
     price: plan && Math.abs(plan.price - plan.monthly * plan.payments) >= 0.01 ? String(plan.price) : "",
   }));
-  const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
+  // The field that needs fixing, marked and focused.
+  const [invalid, setInvalid] = useState<Field | null>(null);
+  const set = (patch: Partial<Form>) => {
+    setForm((f) => ({ ...f, ...patch }));
+    if (invalid && invalid in patch) setInvalid(null);
+  };
+  function problem(field: Field, message: string) {
+    setInvalid(field);
+    document.getElementById(`installment-${field}`)?.focus();
+    toast.error(message);
+  }
+  // Picking what it is suggests its usual length, until you've typed your own.
+  function pickIcon(icon: InstallmentIcon) {
+    const usual = Object.values(DEFAULT_PAYMENTS_FOR).map(String);
+    set(!found && usual.includes(form.payments) ? { icon, payments: String(DEFAULT_PAYMENTS_FOR[icon]) } : { icon });
+  }
 
   async function run(action: () => Promise<void>, done: string) {
     setSaving(true);
@@ -196,11 +212,12 @@ function PlanDialog({
     const payments = Number(form.payments);
     const monthly = Number(form.monthly);
     const price = form.price.trim() === "" ? null : Number(form.price.replace(/[$,]/g, ""));
-    if (!name) return void toast.error("Give it a name, like MacBook Air");
-    if (!Number.isInteger(payments) || payments < 1 || payments > 60) return void toast.error("Payments is a whole number, 1 to 60");
-    if (price !== null && !(price > 0)) return void toast.error("Enter the price in dollars, or leave it blank");
-    if (!found && !(monthly > 0)) return void toast.error("Enter the monthly payment");
-    if (!found && !/^\d{4}-\d{2}-\d{2}$/.test(form.start)) return void toast.error("Enter the day of the first payment");
+    // In the order the fields are laid out, so the first one to fix is the first one shown.
+    if (!name) return problem("name", `Give it a name, like ${EXAMPLE_NAMES[form.icon]}`);
+    if (!found && !(monthly > 0)) return problem("monthly", "Enter the monthly payment");
+    if (!found && !/^\d{4}-\d{2}-\d{2}$/.test(form.start)) return problem("start", "Pick the day of the first payment");
+    if (!Number.isInteger(payments) || payments < 1 || payments > 60) return problem("payments", "Payments is a whole number, 1 to 60");
+    if (price !== null && !(price > 0)) return problem("price", "Enter the price in dollars, or leave it blank");
 
     const settings = found
       ? { name, icon: form.icon, payments, price }
@@ -230,7 +247,7 @@ function PlanDialog({
                   type="button"
                   role="radio"
                   aria-checked={form.icon === icon}
-                  onClick={() => set({ icon })}
+                  onClick={() => pickIcon(icon)}
                   className={cn(
                     "flex flex-col items-center gap-1 rounded-lg border px-2 pt-2 pb-1.5 text-xs transition-colors",
                     form.icon === icon
@@ -251,7 +268,8 @@ function PlanDialog({
               id="installment-name"
               value={form.name}
               onChange={(e) => set({ name: e.target.value })}
-              placeholder={form.icon === "other" ? "e.g. Couch" : `e.g. ${ICON_LABELS[form.icon]}`}
+              placeholder={`e.g. ${EXAMPLE_NAMES[form.icon]}`}
+              aria-invalid={invalid === "name" || undefined}
               maxLength={60}
             />
           </div>
@@ -264,6 +282,7 @@ function PlanDialog({
                   <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-xs text-muted-foreground">$</span>
                   <Input
                     id="installment-monthly"
+                    aria-invalid={invalid === "monthly" || undefined}
                     inputMode="decimal"
                     value={form.monthly}
                     onChange={(e) => set({ monthly: e.target.value })}
@@ -274,7 +293,13 @@ function PlanDialog({
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="installment-start">First payment</Label>
-                <Input id="installment-start" type="date" value={form.start} onChange={(e) => set({ start: e.target.value })} />
+                <Input
+                  id="installment-start"
+                  type="date"
+                  value={form.start}
+                  onChange={(e) => set({ start: e.target.value })}
+                  aria-invalid={invalid === "start" || undefined}
+                />
               </div>
             </div>
           )}
@@ -284,6 +309,7 @@ function PlanDialog({
               <Label htmlFor="installment-payments">Payments</Label>
               <Input
                 id="installment-payments"
+                aria-invalid={invalid === "payments" || undefined}
                 type="number"
                 inputMode="numeric"
                 min="1"
@@ -298,6 +324,7 @@ function PlanDialog({
                 <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 font-mono text-xs text-muted-foreground">$</span>
                 <Input
                   id="installment-price"
+                  aria-invalid={invalid === "price" || undefined}
                   inputMode="decimal"
                   value={form.price}
                   onChange={(e) => set({ price: e.target.value })}

@@ -411,3 +411,21 @@ test("recurring: a subscription the bank missed is found in your charges, across
   await sheet.getByRole("button", { name: "Not a subscription" }).click();
   await expect(page.getByRole("button", { name: /^Amazon Prime,/ })).toHaveCount(0);
 });
+
+test("recurring: monthly and yearly subscriptions apart, each with its own total", async ({ page }) => {
+  await page.goto("/recurring");
+  await afterWelcome(page);
+  const byOften = page.locator("[data-slot=card]").filter({ hasText: "By how often" });
+  await expect(byOften.getByRole("button", { name: /Yearly/ })).toContainText("$65.00");
+  await expect(byOften.getByRole("button", { name: /Yearly/ })).toContainText("a year");
+
+  await page.getByRole("radiogroup", { name: "How often" }).getByRole("radio", { name: /^Yearly/ }).click();
+  await expect(page.getByRole("button", { name: /^Costco Membership,/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Netflix,/ })).toHaveCount(0);
+  await expect(page.getByText("Total a year")).toBeVisible();
+
+  await byOften.getByRole("button", { name: /Monthly/ }).click();
+  await expect(page.getByRole("button", { name: /^Netflix,/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Costco Membership,/ })).toHaveCount(0);
+  await expect(page.getByText("Total a month")).toBeVisible();
+});

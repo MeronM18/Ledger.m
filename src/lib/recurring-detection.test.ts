@@ -109,6 +109,16 @@ describe("detectRecurring across accounts", () => {
     expect(detectRecurring([...kroger, ...uber], "2026-06-20")).toEqual([]);
   });
 
+  it("doesn't take two different charges a year apart as a yearly plan", () => {
+    const pharmacy = [
+      { date: "2025-03-11", name: "CVS Pharmacy", amount: 41.2, category: "MEDICAL" },
+      { date: "2026-03-14", name: "CVS Pharmacy", amount: 76.02, category: "MEDICAL" },
+    ];
+    expect(detectRecurring(pharmacy, "2026-06-20")).toEqual([]);
+    // A yearly renewal at one price is.
+    expect(detectRecurring(pharmacy.map((c) => ({ ...c, name: "Costco Membership", amount: 65, category: "GENERAL_SERVICES" })), "2026-06-20")).toHaveLength(1);
+  });
+
   it("never takes transfers or income", () => {
     expect(detectRecurring(monthly("Savings", 200).map((c) => ({ ...c, category: "TRANSFER_OUT" })), "2026-06-20")).toEqual([]);
   });

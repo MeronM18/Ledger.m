@@ -21,6 +21,19 @@ export const ICON_LABELS: Record<InstallmentIcon, string> = {
   other: "Other",
 };
 
+// A name to suggest for each, as a placeholder and in the reminder to fill it in.
+export const EXAMPLE_NAMES: Record<InstallmentIcon, string> = {
+  laptop: "MacBook Air",
+  phone: "iPhone 17 Pro",
+  tablet: "iPad Air",
+  watch: "Apple Watch",
+  headphones: "AirPods Pro",
+  other: "Couch",
+};
+
+// Apple Card Monthly Installments: 24 payments for an iPhone, 12 for the rest.
+export const DEFAULT_PAYMENTS_FOR: Record<InstallmentIcon, number> = { laptop: 12, phone: 24, tablet: 12, watch: 12, headphones: 12, other: 12 };
+
 const money = z.number().positive().max(1_000_000);
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 

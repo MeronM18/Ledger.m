@@ -772,6 +772,82 @@ function WhereItGoes({ items, onOpen }: { items: Item[]; onOpen: (key: string) =
   );
 }
 
+/** How often it charges, as the list filters it: monthly, yearly, or anything else (weekly, twice a month). */
+type Often = "all" | "monthly" | "yearly" | "other";
+const oftenOf = (item: Item): Exclude<Often, "all"> => (item.frequency === "MONTHLY" ? "monthly" : item.frequency === "ANNUALLY" ? "yearly" : "other");
+
+/**
+ * Monthly and yearly subscriptions apart: how many, and what they cost in
+ * their own terms (a month for the monthly ones, a year for the yearly
+ * ones). Each row filters the list.
+ */
+function ByHowOften({ items, value, onChange }: { items: Item[]; value: Often; onChange: (v: Often) => void }) {
+  const group = (o: Exclude<Often, "all">) => items.filter((i) => oftenOf(i) === o);
+  const monthlyOnes = group("monthly");
+  const yearlyOnes = group("yearly");
+  const otherOnes = group("other");
+  const perMonth = items.reduce((s, i) => s + monthly(i), 0);
+  const yearTotal = yearlyOnes.reduce((s, i) => s + i.amount, 0);
+  const rows: { value: Exclude<Often, "all">; label: string; count: number; amount: number; per: string; note?: string }[] = [
+    { value: "monthly", label: "Monthly", count: monthlyOnes.length, amount: monthlyOnes.reduce((s, i) => s + i.amount, 0), per: "a month" },
+    { value: "yearly", label: "Yearly", count: yearlyOnes.length, amount: yearTotal, per: "a year", note: yearTotal > 0 ? `about ${formatCurrency(yearTotal / 12, "USD")} a month` : undefined },
+    ...(otherOnes.length > 0
+      ? [{ value: "other" as const, label: "Weekly and other", count: otherOnes.length, amount: otherOnes.reduce((s, i) => s + monthly(i), 0), per: "a month" }]
+      : []),
+  ];
+  if (items.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>By how often</CardTitle>
+        <p className="text-xs text-muted-foreground">Pick one to see only those</p>
+      </CardHeader>
+      <CardContent className="flex flex-col">
+        <ul className="-mx-2 flex flex-col">
+          {rows.map((r) => {
+            const on = value === r.value;
+            return (
+              <li key={r.value}>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => onChange(on ? "all" : r.value)}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-bone/6",
+                    on && "bg-bone/[0.08] ring-1 ring-bone/10 ring-inset"
+                  )}
+                >
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-sm text-bone">{r.label}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {r.count} {r.count === 1 ? "subscription" : "subscriptions"}
+                      {r.note ? ` · ${r.note}` : ""}
+                    </span>
+                  </span>
+                  <span className="flex flex-col items-end">
+                    <span className={cn(MONEY, "text-sm text-bone")}>{formatCurrency(r.amount, "USD")}</span>
+                    <span className="text-[11px] text-muted-foreground">{r.per}</span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-2 flex items-center justify-between gap-3 border-t border-border pt-3">
+          <span className="text-sm text-muted-foreground">All together</span>
+          <span className="flex flex-col items-end">
+            <span className={cn(MONEY, "text-sm font-semibold text-bone")}>{formatCurrency(perMonth, "USD")}</span>
+            <span className="text-[11px] text-muted-foreground">
+              a month · <span className={MONEY}>{formatCurrency(perMonth * 12, "USD")}</span> a year
+            </span>
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 type Status = "active" | "cancelled";
 type Sort = "next" | "amount" | "name";
 
@@ -804,6 +880,7 @@ export function RecurringBoard({
   const [sort, setSort] = useState<Sort>("next");
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState("all");
+  const [often, setOften] = useState<Often>("all");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openCount, setOpenCount] = useState(0);
 
@@ -820,6 +897,7 @@ export function RecurringBoard({
     const list = all.filter(
       (i) =>
         (status === "active" ? i.active : !i.active) &&
+        (often === "all" || oftenOf(i) === often) &&
         (accountFilter === "all" || (accountFilter === "manual" ? i.source === "manual" && i.accountId === null : i.accountId === accountFilter)) &&
         (!q || i.name.toLowerCase().includes(q))
     );
@@ -831,8 +909,13 @@ export function RecurringBoard({
           ? byName(a, b)
           : (a.next ?? "9999").localeCompare(b.next ?? "9999") || byName(a, b)
     );
-  }, [all, status, sort, search, accountFilter]);
+  }, [all, status, sort, search, accountFilter, often]);
   const shownMonthly = shown.reduce((s, i) => s + monthly(i), 0);
+  // Yearly ones add up by the year; everything else by the month.
+  const byYear = often === "yearly";
+  const shownYearly = shown.reduce((s, i) => s + i.amount, 0);
+  const inStatus = all.filter((i) => (status === "active" ? i.active : !i.active));
+  const countOf = (o: Exclude<Often, "all">) => inStatus.filter((i) => oftenOf(i) === o).length;
 
   const cancelledCount = all.length - active.length;
   const open = (key: string) => {
@@ -893,6 +976,17 @@ export function RecurringBoard({
                 ]}
               />
               <Segmented
+                label="How often"
+                value={often}
+                onChange={setOften}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "monthly", label: `Monthly (${countOf("monthly")})` },
+                  { value: "yearly", label: `Yearly (${countOf("yearly")})` },
+                  ...(countOf("other") > 0 || often === "other" ? [{ value: "other" as const, label: `Other (${countOf("other")})` }] : []),
+                ]}
+              />
+              <Segmented
                 label="Sort by"
                 value={sort}
                 onChange={setSort}
@@ -932,7 +1026,7 @@ export function RecurringBoard({
             </div>
             {shown.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-                {search || accountFilter !== "all"
+                {search || accountFilter !== "all" || often !== "all"
                   ? "Nothing matches these filters."
                   : status === "active"
                     ? "No active subscriptions yet. Add one, or they'll show up as your bank spots them."
@@ -947,10 +1041,12 @@ export function RecurringBoard({
             )}
             {status === "active" && shown.length > 0 && (
               <div className={cn(GRID, "border-t border-border bg-muted/40 px-3 py-2.5 sm:px-4")}>
-                <span className="text-sm font-semibold text-bone">Total a month</span>
+                <span className="text-sm font-semibold text-bone">{byYear ? "Total a year" : "Total a month"}</span>
                 <span className="hidden md:block" />
-                <span className="hidden text-xs text-muted-foreground md:block">{formatCurrency(shownMonthly * 12, "USD")} a year</span>
-                <span className={cn(MONEY, "text-right text-sm font-semibold text-bone")}>{formatCurrency(shownMonthly, "USD")}</span>
+                <span className="hidden text-xs text-muted-foreground md:block">
+                  {byYear ? `about ${formatCurrency(shownYearly / 12, "USD")} a month` : `${formatCurrency(shownMonthly * 12, "USD")} a year`}
+                </span>
+                <span className={cn(MONEY, "text-right text-sm font-semibold text-bone")}>{formatCurrency(byYear ? shownYearly : shownMonthly, "USD")}</span>
                 <span />
               </div>
             )}
@@ -960,6 +1056,14 @@ export function RecurringBoard({
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
+          <ByHowOften
+            items={active}
+            value={often}
+            onChange={(v) => {
+              setOften(v);
+              setStatus("active");
+            }}
+          />
           <ComingUp items={active} todayIso={todayIso} onOpen={open} />
           <WhereItGoes items={active} onOpen={open} />
           <SubscriptionInsightsCard insights={insights} />

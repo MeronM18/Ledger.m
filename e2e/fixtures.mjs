@@ -202,6 +202,7 @@ export function buildFixtures(now = new Date()) {
       { id: uuid("ms"), name: "Snapchat+", amount: 1.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 29)), notes: null, is_active: true },
       // Added from the Apple Card statements' suggestions.
       { id: uuid("ms"), name: "Uber One", amount: 9.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 12)), notes: "Found on your Apple Card", is_active: true },
+      { id: uuid("ms"), name: "Costco Membership", amount: 65, frequency: "ANNUALLY", next_billing_date: iso(addDays(today, 120)), notes: null, is_active: true },
       // Added by hand before the bank picked it up: the bank's Spotify stands for it.
       { id: uuid("ms"), name: "Spotify", amount: 11.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 5)), notes: null, is_active: true },
     ],
