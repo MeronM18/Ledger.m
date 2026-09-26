@@ -86,7 +86,7 @@ test("goals: each month's deposits against what the plan needs, and the latest a
   // What went into goal accounts this month, at the top.
   await expect(page.getByText(/^Put in this \w+$/)).toBeVisible();
 
-  await page.getByRole("button", { name: "Open Start a business" }).click();
+  await page.getByRole("button", { name: /^Start a business:/ }).click();
   const business = page.getByRole("dialog");
 
   const months = business.getByRole("region", { name: "Start a business, month by month" });

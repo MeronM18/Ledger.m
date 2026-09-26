@@ -50,8 +50,11 @@ export default async function GoalsPage() {
   return (
     <div className="flex flex-col gap-6">
       {/* Room at the right for the alerts bell. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 md:pr-12">
-        <h1 className="font-serif text-2xl font-semibold text-bone">Goals</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3 md:pr-12">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-serif text-2xl font-semibold text-bone">Goals</h1>
+          <p className="text-sm text-muted-foreground">What you&apos;re saving for, and how close you are.</p>
+        </div>
         {rows.length > 0 && <NewGoalButton accounts={accounts} pay={pay} today={today} />}
       </div>
 

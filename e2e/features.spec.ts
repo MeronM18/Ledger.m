@@ -189,28 +189,25 @@ test("accounts: grouped by what they are, with net worth over a chosen period an
   await expect(page.locator("[data-transaction]").first()).toContainText("Chase Freedom Flex");
 });
 
-test("goals: each goal says its next step, and its panel says where it stands and what to save", async ({ page }) => {
+test("goals: each goal says where it stands, and its panel says what to save and plans it", async ({ page }) => {
   await page.goto("/goals");
   await afterWelcome(page);
 
-  // The goal that needs attention leads, with its status, one next step and a what-if slider.
-  const card = page.locator("[data-slot=card]").filter({ hasText: "Needs you most" });
-  await expect(card.getByRole("heading", { name: "Start a business" })).toBeVisible();
+  // In progress, the goal needing attention first: its status, what's left and how long there is.
+  const grid = page.getByRole("region", { name: "Goals in progress" });
+  await expect(grid.getByRole("heading").first()).toHaveText("Start a business");
+  const card = grid.locator("> div").filter({ has: page.getByRole("heading", { name: "Start a business" }) });
   await expect(card.getByText(/^(Ahead of pace|On pace|Behind pace)$/)).toBeVisible();
-  await expect(card.getByText(/^(Move \$[\d,]+( more)? from your [A-Z][a-z]{2} \d+ paycheck|Save \$[\d,]+ a month to finish on time)$/)).toBeVisible();
-  const slider = card.getByRole("slider", { name: "Monthly amount to try" });
-  // Sliding to the top amount finishes it early.
-  await slider.focus();
-  await page.keyboard.press("End");
-  await expect(card.getByText(/months? before your date\./)).toBeVisible();
-  // The on-time amount lands on the date, with nothing short on it.
-  await card.getByRole("button", { name: /^On time/ }).click();
-  await expect(card.getByText(/right on time\./)).toBeVisible();
-  await expect(card.getByText(/\(your date\)/)).toBeVisible();
-  await expect(card.getByText(/· reached$/)).toBeVisible();
+  await expect(card.getByText(/remaining/)).toBeVisible();
+  await expect(card.getByText(/^\d+ (months|days|years) left$/)).toBeVisible();
+  // Its menu edits it.
+  await card.getByRole("button", { name: "Start a business options" }).click();
+  await page.getByRole("button", { name: "Edit goal" }).click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: "Edit goal" })).toBeVisible();
+  await page.keyboard.press("Escape");
 
-  // Its panel has the rest.
-  await card.getByRole("button", { name: "Open Start a business" }).click();
+  // Its panel has the rest, and a what-if slider.
+  await card.getByRole("button", { name: /^Start a business:/ }).click();
   const panel = page.getByRole("dialog");
   await expect(panel.getByText(/^\$[\d,]+ to go · \d+ months? left$/)).toBeVisible();
   await expect(panel.getByText("Save each month")).toBeVisible();
@@ -218,6 +215,16 @@ test("goals: each goal says its next step, and its panel says where it stands an
   await expect(panel.getByText(/^From your [A-Z][a-z]{2} \d+ check$/)).toBeVisible();
   await expect(panel.getByText("At your current pace")).toBeVisible();
   await expect(panel.getByRole("group", { name: /saved over time/ })).toBeVisible();
+  const slider = panel.getByRole("slider", { name: "Monthly amount to try" });
+  // Sliding to the top amount finishes it early.
+  await slider.focus();
+  await page.keyboard.press("End");
+  await expect(panel.getByText(/months? before your date\./)).toBeVisible();
+  // The on-time amount lands on the date, with nothing short on it.
+  await panel.getByRole("button", { name: /^On time/ }).click();
+  await expect(panel.getByText(/right on time\./)).toBeVisible();
+  await expect(panel.getByText(/\(your date\)/)).toBeVisible();
+  await expect(panel.getByText(/· reached$/)).toBeVisible();
   await page.keyboard.press("Escape");
 
   // Tracked by hand: no pace to read, but still a monthly amount.
@@ -238,6 +245,8 @@ test("goals: each goal says its next step, and its panel says where it stands an
   await dialog.getByRole("checkbox", { name: /High Yield Savings/ }).check();
   await dialog.getByRole("spinbutton", { name: /Share of High Yield Savings/ }).fill("50");
   await dialog.getByRole("button", { name: "Create goal" }).click();
+  // Already there, so it's under Reached.
+  await page.getByRole("tab", { name: /^Reached/ }).click();
   await expect(page.getByRole("button", { name: /^New bike: \$9,125\.00 of \$8,000\.00/ })).toBeVisible();
 });
 

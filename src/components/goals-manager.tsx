@@ -5,8 +5,11 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight,
+  ArrowUpDown,
   Check,
   ChevronRight,
+  Clock,
+  MoreVertical,
   Pencil,
   PiggyBank,
   Plus,
@@ -27,6 +30,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetBody, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { addDays, daysBetween } from "@/lib/account-history";
@@ -85,29 +90,41 @@ function GoalDialog({
   today,
   trigger,
   preset,
+  defaultOpen = false,
+  onClosed,
 }: {
   goal?: GoalRow;
   accounts: AccountChoice[];
   pay: PaySummary | null;
   today: string;
-  trigger: React.ReactNode;
+  // What opens it; none when it's opened from a menu (defaultOpen) and removed once closed (onClosed).
+  trigger?: React.ReactNode;
   // A starting point for a new goal (from the ideas), filled in when it opens.
   preset?: { name: string; icon: GoalIcon; color: GoalColor };
+  defaultOpen?: boolean;
+  onClosed?: () => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(defaultOpen);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    if (!next) onClosed?.();
+  };
   const [saving, setSaving] = useState(false);
-  const [name, setName] = useState("");
-  const [target, setTarget] = useState("");
-  const [saved, setSaved] = useState("");
-  const [date, setDate] = useState("");
-  const [mode, setMode] = useState<TrackMode>("balance");
-  const [icon, setIcon] = useState<GoalIcon | null>(null);
-  const [color, setColor] = useState<GoalColor | null>(null);
+  // Filled in from the goal (or the idea) when it opens.
+  const [name, setName] = useState(goal?.name ?? preset?.name ?? "");
+  const [target, setTarget] = useState(goal ? String(goal.target) : "");
+  const [saved, setSaved] = useState(goal ? String(goal.savedManual) : "");
+  const [date, setDate] = useState(goal?.targetDate ?? "");
+  const [mode, setMode] = useState<TrackMode>(goal ? (goal.accountRefs.length === 0 ? "hand" : goal.options.tracking) : "balance");
+  const [icon, setIcon] = useState<GoalIcon | null>(goal?.options.icon ?? preset?.icon ?? null);
+  const [color, setColor] = useState<GoalColor | null>(goal?.options.color ?? preset?.color ?? null);
   // Refs ("plaid:<id>" / "manual:<id>" / "asset:<id>") of what this goal follows.
-  const [followed, setFollowed] = useState<string[]>([]);
+  const [followed, setFollowed] = useState<string[]>(goal?.accountRefs ?? []);
   // Percent of each followed account that counts; missing is all of it.
-  const [shares, setShares] = useState<Record<string, string>>({});
+  const [shares, setShares] = useState<Record<string, string>>(() =>
+    Object.fromEntries(Object.entries(goal?.options.shares ?? {}).map(([k, v]) => [k, String(v)]))
+  );
 
   function handleOpenChange(next: boolean) {
     if (next) {
@@ -200,7 +217,7 @@ function GoalDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{goal ? "Edit goal" : "New savings goal"}</DialogTitle>
@@ -436,7 +453,7 @@ export function NewGoalButton({ accounts, pay, today }: { accounts: AccountChoic
       pay={pay}
       today={today}
       trigger={
-        <Button size="sm" variant="outline">
+        <Button size="sm">
           <Plus className="size-3.5" />
           New goal
         </Button>
@@ -968,8 +985,9 @@ function Ring({ goal, size = 64, stroke = 6 }: { goal: GoalRow; size?: number; s
           className="transition-[stroke-dasharray] duration-700 ease-out"
         />
       </svg>
-      <span className={cn("absolute inset-0 flex items-center justify-center font-mono font-semibold text-bone tabular-nums", size >= 100 ? "text-lg" : "text-xs")}>
-        {percent(share)}
+      <span className={cn("absolute inset-0 flex items-baseline justify-center self-center font-mono font-semibold text-bone tabular-nums", size >= 100 ? "text-lg" : size >= 80 ? "text-base" : "text-xs")}>
+        {Math.round(share * 100)}
+        <span className="ml-px text-[0.65em] font-normal text-muted-foreground">%</span>
       </span>
     </span>
   );
@@ -986,66 +1004,124 @@ function StatusPill({ goal }: { goal: GoalRow }) {
   );
 }
 
-/** The one thing to do next for a goal, in a few words. */
-function nextStep(goal: GoalRow, today: string): { text: string; tone: "good" | "bad" | "quiet" | "act" } {
-  const { plan, nextMove: move, verdict, reachDate } = goal.insight;
-  if (goal.status === "complete") return { text: "Reached. Nice work.", tone: "good" };
-  if (verdict === "overdue") return { text: "Its date has passed. Pick a new one.", tone: "bad" };
-  if (move) {
-    const toGo = move.moved === null ? move.suggested : move.suggested - move.moved;
-    if (toGo > 0.5) {
-      return { text: `Move ${dollars(toGo)}${move.moved ? " more" : ""} from your ${shortDate(move.paycheck.date, today)} paycheck`, tone: "act" };
-    }
-    if (move.moved !== null) return { text: `This paycheck's ${dollars(move.suggested)} is in`, tone: "good" };
+/** How long is left, or how it ended, for the foot of a card. */
+function timeLeft(goal: GoalRow, today: string): string {
+  if (goal.status === "complete") {
+    const reached = goal.insight.milestones.at(-1)?.date;
+    return reached ? `Reached ${shortDate(reached, today)}` : "Reached";
   }
-  if (plan && goal.targetDate) {
-    if (plan.perMonth === 0) return { text: "Interest alone gets it there", tone: "good" };
-    return { text: `Save ${dollars(plan.perMonth)} a month to finish on time`, tone: "act" };
-  }
-  if (verdict === "open" && reachDate) return { text: `On pace to finish around ${roughDate(reachDate, today)}`, tone: "quiet" };
-  if (!goal.targetDate) return { text: "Add a date to get a monthly plan", tone: "quiet" };
-  return { text: "A pace shows after a few weeks of history", tone: "quiet" };
+  if (!goal.targetDate) return "No date";
+  if (goal.targetDate < today) return "Past its date";
+  const months = monthsUntil(today, goal.targetDate) ?? 0;
+  if (months >= 24) return `${Math.floor(months / 12)} years left`;
+  return months <= 1 ? `${Math.max(0, daysBetween(today, goal.targetDate))} days left` : `${months} months left`;
 }
 
-const STEP_TONE = { good: "text-moss", bad: "text-oxblood-text", quiet: "text-muted-foreground", act: "text-champagne" } as const;
-
-/** One goal in the list: where it stands and what to do next. Opens its panel. */
-function GoalCard({ goal, today, onOpen }: { goal: GoalRow; today: string; onOpen: () => void }) {
-  const step = nextStep(goal, today);
-  const monthsLeft = goal.targetDate && goal.targetDate > today ? monthsUntil(today, goal.targetDate) : null;
+/**
+ * One goal as a card: its mark and name with a menu, its date and how it's
+ * going, what's saved against what it's for beside a ring of how far along
+ * it is, and what's left and how long there is to go. Opens its panel.
+ */
+function GoalCard({
+  goal,
+  today,
+  accounts,
+  pay,
+  onOpen,
+}: {
+  goal: GoalRow;
+  today: string;
+  accounts: AccountChoice[];
+  pay: PaySummary | null;
+  onOpen: () => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const [dialog, setDialog] = useState<"edit" | "delete" | null>(null);
+  const done = goal.status === "complete";
+  const late = !done && goal.targetDate !== null && goal.targetDate < today;
+  const item = "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-muted";
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      aria-label={`${goal.name}: ${formatCurrency(goal.saved, "USD")} of ${formatCurrency(goal.target, "USD")}`}
-      className="group flex flex-col gap-4 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-bone/20 hover:bg-bone/[0.03] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-    >
-      <span className="flex items-start gap-3">
-        <GoalIcon goal={goal} />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate text-sm font-medium text-bone">{goal.name}</span>
-          <span className="truncate text-xs text-muted-foreground">
-            {goal.targetDate ? `By ${shortDate(goal.targetDate, today)}` : "No date"}
-            {monthsLeft ? ` · ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} left` : ""}
-          </span>
+    <div className="group relative flex flex-col gap-4 rounded-xl border border-border bg-card p-5 transition-colors hover:border-bone/20 hover:bg-bone/[0.02]">
+      <div className="flex items-center gap-3">
+        <GoalIcon goal={goal} className="size-9 rounded-lg" />
+        <h3 className="min-w-0 flex-1 truncate text-base font-medium text-bone">
+          {/* The whole card opens the goal; the menu stays its own button above it. */}
+          <button
+            type="button"
+            onClick={onOpen}
+            aria-label={`${goal.name}: ${formatCurrency(goal.saved, "USD")} of ${formatCurrency(goal.target, "USD")}`}
+            className="text-left after:absolute after:inset-0 after:rounded-xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-champagne/60"
+          >
+            {goal.name}
+          </button>
+        </h3>
+        <Popover open={menu} onOpenChange={setMenu}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={`${goal.name} options`}
+              className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-bone data-[state=open]:bg-muted data-[state=open]:text-bone"
+            >
+              <MoreVertical className="size-4" aria-hidden />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-44 p-1">
+            <button type="button" className={item} onClick={() => (setMenu(false), onOpen())}>
+              <ChevronRight className="size-3.5 text-muted-foreground" aria-hidden />
+              See details
+            </button>
+            <button type="button" className={item} onClick={() => (setMenu(false), setDialog("edit"))}>
+              <Pencil className="size-3.5 text-muted-foreground" aria-hidden />
+              Edit goal
+            </button>
+            <button type="button" className={cn(item, "text-oxblood-text")} onClick={() => (setMenu(false), setDialog("delete"))}>
+              <Trash2 className="size-3.5" aria-hidden />
+              Delete
+            </button>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ring-1 ring-inset",
+            late ? "bg-oxblood/10 text-oxblood-text ring-oxblood/25" : "bg-bone/[0.05] text-muted-foreground ring-bone/10"
+          )}
+        >
+          <Clock className="size-3" aria-hidden />
+          {goal.targetDate ? fullDate(goal.targetDate) : "No date"}
         </span>
         <StatusPill goal={goal} />
-      </span>
-      <span className="flex items-center gap-4">
-        <Ring goal={goal} />
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <Money amount={goal.saved} currency="USD" tone="neutral" className="text-xl font-semibold" />
-          <span className="text-xs text-muted-foreground">
-            of {dollars(goal.target)}
-            {goal.status !== "complete" ? ` · ${dollars(goal.remaining)} to go` : ""}
-          </span>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="flex flex-wrap items-baseline gap-x-1.5">
+            <Money amount={goal.saved} currency="USD" tone="neutral" className="text-[1.6rem] leading-none font-semibold" />
+            <span className="text-sm text-muted-foreground">saved</span>
+          </p>
+          <span className="text-sm text-muted-foreground">from {formatCurrency(goal.target, "USD")}</span>
+        </div>
+        <Ring goal={goal} size={84} stroke={7} />
+      </div>
+
+      <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3.5 text-xs">
+        <span className="text-muted-foreground">
+          {done ? (
+            <span className="text-moss">All of it saved</span>
+          ) : (
+            <>
+              <span className="font-mono text-sm text-bone tabular-nums">{formatCurrency(goal.remaining, "USD")}</span> remaining
+            </>
+          )}
         </span>
-      </span>
-      <span className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-3 text-xs">
-        <span className={cn("min-w-0", STEP_TONE[step.tone])}>{step.text}</span>
-        <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
-      </span>
-    </button>
+        <span className={cn("shrink-0", late ? "text-oxblood-text" : "text-muted-foreground")}>{timeLeft(goal, today)}</span>
+      </div>
+
+      {dialog === "edit" && <GoalDialog goal={goal} accounts={accounts} pay={pay} today={today} defaultOpen onClosed={() => setDialog(null)} />}
+      {dialog === "delete" && <DeleteGoalButton goal={goal} asMenu onDeleted={() => {}} onClosed={() => setDialog(null)} />}
+    </div>
   );
 }
 
@@ -1053,9 +1129,24 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   return <h3 className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">{children}</h3>;
 }
 
-function DeleteGoalButton({ goal, onDeleted }: { goal: GoalRow; onDeleted: () => void }) {
+function DeleteGoalButton({
+  goal,
+  onDeleted,
+  asMenu = false,
+  onClosed,
+}: {
+  goal: GoalRow;
+  onDeleted: () => void;
+  // Opened from a card's menu: no button of its own, open at once, removed once closed.
+  asMenu?: boolean;
+  onClosed?: () => void;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(asMenu);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    if (!next) onClosed?.();
+  };
   const [busy, setBusy] = useState(false);
   async function remove() {
     setBusy(true);
@@ -1073,12 +1164,14 @@ function DeleteGoalButton({ goal, onDeleted }: { goal: GoalRow; onDeleted: () =>
   }
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" variant="ghost" className="text-oxblood-text hover:text-oxblood-text">
-          <Trash2 className="size-3.5" />
-          Delete
-        </Button>
-      </DialogTrigger>
+      {!asMenu && (
+        <DialogTrigger asChild>
+          <Button size="sm" variant="ghost" className="text-oxblood-text hover:text-oxblood-text">
+            <Trash2 className="size-3.5" />
+            Delete
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Delete {goal.name}?</DialogTitle>
@@ -1185,6 +1278,13 @@ function GoalDetail({
           </section>
         )}
 
+        {goal.status !== "complete" && (
+          <section className="flex flex-col gap-2.5">
+            <SectionTitle>Plan it</SectionTitle>
+            <WhatIf goal={goal} today={today} />
+          </section>
+        )}
+
         {goal.insight.history && (
           <section className="flex flex-col gap-2.5">
             <SectionTitle>Saved over time</SectionTitle>
@@ -1208,15 +1308,25 @@ function GoalDetail({
 
 // ---- The goal that needs you most, with a what-if planner --------------------
 
-/** The goal most worth attention: past its date, then behind, then the soonest date; reached goals never. */
-function featuredGoal(goals: GoalRow[]): GoalRow | null {
-  const rank = (g: GoalRow) => {
-    const v = g.insight.verdict;
-    return v === "overdue" ? 0 : v === "behind" || v === "stalled" ? 1 : g.targetDate ? 2 : 3;
-  };
-  const open = goals.filter((g) => g.status !== "complete");
-  return open.sort((a, b) => rank(a) - rank(b) || (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") || b.percent - a.percent)[0] ?? null;
-}
+// The ways the goals can be ordered.
+const SORTS = {
+  attention: {
+    label: "Needs attention",
+    // Past its date, then behind, then the soonest date.
+    compare: (a: GoalRow, b: GoalRow) => {
+      const rank = (g: GoalRow) => {
+        const v = g.insight.verdict;
+        return v === "overdue" ? 0 : v === "behind" || v === "stalled" ? 1 : g.targetDate ? 2 : 3;
+      };
+      return rank(a) - rank(b) || (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") || b.percent - a.percent;
+    },
+  },
+  date: { label: "Nearest date", compare: (a: GoalRow, b: GoalRow) => (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") },
+  remaining: { label: "Most to go", compare: (a: GoalRow, b: GoalRow) => b.remaining - a.remaining },
+  progress: { label: "Furthest along", compare: (a: GoalRow, b: GoalRow) => b.percent - a.percent },
+  name: { label: "Name", compare: (a: GoalRow, b: GoalRow) => a.name.localeCompare(b.name) },
+} as const;
+type SortKey = keyof typeof SORTS;
 
 const monthShort = (key: string) => new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
 const monthLong = (key: string) => new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
@@ -1466,54 +1576,6 @@ function WhatIf({ goal, today }: { goal: GoalRow; today: string }) {
   );
 }
 
-function FeaturedGoal({ goal, today, onOpen }: { goal: GoalRow; today: string; onOpen: () => void }) {
-  const step = nextStep(goal, today);
-  const monthsLeft = goal.targetDate && goal.targetDate > today ? monthsUntil(today, goal.targetDate) : null;
-  return (
-    <Card className="relative overflow-hidden">
-      {/* A soft wash of the goal's color behind it. */}
-      <div
-        className="pointer-events-none absolute -top-24 -left-24 size-72 rounded-full opacity-[0.07] blur-3xl"
-        style={{ backgroundColor: accentFor(goal.options) }}
-        aria-hidden
-      />
-      <CardContent className="relative grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-10">
-        <div className="flex flex-col gap-5">
-          <div className="flex items-start gap-3">
-            <GoalIcon goal={goal} className="size-11" />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <span className="text-[11px] font-medium tracking-[0.1em] text-muted-foreground uppercase">Needs you most</span>
-              <h2 className="truncate text-lg font-medium text-bone">{goal.name}</h2>
-              <span className="text-xs text-muted-foreground">
-                {goal.targetDate ? `By ${fullDate(goal.targetDate)}` : "No date"}
-                {monthsLeft ? ` · ${monthsLeft} month${monthsLeft === 1 ? "" : "s"} left` : ""}
-              </span>
-            </div>
-            <StatusPill goal={goal} />
-          </div>
-          <div className="flex items-center gap-5">
-            <Ring goal={goal} size={112} stroke={9} />
-            <div className="flex min-w-0 flex-col gap-1">
-              <Money amount={goal.saved} currency="USD" tone="neutral" className="text-3xl font-semibold" />
-              <span className="text-sm text-muted-foreground">of {formatCurrency(goal.target, "USD")}</span>
-              <span className="text-sm text-muted-foreground">{strong(dollars(goal.remaining))} to go</span>
-            </div>
-          </div>
-          <div className={cn("flex items-center gap-3 rounded-lg border px-3.5 py-3 text-sm", step.tone === "act" ? "border-champagne/30 bg-champagne/[0.06]" : "border-border bg-muted/20")}>
-            <ArrowRight className={cn("size-4 shrink-0", STEP_TONE[step.tone])} aria-hidden />
-            <span className={cn("min-w-0 flex-1", STEP_TONE[step.tone])}>{step.text}</span>
-          </div>
-          <Button variant="outline" size="sm" className="self-start" onClick={onOpen} aria-label={`Open ${goal.name}`}>
-            See everything about it
-            <ChevronRight className="size-3.5" />
-          </Button>
-        </div>
-        <WhatIf key={goal.id} goal={goal} today={today} />
-      </CardContent>
-    </Card>
-  );
-}
-
 // ---- Ideas for a next goal ----------------------------------------------------
 
 const IDEAS: { name: string; icon: GoalIcon; color: GoalColor; note: string }[] = [
@@ -1572,6 +1634,8 @@ export function GoalsManager({
   today: string;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"going" | "reached">("going");
+  const [sort, setSort] = useState<SortKey>("attention");
   const open = openId ? (goals.find((g) => g.id === openId) ?? null) : null;
 
   if (goals.length === 0) {
@@ -1589,24 +1653,65 @@ export function GoalsManager({
     );
   }
 
-  const featured = featuredGoal(goals);
-  // The rest: ones still in progress first, the reached ones after.
-  const rest = goals.filter((g) => g !== featured).sort((a, b) => Number(a.status === "complete") - Number(b.status === "complete"));
+  const going = goals.filter((g) => g.status !== "complete");
+  const reached = goals.filter((g) => g.status === "complete");
+  // With nothing still going, the reached ones are what there is to show.
+  const view = tab === "reached" || going.length === 0 ? "reached" : "going";
+  const shown = [...(view === "going" ? going : reached)].sort(SORTS[sort].compare);
 
   return (
     <>
-      {featured && <FeaturedGoal goal={featured} today={today} onOpen={() => setOpenId(featured.id)} />}
-      {rest.length > 0 && (
-        <section className="flex flex-col gap-3" aria-label="Your goals">
-          {featured && <SectionTitle>{rest.length === 1 ? "Your other goal" : "Your other goals"}</SectionTitle>}
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {rest.map((g) => (
-              <GoalCard key={g.id} goal={g} today={today} onOpen={() => setOpenId(g.id)} />
-            ))}
-          </div>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border">
+        <div role="tablist" aria-label="Goals" className="flex gap-6">
+          {(
+            [
+              ["going", "In progress", going.length],
+              ["reached", "Reached", reached.length],
+            ] as const
+          ).map(([key, label, count]) => (
+            <button
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={view === key}
+              onClick={() => setTab(key)}
+              className={cn(
+                "-mb-px inline-flex items-center gap-1.5 border-b-2 pb-2.5 text-sm transition-colors",
+                view === key ? "border-champagne text-bone" : "border-transparent text-muted-foreground hover:text-bone"
+              )}
+            >
+              {label}
+              <span className="font-mono text-xs text-muted-foreground tabular-nums">{count}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mb-2 flex items-center gap-2">
+          <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+            <SelectTrigger size="sm" aria-label="Sort goals" className="min-w-40">
+              <ArrowUpDown className="size-3.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper" align="end">
+              {(Object.keys(SORTS) as SortKey[]).map((k) => (
+                <SelectItem key={k} value={k}>
+                  {SORTS[k].label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {shown.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">No goals reached yet. They&apos;ll show here once one is.</p>
+      ) : (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3" aria-label={view === "going" ? "Goals in progress" : "Goals reached"}>
+          {shown.map((g) => (
+            <GoalCard key={g.id} goal={g} today={today} accounts={accounts} pay={pay} onOpen={() => setOpenId(g.id)} />
+          ))}
         </section>
       )}
-      <Ideas goals={goals} accounts={accounts} pay={pay} today={today} />
+      {view === "going" && <Ideas goals={goals} accounts={accounts} pay={pay} today={today} />}
 
       <Sheet open={open !== null} onOpenChange={(next) => !next && setOpenId(null)}>
         <SheetContent
