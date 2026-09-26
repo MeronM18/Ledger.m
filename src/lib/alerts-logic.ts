@@ -3,6 +3,7 @@ import { GOOD_UTILIZATION, type CardUtilization } from "@/lib/credit-utilization
 import { formatCurrency } from "@/lib/format";
 import type { SpendingTransaction } from "@/lib/spending-aggregation";
 import { hasLapsed, hasPriceIncrease, isWithinNextDays, projectNextOccurrence } from "@/lib/subscriptions-aggregation";
+import type { InstallmentDue } from "@/lib/installments";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure, dependency-free. Each function turns current data into the alerts
@@ -21,7 +22,8 @@ export type AlertKind =
   | "import-reminder"
   | "high-utilization"
   | "deposit-review"
-  | "subscription-review";
+  | "subscription-review"
+  | "installment-due";
 
 // `href`: where tapping the push opens, when there's a page for it.
 export type Alert = { key: string; kind: AlertKind; title: string; body: string; href?: string };
@@ -312,4 +314,24 @@ export function subscriptionReviewAlerts(
       href: "/recurring",
     })),
   ];
+}
+
+/**
+ * A payment on an installment plan coming up within `daysAhead` days: one
+ * alert per payment. `due` is only plans still being paid
+ * (installmentPaymentsBetween), so one paid off stops alerting.
+ */
+export function installmentDueAlerts(due: InstallmentDue[], todayIso: string, currency: string): Alert[] {
+  const today = Date.parse(`${todayIso}T00:00:00Z`);
+  return due.map(({ plan, payment }) => {
+    const daysAway = Math.round((Date.parse(`${payment.date}T00:00:00Z`) - today) / 86_400_000);
+    const after = plan.payments - payment.n;
+    return {
+      key: `installment-due:${plan.key}:${payment.date}`,
+      kind: "installment-due" as const,
+      title: `${plan.name} payment ${whenLabel(daysAway)}`,
+      body: `${formatCurrency(payment.amount, currency)}, payment ${payment.n} of ${plan.payments}${plan.accountName ? ` on ${plan.accountName}` : ""}. ${after === 0 ? "It's the last one." : `${after} more after this.`}`,
+      href: "/recurring#installments",
+    };
+  });
 }

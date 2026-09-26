@@ -919,6 +919,11 @@ export function RecurringBoard({
 
   const cancelledCount = all.length - active.length;
   const open = (key: string) => {
+    // An installment payment on the calendar goes to its plan above.
+    if (key.startsWith("installment:")) {
+      document.getElementById("installments")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     setOpenCount((n) => n + 1);
     setOpenKey(key);
   };
@@ -962,7 +967,9 @@ export function RecurringBoard({
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="flex min-w-0 flex-col gap-6">
-          <InstallmentsCard plans={installments} todayIso={todayIso} />
+          <div id="installments" className="scroll-mt-6">
+            <InstallmentsCard plans={installments} todayIso={todayIso} />
+          </div>
 
           <Card className="gap-0 overflow-hidden py-0">
             <div className="flex flex-wrap items-center gap-2 px-3 py-3 sm:px-4">

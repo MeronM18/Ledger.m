@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export type CalendarEvent = { key: string; date: string; name: string; amount: number };
+// `installment`: a payment on an installment plan rather than a subscription, marked apart.
+export type CalendarEvent = { key: string; date: string; name: string; amount: number; installment?: boolean };
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -124,7 +125,7 @@ export function SubscriptionCalendar({
                 {/* Names only fit from tablet width up; a phone cell shows dots and the list below has the detail. */}
                 <span className="flex flex-wrap gap-0.5 sm:hidden" aria-hidden>
                   {dayEvents.slice(0, 3).map((e, idx) => (
-                    <span key={idx} className="size-1.5 rounded-full bg-champagne" />
+                    <span key={idx} className={cn("size-1.5 rounded-full", e.installment ? "bg-moss" : "bg-champagne")} />
                   ))}
                 </span>
                 {dayEvents.slice(0, 2).map((e, idx) => (
@@ -132,7 +133,11 @@ export function SubscriptionCalendar({
                     key={idx}
                     type="button"
                     onClick={() => onOpen(e.key)}
-                    className="hidden w-full min-w-0 items-center justify-between gap-1 rounded border-l-2 border-champagne/70 bg-bone/6 px-1 text-left text-[10px] leading-4 text-bone transition-colors hover:bg-bone/12 sm:flex"
+                    title={e.installment ? `Installment payment: ${e.name}` : undefined}
+                    className={cn(
+                      "hidden w-full min-w-0 items-center justify-between gap-1 rounded border-l-2 bg-bone/6 px-1 text-left text-[10px] leading-4 text-bone transition-colors hover:bg-bone/12 sm:flex",
+                      e.installment ? "border-moss/80" : "border-champagne/70"
+                    )}
                   >
                     <span className="truncate">{e.name}</span>
                     <span className="hidden shrink-0 font-mono text-muted-foreground tabular-nums xl:inline">{Math.round(e.amount)}</span>
@@ -147,6 +152,18 @@ export function SubscriptionCalendar({
           ))}
         </div>
 
+        {monthEvents.some((e) => e.installment) && (
+          <p className="flex gap-4 text-[11px] text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-0.5 rounded-full bg-champagne/70" aria-hidden />
+              Subscription
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-2.5 w-0.5 rounded-full bg-moss/80" aria-hidden />
+              Installment payment
+            </span>
+          </p>
+        )}
         {monthEvents.length > 0 && (
           <ul className="flex flex-col sm:hidden">
             {monthEvents.map((e, i) => (
@@ -154,6 +171,7 @@ export function SubscriptionCalendar({
                 <button type="button" onClick={() => onOpen(e.key)} className="flex w-full items-center justify-between gap-3 py-2 text-left">
                   <span className="min-w-0 text-sm">
                     <span className="text-bone">{e.name}</span>
+                    {e.installment && <span className="text-moss"> · installment</span>}
                     <span className="text-muted-foreground">
                       {" "}
                       · {new Date(`${e.date}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}

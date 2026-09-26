@@ -198,6 +198,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 descriptions={{
                   "large-charge": `Any single charge of ${usd(thresholds.largeCharge)} or more, even with the one above off.`,
                   renewal: `A subscription charging within ${thresholds.renewalDaysAhead} day${thresholds.renewalDaysAhead === 1 ? "" : "s"}.`,
+                  "installment-due": `A payment on an installment plan due within ${thresholds.renewalDaysAhead} day${thresholds.renewalDaysAhead === 1 ? "" : "s"}.`,
                   "low-balance": `A checking or savings account under ${usd(thresholds.lowBalance)}, at most weekly.`,
                 }}
               />

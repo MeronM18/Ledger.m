@@ -10,6 +10,8 @@ import { formatCurrency } from "@/lib/format";
 import { loadForecast } from "@/lib/forecast-data";
 import { verdictLine } from "@/lib/goal-copy";
 import { loadGoals } from "@/lib/goals-data";
+import { installmentPaymentLabel, installmentPaymentsBetween } from "@/lib/installments";
+import { loadSubscriptions } from "@/lib/recurring-extras";
 import { upcomingBills, type CategoryShare } from "@/lib/overview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LedgerTransaction } from "@/lib/spending-data";
@@ -61,8 +63,20 @@ const UPCOMING_SHOWN = 5;
  * page doesn't wait on it.
  */
 export async function UpcomingCard({ todayIso }: { todayIso: string }) {
-  const data = await loadForecast(createAdminClient());
-  const upcoming = data.error ? null : upcomingBills(data.forecast.events, todayIso, UPCOMING_DAYS);
+  const admin = createAdminClient();
+  const [data, subscriptions] = await Promise.all([loadForecast(admin), loadSubscriptions(admin)]);
+  // Installment payments due too, listed with the bills (plans paid off have none).
+  const through = new Date(Date.parse(`${todayIso}T00:00:00Z`) + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const installments = subscriptions.error
+    ? []
+    : installmentPaymentsBetween(subscriptions.installments, todayIso, through).map((d) => ({
+        date: d.payment.date,
+        name: installmentPaymentLabel(d),
+        amount: d.payment.amount,
+        kind: "bill" as const,
+        installment: true,
+      }));
+  const upcoming = data.error ? null : upcomingBills([...data.forecast.events, ...installments], todayIso, UPCOMING_DAYS);
   return (
     <Panel title="Upcoming" href="/recurring" linkLabel="Recurring">
       {upcoming === null ? (
@@ -97,7 +111,7 @@ export async function UpcomingCard({ todayIso }: { todayIso: string }) {
                         {e.kind === "card" ? e.name.replace(/\s+payment$/i, "") : e.name}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {e.kind === "card" ? "Card payment · " : ""}
+                        {e.kind === "card" ? "Card payment · " : "installment" in e ? "Installment · " : ""}
                         {dayLabel(e.date)}
                       </span>
                     </span>

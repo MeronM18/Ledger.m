@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { installmentDueAlerts } from "@/lib/alerts-logic";
 import {
   addMonths,
   buildInstallmentPlans,
   detectInstallments,
+  installmentPaymentLabel,
+  installmentPaymentsBetween,
   paymentNumber,
   resolveInstallmentPrefs,
   type InstallmentCharge,
@@ -155,5 +158,52 @@ describe("resolveInstallmentPrefs", () => {
   it("falls back to nothing set for anything unreadable", () => {
     expect(resolveInstallmentPrefs("nonsense")).toEqual({ detected: {}, added: [] });
     expect(resolveInstallmentPrefs({ detected: 4, added: [{ bad: true }] })).toEqual({ detected: {}, added: [] });
+  });
+});
+
+describe("paid off early, and the payments still to make", () => {
+  const mac = [charge("2026-05-31", 133.25), charge("2026-06-30", 133.25), charge("2026-07-31", 133.25)];
+  const key = `${APPLE}|13325`;
+
+  it("lists the next payments of plans that are going, soonest first", () => {
+    const plans = buildInstallmentPlans(mac, resolveInstallmentPrefs({ detected: { [key]: { name: "MacBook Air" } } }), "2026-09-25");
+    const due = installmentPaymentsBetween(plans, "2026-09-25", "2026-11-05");
+    expect(due.map((d) => d.payment.date)).toEqual(["2026-09-30", "2026-10-31"]);
+    expect(installmentPaymentLabel(due[0])).toBe("MacBook Air · 5 of 12");
+  });
+
+  it("marks a plan paid off early as done, with nothing more due", () => {
+    const prefs = resolveInstallmentPrefs({ detected: { [key]: { paidOff: "2026-09-20" } } });
+    const [plan] = buildInstallmentPlans(mac, prefs, "2026-09-25");
+    expect(plan).toMatchObject({ done: true, left: 0, leftAmount: 0, next: null, paidOff: "2026-09-20", payoff: "2026-09-20" });
+    expect(installmentPaymentsBetween([plan], "2026-09-25", "2027-12-31")).toEqual([]);
+  });
+
+  it("leaves out a plan hidden as not an installment", () => {
+    const [plan] = buildInstallmentPlans(mac, resolveInstallmentPrefs({ detected: { [key]: { hidden: true } } }), "2026-09-25");
+    expect(installmentPaymentsBetween([plan], "2026-09-25", "2027-12-31")).toEqual([]);
+  });
+});
+
+describe("installmentDueAlerts", () => {
+  const mac = [charge("2026-05-31", 133.25), charge("2026-06-30", 133.25), charge("2026-07-31", 133.25)];
+  const key = `${APPLE}|13325`;
+
+  it("alerts for a payment due within the days ahead, once per payment", () => {
+    const plans = buildInstallmentPlans(mac, resolveInstallmentPrefs({ detected: { [key]: { name: "MacBook Air" } } }), "2026-09-27");
+    const [alert, ...rest] = installmentDueAlerts(installmentPaymentsBetween(plans, "2026-09-27", "2026-09-30"), "2026-09-27", "USD");
+    expect(rest).toEqual([]);
+    expect(alert).toMatchObject({
+      key: `installment-due:${key}:2026-09-30`,
+      kind: "installment-due",
+      title: "MacBook Air payment in 3 days",
+      body: "$133.25, payment 5 of 12 on Apple Card. 7 more after this.",
+      href: "/recurring#installments",
+    });
+  });
+
+  it("stops once the plan is paid off", () => {
+    const plans = buildInstallmentPlans(mac, resolveInstallmentPrefs({ detected: { [key]: { paidOff: "2026-09-20" } } }), "2026-09-27");
+    expect(installmentDueAlerts(installmentPaymentsBetween(plans, "2026-09-27", "2026-09-30"), "2026-09-27", "USD")).toEqual([]);
   });
 });

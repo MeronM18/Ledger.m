@@ -5,6 +5,7 @@ import {
   highUtilizationAlerts,
   lowBalanceAlerts,
   priceIncreaseAlerts,
+  installmentDueAlerts,
   renewalAlerts,
   subscriptionReviewAlerts,
   unusualChargeAlerts,
@@ -14,6 +15,7 @@ import {
 import type { AlertSettings } from "@/lib/alert-settings";
 import { accountName } from "@/lib/account-settings";
 import { depositReviewAlerts, depositsToReview } from "@/lib/deposit-review";
+import { installmentPaymentsBetween } from "@/lib/installments";
 import { summarizeUtilization } from "@/lib/credit-utilization";
 import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
@@ -213,6 +215,9 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       date: t.date,
     }));
     alerts.push(...renewalAlerts(candidates, today, thresholds.renewalDaysAhead, currency), ...subscriptionReviewAlerts(subscriptions.review, currency));
+    // Installment payments coming up, on the same days-ahead as renewals.
+    const through = new Date(Date.parse(`${now.isoDate}T00:00:00Z`) + thresholds.renewalDaysAhead * 86_400_000).toISOString().slice(0, 10);
+    alerts.push(...installmentDueAlerts(installmentPaymentsBetween(subscriptions.installments, now.isoDate, through), now.isoDate, currency));
   }
 
   if (accountsRes.error) {

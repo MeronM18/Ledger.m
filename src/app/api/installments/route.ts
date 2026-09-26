@@ -68,8 +68,8 @@ export async function PATCH(request: Request) {
     prefs.added[added] = next.data;
   } else {
     // A found plan keeps its amount and dates from its charges.
-    const { name, icon, payments, price, hidden } = settings;
-    const changes = Object.fromEntries(Object.entries({ name, icon, payments, price, hidden }).filter(([, v]) => v !== undefined));
+    const { name, icon, payments, price, hidden, paidOff } = settings;
+    const changes = Object.fromEntries(Object.entries({ name, icon, payments, price, hidden, paidOff }).filter(([, v]) => v !== undefined));
     prefs.detected[key] = { ...(prefs.detected[key] ?? {}), ...changes };
   }
   return save(admin, prefs);

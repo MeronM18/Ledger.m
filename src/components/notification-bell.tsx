@@ -37,10 +37,13 @@ const KIND: Record<string, { Icon: LucideIcon; className: string }> = {
   transaction: { Icon: ArrowLeftRight, className: "text-muted-foreground" },
   "monthly-summary": { Icon: CalendarRange, className: "text-moss" },
   "deposit-review": { Icon: HandCoins, className: "text-champagne" },
+  "installment-due": { Icon: CalendarClock, className: "text-moss" },
 };
 // Where an alert of each kind takes you, for the ones with something to do.
-const HREF: Record<string, string> = {
-  "deposit-review": "/transactions/deposits",
+const HREF: Record<string, { href: string; label: string }> = {
+  "deposit-review": { href: "/transactions/deposits", label: "Review it" },
+  "subscription-review": { href: "/recurring", label: "Review it" },
+  "installment-due": { href: "/recurring#installments", label: "See the plan" },
 };
 const FALLBACK = { Icon: Bell, className: "text-muted-foreground" };
 
@@ -121,8 +124,8 @@ export function NotificationBell({ alerts, seenAt, className }: { alerts: BellAl
                     <p className="text-sm font-medium">{a.title}</p>
                     <p className="text-xs text-muted-foreground">{a.body}</p>
                     {HREF[a.kind] && (
-                      <Link href={HREF[a.kind]} onClick={() => setOpen(false)} className="mt-0.5 self-start text-xs text-champagne underline-offset-4 hover:underline">
-                        Review it
+                      <Link href={HREF[a.kind].href} onClick={() => setOpen(false)} className="mt-0.5 self-start text-xs text-champagne underline-offset-4 hover:underline">
+                        {HREF[a.kind].label}
                       </Link>
                     )}
                   </div>

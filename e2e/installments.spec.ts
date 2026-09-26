@@ -73,3 +73,27 @@ test("installments: the add form's hints follow what it is, and point at the fie
   await expect(page.getByText("Enter the monthly payment")).toBeVisible();
   await expect(dialog.getByLabel("Monthly payment")).toBeFocused();
 });
+
+test("installments: payments due are on the calendar, and a plan paid off early leaves it", async ({ page }) => {
+  await page.goto("/recurring");
+  await afterWelcome(page);
+  const card = page.getByRole("region", { name: "Installments" });
+  await expect(card).toContainText(/[45] of 12 paid/);
+  // The next payment, as the calendar's list and grid name it.
+  const calendarEntry = page.getByRole("button", { name: /Apple Card installment · \d+ of 12/ });
+  await expect(calendarEntry.first()).toBeAttached();
+
+  // Paid off early: nothing more is due, so it leaves the calendar.
+  await card.getByRole("button", { name: "Name it and pick what it is" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Paid off early" }).click();
+  await expect(page.getByText(/marked paid off/)).toBeVisible();
+  await expect(calendarEntry).toHaveCount(0);
+  // Shown with any finished plans (behind "Paid off" when others are still going).
+  const paidOff = card.getByRole("button", { name: /Paid off \(\d+\)/ });
+  if (await paidOff.count()) await paidOff.click();
+  await expect(card).toContainText(/Paid off early/);
+
+  const saved = (await mockWrites(page)).filter((w) => w.table === "ui_preferences" && (w.body as { key?: string }).key === "installment_plans");
+  expect(JSON.stringify(saved.at(-1)?.body)).toMatch(/"paidOff":"\d{4}-\d{2}-\d{2}"/);
+});

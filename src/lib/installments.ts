@@ -46,6 +46,8 @@ const settingsSchema = z.object({
   price: money.nullable().optional(),
   // Not an installment after all.
   hidden: z.boolean().optional(),
+  // Paid off early, on this day: nothing more is due.
+  paidOff: isoDate.nullable().optional(),
 });
 export type PlanSettings = z.infer<typeof settingsSchema>;
 
@@ -59,6 +61,8 @@ const addedSchema = z.object({
   // The day of the first payment.
   start: isoDate,
   price: money.nullable(),
+  // Paid off early, on this day: nothing more is due.
+  paidOff: isoDate.nullable().optional(),
 });
 export type AddedPlan = z.infer<typeof addedSchema>;
 
@@ -213,6 +217,8 @@ export type InstallmentPlan = {
   payoff: string;
   done: boolean;
   hidden: boolean;
+  // The day it was paid off early, when it was.
+  paidOff: string | null;
 };
 
 // Apple Card Monthly Installments run 12 months for a Mac, iPad or Watch
@@ -232,9 +238,10 @@ function build(input: {
   accountName: string | null;
   charges: InstallmentCharge[];
   hidden: boolean;
+  paidOff: string | null;
   todayIso: string;
 }): InstallmentPlan {
-  const { monthly, payments, todayIso } = input;
+  const { monthly, payments, todayIso, paidOff } = input;
   const price = input.price ?? Math.round(monthly * payments * 100) / 100;
   const unmatched = [...input.charges];
   const schedule: ScheduledPayment[] = Array.from({ length: payments }, (_, i) => {
@@ -252,7 +259,8 @@ function build(input: {
       date: charge?.date ?? date,
       amount: charge ? charge.amount : amount,
       charge,
-      status: charge || date <= todayIso ? ("paid" as const) : ("due" as const),
+      // Paid off early settles every payment still to come.
+      status: charge || date <= todayIso || paidOff ? ("paid" as const) : ("due" as const),
     };
   });
   const made = schedule.filter((p) => p.status === "paid");
@@ -275,9 +283,10 @@ function build(input: {
     leftAmount,
     progress: payments > 0 ? made.length / payments : 1,
     next: schedule.find((p) => p.status === "due") ?? null,
-    payoff: schedule[schedule.length - 1]?.date ?? input.start,
+    payoff: paidOff ?? schedule[schedule.length - 1]?.date ?? input.start,
     done: made.length === payments,
     hidden: input.hidden,
+    paidOff,
   };
 }
 
@@ -299,6 +308,7 @@ export function buildInstallmentPlans(charges: InstallmentCharge[], prefs: Insta
       accountName: d.accountName,
       charges: d.charges,
       hidden: Boolean(set.hidden),
+      paidOff: set.paidOff ?? null,
       todayIso,
     });
   });
@@ -319,6 +329,7 @@ export function buildInstallmentPlans(charges: InstallmentCharge[], prefs: Insta
       accountName: null,
       charges: charges.filter((c) => !claimed.has(c.id) && c.amount > 0 && Math.abs(cents(c.amount) - cents(a.monthly)) <= 5),
       hidden: false,
+      paidOff: a.paidOff ?? null,
       todayIso,
     })
   );
@@ -329,4 +340,25 @@ export function buildInstallmentPlans(charges: InstallmentCharge[], prefs: Insta
 /** The charges that belong to installment plans, so they aren't also suggested as subscriptions. */
 export function installmentChargeIds(plans: InstallmentPlan[]): Set<string> {
   return new Set(plans.flatMap((p) => p.schedule.flatMap((s) => (s.charge ? [s.charge.id] : []))));
+}
+
+export type InstallmentDue = { plan: InstallmentPlan; payment: ScheduledPayment };
+
+/**
+ * Payments still to make on plans that are going (not paid off, early or on
+ * schedule, and not hidden as not an installment), from `fromIso` through
+ * `toIso`, soonest first. What the Recurring calendar, the Overview's
+ * Upcoming card and the payment alerts all read, so a finished plan leaves
+ * all three at once.
+ */
+export function installmentPaymentsBetween(plans: InstallmentPlan[], fromIso: string, toIso: string): InstallmentDue[] {
+  return plans
+    .filter((plan) => !plan.done && !plan.hidden)
+    .flatMap((plan) => plan.schedule.filter((p) => p.status === "due" && p.date >= fromIso && p.date <= toIso).map((payment) => ({ plan, payment })))
+    .sort((a, b) => a.payment.date.localeCompare(b.payment.date) || a.plan.name.localeCompare(b.plan.name));
+}
+
+/** A payment as it reads on a calendar or a list: "MacBook Air · 4 of 12". */
+export function installmentPaymentLabel({ plan, payment }: InstallmentDue): string {
+  return `${plan.name} · ${payment.n} of ${plan.payments}`;
 }

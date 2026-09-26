@@ -13,6 +13,7 @@ import { DeviceArt } from "@/components/device-art";
 import { PillStrip } from "@/components/overview/stat-tile";
 import { formatCurrency } from "@/lib/format";
 import { DEFAULT_PAYMENTS_FOR, EXAMPLE_NAMES, ICON_LABELS, INSTALLMENT_ICONS, type InstallmentIcon, type InstallmentPlan } from "@/lib/installments";
+import { calendarNow } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
 const MONEY = "font-mono tabular-nums";
@@ -110,7 +111,7 @@ function PlanRow({ plan, todayIso, onEdit }: { plan: InstallmentPlan; todayIso: 
             </span>
           </div>
           <span className="text-xs text-muted-foreground @xl/inst:mt-1">
-            {plan.done ? `Last payment ${shortDate(plan.payoff)}` : `Paid off ${monthYear(plan.payoff)}`}
+            {plan.paidOff ? `Paid off early ${shortDate(plan.paidOff)}` : plan.done ? `Last payment ${shortDate(plan.payoff)}` : `Paid off ${monthYear(plan.payoff)}`}
           </span>
         </div>
 
@@ -344,14 +345,34 @@ function PlanDialog({
 
         <DialogFooter className="sm:justify-between">
           {plan ? (
-            <Button
-              variant="ghost"
-              className="text-muted-foreground"
-              disabled={saving}
-              onClick={() => void run(() => send("DELETE", { key: plan.key }), found ? "Hidden" : "Removed")}
-            >
-              {found ? "Not an installment" : "Remove"}
-            </Button>
+            <div className="flex flex-wrap gap-1">
+              {/* Paid off before its last payment: nothing more is due, so it leaves the calendar and alerts. */}
+              {plan.paidOff ? (
+                <Button variant="ghost" className="text-muted-foreground" disabled={saving} onClick={() => void run(() => send("PATCH", { key: plan.key, settings: { paidOff: null } }), "Back to paying it off")}>
+                  Still paying it
+                </Button>
+              ) : (
+                !plan.done && (
+                  <Button
+                    variant="ghost"
+                    className="text-moss hover:text-moss"
+                    disabled={saving}
+                    onClick={() => void run(() => send("PATCH", { key: plan.key, settings: { paidOff: calendarNow().isoDate } }), `${plan.name} marked paid off`)}
+                  >
+                    <Check />
+                    Paid off early
+                  </Button>
+                )
+              )}
+              <Button
+                variant="ghost"
+                className="text-muted-foreground"
+                disabled={saving}
+                onClick={() => void run(() => send("DELETE", { key: plan.key }), found ? "Hidden" : "Removed")}
+              >
+                {found ? "Not an installment" : "Remove"}
+              </Button>
+            </div>
           ) : (
             <span />
           )}

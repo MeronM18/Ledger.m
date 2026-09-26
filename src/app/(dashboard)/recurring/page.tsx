@@ -3,6 +3,7 @@ import type { CalendarEvent } from "@/components/subscription-calendar";
 import type { ManualSubscription } from "@/components/manual-subscription-form";
 import { QueryErrorState } from "@/components/query-error";
 import { occurrencesBetween } from "@/lib/forecast";
+import { installmentPaymentLabel, installmentPaymentsBetween } from "@/lib/installments";
 import { subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
 import { loadFirstChargeAmounts } from "@/lib/subscription-data";
 import { subscriptionAccount } from "@/lib/subscription-accounts";
@@ -113,9 +114,17 @@ export default async function SubscriptionsPage() {
   const todayIso = calendarNow().isoDate;
   const today = easternToday();
   const end = new Date(today.getTime() + CALENDAR_DAYS * 86_400_000);
-  const calendarEvents: CalendarEvent[] = tracked
-    .flatMap((item) => occurrencesBetween({ ...item, id: item.key }, today, end).map((date) => ({ key: item.key, date, name: item.name, amount: item.amount })))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const calendarEvents: CalendarEvent[] = [
+    ...tracked.flatMap((item) => occurrencesBetween({ ...item, id: item.key }, today, end).map((date) => ({ key: item.key, date, name: item.name, amount: item.amount }))),
+    // Each installment payment still to make; a plan paid off (or hidden) has none.
+    ...installmentPaymentsBetween(subscriptions.installments, todayIso, new Intl.DateTimeFormat("en-CA").format(end)).map((d) => ({
+      key: `installment:${d.plan.key}`,
+      date: d.payment.date,
+      name: installmentPaymentLabel(d),
+      amount: d.payment.amount,
+      installment: true,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
 
   if (error || manualError || acctError) {
     return (
