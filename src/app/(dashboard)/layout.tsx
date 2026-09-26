@@ -1,3 +1,4 @@
+import { alertHref } from "@/lib/alerts-logic";
 import { requireUser } from "@/lib/auth";
 import { MobileNav } from "@/components/mobile-nav";
 import { NotificationBell, type BellAlert } from "@/components/notification-bell";
@@ -21,11 +22,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // just leaves the bell empty; it never breaks the page.
   const admin = createAdminClient();
   const [alertsRes, alertsSeenAt] = await Promise.all([
-    admin.from("alert_events").select("id, kind, title, body, created_at").order("created_at", { ascending: false }).limit(30),
+    admin.from("alert_events").select("id, dedupe_key, kind, title, body, created_at").order("created_at", { ascending: false }).limit(30),
     loadAlertsSeenAt(admin),
   ]);
   if (alertsRes.error) console.error("Failed to load alerts for the bell", alertsRes.error);
-  const alerts = (alertsRes.data ?? []) as BellAlert[];
+  const alerts: BellAlert[] = (alertsRes.data ?? []).map(({ dedupe_key, ...a }) => ({ ...a, href: alertHref(a.kind as string, dedupe_key as string) }));
   // Today in Eastern time, worked out here so the server and browser agree.
   const [year, month, day] = calendarNow().isoDate.split("-");
   const monthName = new Date(Number(year), Number(month) - 1, 1).toLocaleDateString("en-US", { month: "short" });

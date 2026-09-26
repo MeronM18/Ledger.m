@@ -4,6 +4,7 @@
 export const ALERT_SETTINGS = [
   { kind: "transaction", label: "Every new transaction", description: "A push for each charge or deposit as it syncs." },
   { kind: "large-charge", label: "Large charges", description: "Any single charge of $250 or more, even with the one above off." },
+  { kind: "refund", label: "Refunds", description: "Money back from a store, with the purchase it's for. It counts in that purchase's month." },
   { kind: "deposit-review", label: "Deposits to review", description: "A Zelle transfer, check or other deposit that isn't a paycheck or interest, so you can say what it was." },
   { kind: "unusual-charge", label: "Unusual charges", description: "A charge far above what that merchant usually costs you." },
   { kind: "budget-over", label: "Over budget", description: "When a category goes over its monthly budget." },

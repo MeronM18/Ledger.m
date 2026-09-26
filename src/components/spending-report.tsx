@@ -687,6 +687,7 @@ export function SpendingReport({
           transaction={panel.openId ? (byId.get(panel.openId) ?? null) : null}
           openKey={panel.openKey}
           onClose={panel.close}
+          onOpen={panel.open}
           transactions={transactions}
           cards={cards}
           institutions={institutions}

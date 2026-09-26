@@ -1,5 +1,6 @@
 import type { Transaction as PlaidTransaction } from "plaid";
 import { ALERT_THRESHOLDS } from "@/lib/config";
+import { isSpendingCategory } from "@/lib/plaid-categories";
 import { humanizeTransactionName } from "@/lib/transaction-display";
 
 // Pure logic only — no server-only, no DB/network access — so this module
@@ -50,6 +51,16 @@ export function isLargeCharge(t: PlaidTransaction, threshold: number = ALERT_THR
 }
 
 /**
+ * Money back from a store, as the bank files it: a credit in a named
+ * spending category. The refund alert (alerts-logic refundAlerts) says what
+ * it's for once it posts.
+ */
+export function isStoreRefund(t: PlaidTransaction): boolean {
+  const primary = t.personal_finance_category?.primary ?? null;
+  return t.amount < 0 && primary !== null && primary !== "OTHER" && isSpendingCategory(primary);
+}
+
+/**
  * Message formatting. A settled amount/merchant that differs from what was
  * in the original pending push is not flagged here — the row is just
  * quietly updated; a "changed" notification isn't implemented (easy to add
@@ -64,10 +75,12 @@ export function formatTransactionNotification(
   const isDebit = t.amount >= 0; // Plaid: positive = money out, negative = money in
   const amountStr = formatCurrency(Math.abs(t.amount), t.iso_currency_code);
 
+  const refund = isStoreRefund(t);
   let subtitle = isDebit ? `${amountStr} at ${merchant}` : `+${amountStr} from ${merchant}`;
+  if (refund) subtitle = `Refund: ${subtitle}`;
   if (t.pending) subtitle = `Pending: ${subtitle}`;
   if (isLargeCharge(t, largeCharge)) subtitle = `Large charge: ${subtitle}`;
-  const body = `${isDebit ? "Debit" : "Credit"} on ${accountLabel}`;
+  const body = `${refund ? "Refund" : isDebit ? "Debit" : "Credit"} on ${accountLabel}`;
 
   return { subtitle, body };
 }

@@ -6,6 +6,7 @@ import {
   lowBalanceAlerts,
   priceIncreaseAlerts,
   installmentDueAlerts,
+  refundAlerts,
   renewalAlerts,
   subscriptionReviewAlerts,
   unusualChargeAlerts,
@@ -270,6 +271,14 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   } else {
     const cardIds = new Set(data.cards.map((c) => c.id));
     alerts.push(...depositReviewAlerts(depositsToReview(data.transactions, cardIds, depositReviews.reviews, now.isoDate), now.isoDate, currency));
+  }
+
+  // Money back from a store, and the purchase it's for. Last: it's good
+  // news, so in a burst it's the one folded into the summary push.
+  if (data.error) {
+    console.error("Skipping refund alerts: load failed");
+  } else {
+    alerts.push(...refundAlerts(data.transactions, new Set(data.cards.map((c) => c.id)), now.isoDate, currency));
   }
 
   return dispatchAlerts(admin, enabledAlerts(alerts, settings));

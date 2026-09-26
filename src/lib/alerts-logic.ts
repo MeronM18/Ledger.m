@@ -1,7 +1,9 @@
 import type { BudgetLine, BudgetProgress } from "@/lib/budgets";
 import { GOOD_UTILIZATION, type CardUtilization } from "@/lib/credit-utilization";
 import { formatCurrency } from "@/lib/format";
-import type { SpendingTransaction } from "@/lib/spending-aggregation";
+import { humanizeCategory } from "@/lib/plaid-categories";
+import { cameBackOn, isRefund, type RefundDating } from "@/lib/refunds";
+import { displayCategoryKey, type SpendingTransaction } from "@/lib/spending-aggregation";
 import { hasLapsed, hasPriceIncrease, isWithinNextDays, projectNextOccurrence } from "@/lib/subscriptions-aggregation";
 import type { InstallmentDue } from "@/lib/installments";
 import { humanizeTransactionName } from "@/lib/transaction-display";
@@ -23,7 +25,8 @@ export type AlertKind =
   | "high-utilization"
   | "deposit-review"
   | "subscription-review"
-  | "installment-due";
+  | "installment-due"
+  | "refund";
 
 // `href`: where tapping the push opens, when there's a page for it.
 export type Alert = { key: string; kind: AlertKind; title: string; body: string; href?: string };
@@ -334,4 +337,55 @@ export function installmentDueAlerts(due: InstallmentDue[], todayIso: string, cu
       href: "/recurring#installments",
     };
   });
+}
+
+// Refunds that came back this recently are told about (the daily run plus a little slack).
+export const REFUND_ALERT_DAYS = 3;
+
+const monthName = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "long", timeZone: "UTC" });
+
+/**
+ * Money back from a store, once each, as it comes back: the purchase it's
+ * for, and the month it counts in. Pending ones wait until they post (a
+ * pending credit gets a new id when it does). A credit with no category
+ * on a bank account is a deposit, asked about as one, unless it matched a
+ * purchase.
+ */
+export function refundAlerts(
+  transactions: (SpendingTransaction & RefundDating & { id: string; account: { id: string; name: string; mask: string | null } | null })[],
+  cardIds: Set<string>,
+  todayIso: string,
+  currency: string
+): Alert[] {
+  const today = dayNumber(todayIso);
+  return transactions.flatMap((t) => {
+    if (!isRefund(t)) return [];
+    const back = cameBackOn(t);
+    const age = today - dayNumber(back);
+    if (age < 0 || age > REFUND_ALERT_DAYS) return [];
+    const category = displayCategoryKey(t);
+    if (!t.refund_for && category === "OTHER" && !(t.account && cardIds.has(t.account.id))) return [];
+
+    const to = t.account ? ` to ${t.account.name}${t.account.mask ? ` ••${t.account.mask}` : ""}` : "";
+    const p = t.refund_for;
+    const purchase = p ? (p.partial ? ` for part of your ${formatCurrency(p.purchaseAmount, currency)} purchase on ${monthDay(p.purchaseDate)}` : ` for your ${monthDay(p.purchaseDate)} purchase`) : "";
+    const counts = t.refunded_on
+      ? `It counts in ${monthName(t.date)}, with the purchase.`
+      : `It comes off ${category === "OTHER" ? "Other" : humanizeCategory(category)} spending for ${monthName(t.date)}.`;
+    return [
+      {
+        key: `refund:${t.id}`,
+        kind: "refund" as const,
+        title: `${formatCurrency(-t.amount, currency)} back from ${humanizeTransactionName(t)}`,
+        body: `A refund${to}${purchase}. ${counts}`,
+        href: `/transactions?open=${t.id}`,
+      },
+    ];
+  });
+}
+
+/** Where an alert in the list opens, when it's about one thing: a refund opens that transaction. */
+export function alertHref(kind: string, dedupeKey: string): string | undefined {
+  if (kind === "refund" && dedupeKey.startsWith("refund:")) return `/transactions?open=${encodeURIComponent(dedupeKey.slice(7))}`;
+  return undefined;
 }

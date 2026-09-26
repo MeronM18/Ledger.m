@@ -4,7 +4,7 @@ import type { Transaction as PlaidTransaction, TransactionStream } from "plaid";
 import { decrypt } from "@/lib/crypto";
 import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
-import { selectTransactionsToNotify, formatTransactionNotification, isLargeCharge } from "@/lib/plaid-notify-format";
+import { selectTransactionsToNotify, formatTransactionNotification, isLargeCharge, isStoreRefund } from "@/lib/plaid-notify-format";
 import { runAlertChecks } from "@/lib/alerts";
 import { carryDepositReviews } from "@/lib/deposit-review-store";
 import { loadAlertSettings, loadAlertThresholds } from "@/lib/ui-preferences";
@@ -126,11 +126,12 @@ async function notifyNewTransactions(
 
   const { toPush: candidates } = selectTransactionsToNotify(added, previouslyNotifiedIds);
   // With "every new transaction" switched off, only large charges still
-  // push (if those are on).
+  // push (if those are on). A refund isn't pushed here while refund alerts
+  // are on: that alert comes once it posts and says what it's for.
   const [settings, thresholds] = candidates.length > 0 ? await Promise.all([loadAlertSettings(admin), loadAlertThresholds(admin)]) : [null, null];
   const large = (t: PlaidTransaction) => isLargeCharge(t, thresholds!.largeCharge);
   const toPush = settings
-    ? candidates.filter((t) => settings.transaction || (settings["large-charge"] && large(t)))
+    ? candidates.filter((t) => !(settings.refund && isStoreRefund(t)) && (settings.transaction || (settings["large-charge"] && large(t))))
     : [];
 
   if (toPush.length > 0) {

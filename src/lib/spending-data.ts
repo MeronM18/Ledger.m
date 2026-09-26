@@ -16,7 +16,8 @@ import { accountName } from "@/lib/account-settings";
 import { cardProgramFor, programForAccount, rewardsFor, type ProgramId, type Reward } from "@/lib/card-rewards";
 import type { Card } from "@/lib/card-statements";
 import { incomeOf, reviewSummary } from "@/lib/deposit-review";
-import { loadAccountSettings, loadDepositReviews } from "@/lib/ui-preferences";
+import { matchRefunds, withRefundDates, type RefundDating } from "@/lib/refunds";
+import { loadAccountSettings, loadDepositReviews, loadRefundChoices } from "@/lib/ui-preferences";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -24,7 +25,8 @@ export type LedgerAccountRef = { id: string; name: string; mask: string | null }
 
 /** One transaction, Plaid or manual, with the user's edits and rules applied. */
 export type LedgerTransaction = SpendingTransaction &
-  Partial<EditMeta> & {
+  Partial<EditMeta> &
+  RefundDating & {
     id: string;
     logo_url: string | null;
     iso_currency_code: string | null;
@@ -97,7 +99,7 @@ function readManualTransactions(admin: AdminClient, withPaidBack: boolean) {
  * per component. Outside a render (a cron or webhook) it simply runs.
  */
 export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
-  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits, accountSettings, depositReviews] = await Promise.all([
+  const [txRes, manualFirstTry, accountsRes, issuersRes, manualAccountsRes, edits, accountSettings, depositReviews, refundChoices] = await Promise.all([
     fetchAllRows((from, to) =>
       admin
         .from("transactions")
@@ -115,6 +117,7 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     loadTransactionEdits(admin),
     loadAccountSettings(admin),
     loadDepositReviews(admin),
+    loadRefundChoices(admin),
   ]);
 
   // Before migration 0015 there's no paid-back column: read without it.
@@ -172,6 +175,9 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     };
   });
 
+  // A refund counts with the purchase it's for, in that purchase's month (refunds.ts).
+  const everything: LedgerTransaction[] = withRefundDates([...plaid, ...manual], matchRefunds([...plaid, ...manual], refundChoices.choices), refundChoices.choices);
+
   // Each rewards card by account id, as chosen in its settings or known by
   // its names, and what every purchase on one earned. Rewards go by the
   // merchant as the bank reported it, whatever it's been renamed to.
@@ -190,7 +196,7 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
       .map((a) => ({ accountId: `manual:${a.id}`, program: cardProgramFor(`${a.name} ${a.institution_name}`) })),
   ].flatMap((c) => (c.program ? [{ accountId: c.accountId, program: c.program, name: accountById.get(c.accountId)?.name ?? manualAccountRefs.get(c.accountId.slice(7))?.name ?? "" }] : []));
   const { rewards, bonusSpend } = rewardsFor(
-    [...plaid, ...manual].map((t) => ({
+    everything.map((t) => ({
       id: t.id,
       date: t.date,
       amount: t.amount,
@@ -202,12 +208,12 @@ export const loadLedger = cache(async (admin: AdminClient): Promise<Ledger> => {
     })),
     new Map(rewardCards.map((c) => [c.accountId, c.program]))
   );
-  for (const t of [...plaid, ...manual]) {
+  for (const t of everything) {
     const reward = rewards.get(t.id);
     if (reward) t.reward = reward;
   }
 
-  const transactions = [...plaid, ...manual].sort((a, b) => b.date.localeCompare(a.date));
+  const transactions = everything.sort((a, b) => b.date.localeCompare(a.date));
 
   return {
     transactions,

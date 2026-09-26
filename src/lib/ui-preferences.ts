@@ -9,6 +9,7 @@ import { resolveDepositReviews, type DepositReviews } from "@/lib/deposit-review
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
 import { resolveInstallmentPrefs, type InstallmentPrefs } from "@/lib/installments";
+import { resolveRefundChoices, type RefundChoices } from "@/lib/refunds";
 import { resolveFoundRecurring, type FoundRecurringPrefs } from "@/lib/found-recurring";
 import { resolveSubscriptionReview, type SubscriptionReviewPrefs } from "@/lib/subscription-review";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -109,6 +110,15 @@ export const loadDepositReviews = cache(async function loadDepositReviews(admin:
   const { data, error } = await admin.from("ui_preferences").select("value").eq("key", DEPOSIT_REVIEWS_KEY).maybeSingle();
   if (error) console.error("Failed to load deposit reviews", error);
   return { reviews: resolveDepositReviews(data?.value), error: Boolean(error) };
+});
+
+export const REFUND_CHOICES_KEY = "refund_matches";
+
+/** The purchase you said each refund is for, or that it has none, by refund id. */
+export const loadRefundChoices = cache(async function loadRefundChoices(admin: AdminClient): Promise<{ choices: RefundChoices; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", REFUND_CHOICES_KEY).maybeSingle();
+  if (error) console.error("Failed to load refund choices", error);
+  return { choices: resolveRefundChoices(data?.value), error: Boolean(error) };
 });
 
 export const INSTALLMENTS_KEY = "installment_plans";

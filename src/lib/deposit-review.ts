@@ -119,6 +119,8 @@ export type ReviewableTx = SpendingTransaction & {
   id: string;
   isManual: boolean;
   account: { id: string; name: string; mask: string | null } | null;
+  // A refund's purchase, when it's been matched to one (refunds.ts).
+  refund_for?: unknown;
 };
 
 export type DepositToReview = {
@@ -169,6 +171,8 @@ export function depositsToReview(
     const age = today - dayOf(t.date);
     if (age < 0 || age > REVIEW_WINDOW_DAYS) continue;
     if (reviews[t.id] || t.category_override) continue;
+    // Money back for a purchase on this account is a refund, not a deposit to ask about.
+    if (t.refund_for) continue;
     if (isPayOrInterest(t)) continue;
     const category = effectiveCategory(t);
     // A store refund lands in its own category and already comes off spending.

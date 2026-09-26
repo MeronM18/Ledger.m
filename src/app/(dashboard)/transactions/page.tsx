@@ -16,7 +16,7 @@ const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : u
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ account?: string | string[]; month?: string | string[]; category?: string | string[]; kind?: string | string[] }>;
+  searchParams: Promise<{ account?: string | string[]; month?: string | string[]; category?: string | string[]; kind?: string | string[]; open?: string | string[] }>;
 }) {
   const admin = createAdminClient();
   const [ledger, params, { data: goalRows, error: goalError }, depositReviews] = await Promise.all([
@@ -52,10 +52,15 @@ export default async function TransactionsPage({
   const account = one(params.account);
   const month = one(params.month);
   const kind = one(params.kind) as KindFilter | undefined;
+  // Opened from an alert about one transaction (a refund): that one, in the panel.
+  const open = one(params.open);
+  const opening = open && ledger.transactions.some((t) => t.id === open) ? open : null;
   const waiting = depositReviews.error ? 0 : depositsToReview(ledger.transactions, new Set(ledger.cards.map((c) => c.id)), depositReviews.reviews, calendarNow().isoDate).length;
 
   return (
     <TransactionsExplorer
+      // Starts over for a new ?open=, so an alert tapped while already here still opens its transaction.
+      key={opening ?? ""}
       transactions={ledger.transactions}
       accounts={ledger.accounts}
       cards={ledger.cards}
@@ -67,6 +72,7 @@ export default async function TransactionsPage({
       initialMonth={month && /^\d{4}-\d{2}$/.test(month) ? month : "all"}
       initialCategory={one(params.category) ?? "all"}
       initialKind={kind && KINDS.includes(kind) ? kind : "all"}
+      initialOpen={opening}
       depositsToReview={waiting}
     />
   );

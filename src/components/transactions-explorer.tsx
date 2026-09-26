@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeftRight, CalendarDays, ChevronRight, CreditCard, Download, HandCoins, PiggyBank, Search, StickyNote } from "lucide-react";
 import { InstitutionAvatar } from "@/components/institution-avatar";
 import { TransactionAvatar } from "@/components/transaction-avatar";
@@ -21,8 +22,10 @@ import type { Card as StatementCard } from "@/lib/card-statements";
 import { accountLabel, MANUAL_ACCOUNT_ID, MANUAL_ACCOUNT_OPTION, type AccountOption } from "@/components/filter-bar";
 import { AddManualTransactionButton, ManualTransactionForm, type ManualTransaction } from "@/components/manual-transaction-form";
 import { EditTransactionForm } from "@/components/edit-transaction-form";
+import { RefundPurchasePicker } from "@/components/refund-purchase-picker";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { humanizeCategory } from "@/lib/plaid-categories";
+import type { RefundDating } from "@/lib/refunds";
 import type { MerchantRule } from "@/lib/transaction-edits";
 import { effectiveCategory, humanizeTransaction, humanizeTransactionName } from "@/lib/transaction-display";
 import { transactionIconColor } from "@/lib/transaction-icons";
@@ -61,7 +64,7 @@ export type TransactionRow = {
   depositReview?: string;
   // Of a split deposit, how much was income.
   income_share?: number | null;
-};
+} & RefundDating;
 
 /**
  * What each row is (spending, a card payment, a transfer...), the names of
@@ -122,6 +125,7 @@ function goalsOf(t: TransactionRow, labels: TransactionLabels | null, d: Describ
 
 const longDay = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+const monthDay = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const shortDay = (iso: string) =>
   new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 
@@ -218,6 +222,16 @@ function Badges({ t }: { t: TransactionRow }) {
           {t.paid_back >= t.amount - 0.005 ? "Paid back in full" : `Paid back ${formatCurrency(t.paid_back, t.iso_currency_code)}`}
         </Badge>
       ) : null}
+      {t.refunded ? (
+        <Badge variant="secondary" className="text-[10px] text-moss" title={`${formatCurrency(t.refunded, t.iso_currency_code)} of it came back as a refund`}>
+          {t.refunded >= t.amount - 0.005 ? "Refunded" : `Refunded ${formatCurrency(t.refunded, t.iso_currency_code)}`}
+        </Badge>
+      ) : null}
+      {t.refunded_on && (
+        <Badge variant="secondary" className="text-[10px] text-moss" title="Dated with the purchase it's for, so it counts in that month">
+          Came back {monthDay(t.refunded_on)}
+        </Badge>
+      )}
       {t.depositReview && (
         <Badge variant="secondary" className="max-w-64 truncate text-[10px] text-champagne" title={`You said: ${t.depositReview}. Change it on Transactions → Deposits.`}>
           {t.depositReview}
@@ -468,14 +482,26 @@ function countsAs(t: TransactionRow, d: Described, category: string, goals: stri
     case "spending":
       if (t.pending) return <>Spending in {category}{quiet("once it posts; pending charges aren't counted yet")}</>;
       if (t.paid_back && t.paid_back >= t.amount - 0.005) return <>Nothing{quiet("paid back in full, so it isn't your spending")}</>;
+      if (t.refunded && t.refunded >= t.amount - 0.005) return <>Nothing{quiet("refunded in full, so the two cancel out in Spending and Budgets")}</>;
       return (
         <>
           Spending in {category}
-          {t.paid_back ? quiet(`your ${formatCurrency(t.amount - t.paid_back, t.iso_currency_code)} share, in Spending and Budgets`) : quiet("in Spending and Budgets")}
+          {t.paid_back
+            ? quiet(`your ${formatCurrency(t.amount - t.paid_back, t.iso_currency_code)} share, in Spending and Budgets`)
+            : t.refunded
+              ? quiet(`less the ${formatCurrency(t.refunded, t.iso_currency_code)} refunded, in Spending and Budgets`)
+              : quiet("in Spending and Budgets")}
         </>
       );
     case "refund":
-      return <>A refund{quiet(`comes off ${category} spending`)}</>;
+      return t.refunded_on ? (
+        <>
+          A refund
+          {quiet(`comes off ${category} spending in ${new Date(`${t.date}T00:00:00`).toLocaleDateString("en-US", { month: "long" })}, the month of its purchase`)}
+        </>
+      ) : (
+        <>A refund{quiet(`comes off ${category} spending`)}</>
+      );
     case "income":
       return <>Income{goals.length > 0 ? quiet(`toward ${goals.join(" and ")}`) : quiet("in Reports → Income")}</>;
     case "card-payment":
@@ -507,12 +533,15 @@ function TransactionPanel({
   cards,
   institutions,
   onClose,
+  onOpen,
 }: {
   t: TransactionRow;
   transactions: TransactionRow[];
   cards: StatementCard[];
   institutions: Record<string, string>;
   onClose: () => void;
+  // Opens another transaction in the panel (a refund's purchase).
+  onOpen?: (id: string) => void;
 }) {
   const { displayName, displayCategoryLabel: category } = humanizeTransaction(t);
   const labels = useContext(LabelsContext);
@@ -522,6 +551,9 @@ function TransactionPanel({
   const onCard = t.account ? cards.some((c) => c.id === t.account!.id) : false;
   const posted = t.posted_date && t.posted_date !== t.date ? t.posted_date : null;
   const original = humanizeTransactionName({ ...t, merchant_name: t.original_merchant_name ?? t.merchant_name });
+  const purchase = t.refund_for ? transactions.find((p) => p.id === t.refund_for!.purchaseId) : undefined;
+  const refund = d?.kind === "refund" && !t.pending;
+  const refunds = t.refunded ? transactions.filter((r) => r.refund_for?.purchaseId === t.id) : [];
 
   return (
     <>
@@ -531,7 +563,7 @@ function TransactionPanel({
           <div className="flex min-w-0 flex-col gap-0.5">
             <SheetTitle className="truncate">{displayName}</SheetTitle>
             <SheetDescription>
-              {longDay(t.date)} · {accountText(t)}
+              {longDay(t.refunded_on ?? t.date)} · {accountText(t)}
             </SheetDescription>
           </div>
         </div>
@@ -542,8 +574,47 @@ function TransactionPanel({
       </SheetHeader>
       <SheetBody className="flex flex-col gap-5">
         <dl className="flex flex-col divide-y divide-border rounded-lg border border-border px-3 text-sm">
-          <Detail label="Date">{longDay(t.date)}</Detail>
-          {posted && <Detail label="Posted">{longDay(posted)}</Detail>}
+          <Detail label="Date">
+            {longDay(t.date)}
+            {t.refunded_on && <span className="block text-xs text-muted-foreground">the day of its purchase</span>}
+          </Detail>
+          {t.refunded_on && <Detail label="Came back">{longDay(t.refunded_on)}</Detail>}
+          {posted && posted !== t.refunded_on && <Detail label="Posted">{longDay(posted)}</Detail>}
+          {t.refund_for && (
+            <Detail label="Refund for">
+              {purchase && onOpen ? (
+                <button type="button" onClick={() => onOpen(purchase.id)} className="text-right text-champagne underline-offset-4 hover:underline">
+                  {humanizeTransaction(purchase).displayName} · {formatCurrency(purchase.amount, purchase.iso_currency_code)}
+                </button>
+              ) : (
+                <>
+                  {purchase ? `${humanizeTransaction(purchase).displayName} · ` : ""}
+                  {formatCurrency(t.refund_for.purchaseAmount, t.iso_currency_code)}
+                </>
+              )}
+              <span className="block text-xs text-muted-foreground">
+                bought {longDay(t.refund_for.purchaseDate)}
+                {t.refund_for.partial ? `; ${formatCurrency(-t.amount, t.iso_currency_code)} of it back` : ""}
+              </span>
+            </Detail>
+          )}
+          {refunds.length > 0 && (
+            <Detail label="Refunded">
+              <span className="flex flex-col items-end gap-0.5">
+                {refunds.map((r) =>
+                  onOpen ? (
+                    <button key={r.id} type="button" onClick={() => onOpen(r.id)} className="text-right text-champagne underline-offset-4 hover:underline">
+                      {formatCurrency(-r.amount, r.iso_currency_code)} on {longDay(r.refunded_on ?? r.date)}
+                    </button>
+                  ) : (
+                    <span key={r.id}>
+                      {formatCurrency(-r.amount, r.iso_currency_code)} on {longDay(r.refunded_on ?? r.date)}
+                    </span>
+                  )
+                )}
+              </span>
+            </Detail>
+          )}
           <Detail label={onCard && t.amount > 0 && d?.kind !== "card-payment" ? "Paid with" : "Account"}>
             <span className="inline-flex max-w-full justify-end">
               <AccountLabel t={t} institutions={institutions} />
@@ -573,6 +644,14 @@ function TransactionPanel({
         </dl>
 
         {isCardPaymentRow(t, cards) && <CardPaymentButton payment={t} transactions={transactions} cards={cards} labeled />}
+
+        {refund && (
+          <RefundPurchasePicker
+            key={`${t.refund_for?.purchaseId ?? ""}:${Boolean(t.refund_for?.chosen)}:${Boolean(t.refund_kept)}`}
+            refund={t}
+            transactions={transactions}
+          />
+        )}
 
         <div className="flex flex-col gap-3">
           <p className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">Edit</p>
@@ -689,8 +768,8 @@ const LIST_BATCH = 60;
  * Which transaction's panel is open, for a page with a list. Each opening
  * gets a fresh key, so the panel's form starts from the row every time.
  */
-export function useTransactionPanel() {
-  const [openId, setOpenId] = useState<string | null>(null);
+export function useTransactionPanel(initialId: string | null = null) {
+  const [openId, setOpenId] = useState<string | null>(initialId);
   const [openCount, setOpenCount] = useState(0);
   return {
     openId,
@@ -708,6 +787,7 @@ export function TransactionSheet({
   transaction,
   openKey,
   onClose,
+  onOpen,
   transactions,
   cards,
   institutions,
@@ -715,6 +795,7 @@ export function TransactionSheet({
   transaction: TransactionRow | null;
   openKey: string;
   onClose: () => void;
+  onOpen?: (id: string) => void;
   transactions: TransactionRow[];
   cards: StatementCard[];
   institutions: Record<string, string>;
@@ -736,6 +817,7 @@ export function TransactionSheet({
             cards={cards}
             institutions={institutions}
             onClose={onClose}
+            onOpen={onOpen}
           />
         )}
       </SheetContent>
@@ -755,6 +837,7 @@ export function TransactionsExplorer({
   initialMonth = "all",
   initialCategory = "all",
   initialKind = "all",
+  initialOpen = null,
   depositsToReview = 0,
 }: {
   transactions: TransactionRow[];
@@ -773,6 +856,8 @@ export function TransactionsExplorer({
   initialMonth?: string;
   initialCategory?: string;
   initialKind?: KindFilter;
+  // A transaction to open in the panel (from an alert about it).
+  initialOpen?: string | null;
   // Deposits waiting to be told what they were, for the Deposits button.
   depositsToReview?: number;
 }) {
@@ -782,8 +867,19 @@ export function TransactionsExplorer({
   const [monthFilter, setMonthFilter] = useState<string>(initialMonth);
   const [kindFilter, setKindFilter] = useState<KindFilter>(initialKind);
   const [listOptions, setListOptions] = useState<ListOptions>(DEFAULT_LIST_OPTIONS);
-  const panel = useTransactionPanel();
+  const router = useRouter();
+  const panel = useTransactionPanel(initialOpen);
   const labels = useTransactionLabels(transactions, accounts, cards, connectedCardIssuers, goals);
+
+  function closePanel() {
+    panel.close();
+    // Opened from an alert: take ?open= off the address, so the same alert opens it again.
+    if (initialOpen) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("open");
+      router.replace(`${url.pathname}${url.search}`, { scroll: false });
+    }
+  }
 
   const categories = useMemo(() => {
     const present = new Set<string>();
@@ -958,7 +1054,8 @@ export function TransactionsExplorer({
         <TransactionSheet
           transaction={open}
           openKey={panel.openKey}
-          onClose={panel.close}
+          onClose={closePanel}
+          onOpen={panel.open}
           transactions={transactions}
           cards={cards}
           institutions={institutions}

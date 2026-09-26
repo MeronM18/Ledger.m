@@ -34,6 +34,8 @@ export const IDS = {
   savings: "22222222-0000-4000-8000-000000000004",
   appleCard: "33333333-0000-4000-8000-000000000001",
   appleSavings: "33333333-0000-4000-8000-000000000002",
+  nikeOrder: "44444444-0000-4000-8000-000000000001",
+  nikeRefund: "44444444-0000-4000-8000-000000000002",
 };
 
 export function buildFixtures(now = new Date()) {
@@ -133,6 +135,13 @@ export function buildFixtures(now = new Date()) {
   // Money in that isn't pay or interest, waiting on the Overview to be told what it was.
   tx(addDays(today, -2), IDS.checking, -45, "Zelle payment from JORDAN LEE", null, "TRANSFER_IN", "TRANSFER_IN_ACCOUNT_TRANSFER");
   tx(addDays(today, -9), IDS.momentum, -200, "MOBILE DEPOSIT", null, "TRANSFER_IN", "TRANSFER_IN_DEPOSIT");
+  // Shoes sent back: the order in an earlier month, the refund yesterday.
+  // Fixed ids, so the ids of everything built after this don't shift.
+  const nike = { account_id: IDS.freedom, iso_currency_code: "USD", name: "NIKE.COM", merchant_name: "Nike", logo_url: null, pfc_primary: "GENERAL_MERCHANDISE", pfc_detailed: "GENERAL_MERCHANDISE_CLOTHING_AND_ACCESSORIES", pending: false };
+  transactions.push(
+    { ...nike, id: IDS.nikeOrder, plaid_transaction_id: "plaid-nike-order", date: iso(addDays(today, -40)), amount: 129.99 },
+    { ...nike, id: IDS.nikeRefund, plaid_transaction_id: "plaid-nike-refund", date: iso(addDays(today, -1)), amount: -129.99 }
+  );
 
   const manual_accounts = [
     { id: IDS.appleCard, name: "Apple Card", institution_name: "Apple Card", type: "credit", mask: null, credit_limit: 5000, balance_override: null, apy: null, created_at: "2026-09-01T12:00:00Z" },

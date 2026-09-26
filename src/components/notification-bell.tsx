@@ -14,13 +14,15 @@ import {
   Landmark,
   Receipt,
   TrendingUp,
+  Undo2,
   type LucideIcon,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export type BellAlert = { id: string; kind: string; title: string; body: string; created_at: string };
+// `href`: where one alert about one thing opens (a refund, its transaction).
+export type BellAlert = { id: string; kind: string; title: string; body: string; created_at: string; href?: string };
 
 // An icon, and its color, for what each kind of alert is about.
 const KIND: Record<string, { Icon: LucideIcon; className: string }> = {
@@ -38,12 +40,14 @@ const KIND: Record<string, { Icon: LucideIcon; className: string }> = {
   "monthly-summary": { Icon: CalendarRange, className: "text-moss" },
   "deposit-review": { Icon: HandCoins, className: "text-champagne" },
   "installment-due": { Icon: CalendarClock, className: "text-moss" },
+  refund: { Icon: Undo2, className: "text-moss" },
 };
 // Where an alert of each kind takes you, for the ones with something to do.
 const HREF: Record<string, { href: string; label: string }> = {
   "deposit-review": { href: "/transactions/deposits", label: "Review it" },
   "subscription-review": { href: "/recurring", label: "Review it" },
   "installment-due": { href: "/recurring#installments", label: "See the plan" },
+  refund: { href: "/transactions", label: "See it" },
 };
 const FALLBACK = { Icon: Bell, className: "text-muted-foreground" };
 
@@ -114,6 +118,7 @@ export function NotificationBell({ alerts, seenAt, className }: { alerts: BellAl
             {alerts.map((a) => {
               const { Icon, className: tone } = KIND[a.kind] ?? FALLBACK;
               const fresh = newWhenOpened.has(a.id);
+              const link = HREF[a.kind] ? { ...HREF[a.kind], href: a.href ?? HREF[a.kind].href } : null;
               return (
                 <li
                   key={a.id}
@@ -123,9 +128,9 @@ export function NotificationBell({ alerts, seenAt, className }: { alerts: BellAl
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <p className="text-sm font-medium">{a.title}</p>
                     <p className="text-xs text-muted-foreground">{a.body}</p>
-                    {HREF[a.kind] && (
-                      <Link href={HREF[a.kind].href} onClick={() => setOpen(false)} className="mt-0.5 self-start text-xs text-champagne underline-offset-4 hover:underline">
-                        {HREF[a.kind].label}
+                    {link && (
+                      <Link href={link.href} onClick={() => setOpen(false)} className="mt-0.5 self-start text-xs text-champagne underline-offset-4 hover:underline">
+                        {link.label}
                       </Link>
                     )}
                   </div>
