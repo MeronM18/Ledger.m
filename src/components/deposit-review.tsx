@@ -240,7 +240,7 @@ export function DepositReviewCard({
             </h2>
             <p className="text-xs text-muted-foreground">Money that came in and isn&apos;t a paycheck or interest. Say what it was so income and spending stay right.</p>
           </div>
-          <AnswersHelp />
+          {!onPage && <AnswersHelp />}
           {!onPage && (
             <Link href="/transactions/deposits" className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne">
               All deposits <ArrowRight className="size-3" aria-hidden />
@@ -437,7 +437,7 @@ function AnswerButton({
  * The ? beside the title: what each answer means, in a card below it.
  * Hovering shows it; clicking keeps it open until clicked again or away.
  */
-function AnswersHelp() {
+export function AnswersHelp({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   // Closing waits a beat, so the pointer can cross from the ? to the card.
@@ -468,12 +468,13 @@ function AnswersHelp() {
             setPinned(next);
             setOpen(next);
           }}
+          // The same button as the alerts bell beside it.
           className={cn(
-            "flex size-7 items-center justify-center rounded-full border transition-colors",
-            open ? "border-champagne/50 bg-champagne/12 text-champagne" : "border-border text-muted-foreground hover:border-champagne/40 hover:text-champagne"
+            "relative inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-ash-grey transition-colors hover:bg-muted hover:text-bone data-[state=open]:bg-muted data-[state=open]:text-bone",
+            className
           )}
         >
-          <CircleHelp className="size-4" aria-hidden />
+          <CircleHelp className="size-[18px]" aria-hidden />
         </button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-[22rem] p-0" onPointerEnter={hover(true)} onPointerLeave={hover(false)} onOpenAutoFocus={(e) => e.preventDefault()}>

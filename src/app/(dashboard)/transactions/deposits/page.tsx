@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
-import { DepositReviewCard } from "@/components/deposit-review";
+import { AnswersHelp, DepositReviewCard } from "@/components/deposit-review";
 import { QueryErrorState } from "@/components/query-error";
 import { chargeOptions, depositsToReview, reviewedDeposits } from "@/lib/deposit-review";
 import { loadLedger } from "@/lib/spending-data";
@@ -31,7 +31,11 @@ export default async function DepositsPage() {
         <ChevronLeft className="size-3.5" aria-hidden />
         Transactions
       </Link>
-      <h1 className="font-serif text-2xl font-semibold text-bone">Deposits</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-serif text-2xl font-semibold text-bone">Deposits</h1>
+        {/* At the top, left of the alerts bell (in the layout); on a phone, beside the title. */}
+        <AnswersHelp className="md:absolute md:top-0 md:right-10 md:z-10" />
+      </div>
       <p className="text-sm text-muted-foreground">Zelle transfers, checks and other money in that isn&apos;t a paycheck or interest, and what you said each one was.</p>
     </div>
   );
