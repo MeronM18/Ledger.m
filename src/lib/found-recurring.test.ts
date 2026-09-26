@@ -20,46 +20,31 @@ const prime: DetectedSubscription = {
   charges: [],
 };
 const opts = (over: Partial<Parameters<typeof foundRecurring>[1]> = {}) => ({
-  tracked: [],
-  cancelledElsewhere: [],
   prefs: resolveFoundRecurring(null),
+  cancelledOn: () => null,
   todayIso: "2026-09-25",
   institutionOf: () => "Chase",
   ...over,
 });
 
 describe("foundRecurring", () => {
-  it("lists one nothing else tracks, with its bank", () => {
-    expect(foundRecurring([prime], opts())).toMatchObject([{ name: "Amazon Prime", active: true, institution: "Chase", chargedAfterCancel: false }]);
+  it("lists one with its bank", () => {
+    expect(foundRecurring([prime], opts())).toMatchObject([{ name: "Amazon Prime", active: true, institution: "Chase", cancelledOn: null }]);
   });
 
-  it("leaves out one the bank or you already track, and one you dismissed", () => {
-    expect(foundRecurring([prime], opts({ tracked: ["AMAZON PRIME"] }))).toEqual([]);
-    expect(foundRecurring([prime], opts({ prefs: applyFoundAction(resolveFoundRecurring(null), { key: prime.key, action: "dismiss" }) }))).toEqual([]);
+  it("leaves out one you dismissed, until you restore it", () => {
+    const dismissed = applyFoundAction(resolveFoundRecurring(null), { key: prime.key, action: "dismiss" });
+    expect(foundRecurring([prime], opts({ prefs: dismissed }))).toEqual([]);
+    expect(foundRecurring([prime], opts({ prefs: applyFoundAction(dismissed, { key: prime.key, action: "restore" }) }))).toHaveLength(1);
   });
 
-  it("keeps one you cancelled out of the totals until it charges again", () => {
-    const cancelledThen = applyFoundAction(resolveFoundRecurring(null), { key: prime.key, action: "cancel", lastDate: "2026-09-13" });
-    expect(foundRecurring([prime], opts({ prefs: cancelledThen }))[0]).toMatchObject({ active: false, cancelledByYou: true, chargedAfterCancel: false });
-    const cancelledBefore = applyFoundAction(resolveFoundRecurring(null), { key: prime.key, action: "cancel", lastDate: "2026-08-13" });
-    expect(foundRecurring([prime], opts({ prefs: cancelledBefore }))[0]).toMatchObject({ active: true, cancelledByYou: false, chargedAfterCancel: true });
-  });
-
-  it("flags one you'd cancelled elsewhere that's charging again", () => {
-    const [row] = foundRecurring([prime], opts({ cancelledElsewhere: [{ name: "Amazon Prime", lastDate: "2025-12-15" }] }));
-    expect(row.chargedAfterCancel).toBe(true);
+  it("takes one you cancelled out of the totals, from the day given or the older store", () => {
+    expect(foundRecurring([prime], opts({ cancelledOn: () => "2026-09-20" }))[0]).toMatchObject({ active: false, cancelledOn: "2026-09-20" });
+    const older = resolveFoundRecurring({ dismissed: [], cancelled: { [prime.key]: "2026-09-13" } });
+    expect(foundRecurring([prime], opts({ prefs: older }))[0]).toMatchObject({ active: false, cancelledOn: "2026-09-13" });
   });
 
   it("drops one that stopped over a year ago", () => {
     expect(foundRecurring([{ ...prime, active: false, lastDate: "2025-06-13" }], opts())).toEqual([]);
-  });
-});
-
-describe("applyFoundAction", () => {
-  it("restoring clears a dismissal or a cancel", () => {
-    let prefs = applyFoundAction(resolveFoundRecurring(null), { key: "a", action: "dismiss" });
-    prefs = applyFoundAction(prefs, { key: "b", action: "cancel", lastDate: "2026-09-01" });
-    prefs = applyFoundAction(applyFoundAction(prefs, { key: "a", action: "restore" }), { key: "b", action: "restore" });
-    expect(prefs).toEqual({ dismissed: [], cancelled: {} });
   });
 });

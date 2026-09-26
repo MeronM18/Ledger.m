@@ -4,9 +4,7 @@ import { accountName } from "@/lib/account-settings";
 import { buildForecast, nextDueDate, typicalDailySpend, type CardPayment, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
 import { loadManualAccounts } from "@/lib/manual-accounts";
-import { loadRecurringExtras } from "@/lib/recurring-extras";
-import { effectiveNextDate } from "@/lib/subscription-insights";
-import { streamDisplayName } from "@/lib/transaction-display";
+import { loadSubscriptions } from "@/lib/recurring-extras";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { loadAccountSettings, loadAlertThresholds } from "@/lib/ui-preferences";
 import { calendarNow, easternToday } from "@/lib/time";
@@ -25,37 +23,22 @@ export type ForecastData =
       lowBalanceThreshold: number;
     };
 
-function amountOf(...values: (number | string | null)[]): number {
-  for (const v of values) {
-    if (v !== null && v !== undefined && Number(v) !== 0) return Math.abs(Number(v));
-  }
-  return 0;
-}
-
 export const loadForecast = cache(async function loadForecast(admin: AdminClient): Promise<ForecastData> {
-  const [spending, accountsRes, streamsRes, manualRes, manualCardsRes, accountSettings, thresholds, extras] = await Promise.all([
+  const [spending, accountsRes, subscriptions, manualCardsRes, accountSettings, thresholds] = await Promise.all([
     loadSpendingData(admin),
     admin
       .from("accounts")
       .select("id, name, official_name, mask, type, subtype, available_balance, current_balance")
       .eq("is_hidden", false),
-    admin
-      .from("recurring_streams")
-      .select("id, direction, merchant_name, description, average_amount, last_amount, frequency, predicted_next_date, last_date, pfc_detailed")
-      .eq("is_active", true)
-      .eq("user_marked_cancelled", false)
-      .eq("direction", "outflow"),
-    admin.from("manual_subscriptions").select("id, name, amount, frequency, next_billing_date").eq("is_active", true),
+    // Every subscription that's going, each counted once (the bank's, found in your charges, or yours).
+    loadSubscriptions(admin),
     loadManualAccounts(admin),
     loadAccountSettings(admin),
     loadAlertThresholds(admin),
-    loadRecurringExtras(admin),
   ]);
 
   if (accountsRes.error) console.error("Failed to load accounts for forecast", accountsRes.error);
-  if (streamsRes.error) console.error("Failed to load recurring streams for forecast", streamsRes.error);
-  if (manualRes.error) console.error("Failed to load manual subscriptions for forecast", manualRes.error);
-  if (spending.error || accountsRes.error || streamsRes.error || manualRes.error || manualCardsRes.error) return { error: true };
+  if (spending.error || accountsRes.error || subscriptions.error || manualCardsRes.error) return { error: true };
 
   const accounts = accountsRes.data ?? [];
   // Day-to-day cash: checking-type accounts. Savings is usually set aside, so
@@ -88,29 +71,9 @@ export const loadForecast = cache(async function loadForecast(admin: AdminClient
   ];
   const creditOwed = cardPayments.reduce((sum, c) => sum + c.amount, 0);
 
-  // Card payments the bank detected as a recurring bill are left out: the
-  // balances above already cover them, and counting both would double it.
-  const streams = (streamsRes.data ?? []).filter((s) => s.pfc_detailed !== "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT");
-  const bills: RecurringItem[] = [
-    ...streams.map((s) => ({
-      id: s.id as string,
-      name: streamDisplayName(s, "outflow", "Recurring bill"),
-      amount: amountOf(s.average_amount, s.last_amount),
-      frequency: s.frequency as string | null,
-      date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
-    })),
-    ...(manualRes.data ?? []).map((m) => ({
-      id: m.id as string,
-      name: m.name as string,
-      amount: Math.abs(Number(m.amount)),
-      frequency: m.frequency as string,
-      date: m.next_billing_date as string | null,
-    })),
-    // Found in your charges: ones the bank's feed missed.
-    ...extras.found
-      .filter((f) => f.active)
-      .map((f) => ({ id: `found-${f.key}`, name: f.name, amount: f.amount, frequency: f.frequency as string, date: f.nextDate })),
-  ].filter((b) => b.amount > 0);
+  // Card payments the bank detected as a recurring bill are left out of the
+  // list: the balances above already cover them, and counting both would double it.
+  const bills: RecurringItem[] = subscriptions.tracked.map((t) => ({ id: t.key, name: t.name, amount: t.amount, frequency: t.frequency, date: t.date }));
 
   const forecast = buildForecast({
     cash,

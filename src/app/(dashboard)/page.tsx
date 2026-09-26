@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { DepositReviewCard } from "@/components/deposit-review";
 import { GreetingHeader } from "@/components/greeting-header";
+import { SubscriptionReviewCard } from "@/components/subscription-review";
 import { MonthChart } from "@/components/overview/month-chart";
 import { AccountNotices, BudgetCard, PanelSkeleton, RecentTransactionsCard, UpcomingCard, WhereItWentCard } from "@/components/overview/overview-cards";
 import { StatTile, type TileChange } from "@/components/overview/stat-tile";
@@ -27,6 +28,7 @@ import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadForecast } from "@/lib/forecast-data";
+import { loadSubscriptions } from "@/lib/recurring-extras";
 import { calendarNow } from "@/lib/time";
 import { describeTransactions } from "@/lib/transaction-kind";
 import { loadCardOrder, loadDepositReviews, loadDisplayName, loadMonthlyBudget } from "@/lib/ui-preferences";
@@ -91,6 +93,7 @@ export default async function OverviewPage() {
     monthlyBudget,
     displayName,
     depositReviews,
+    subscriptions,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
     admin.from("manual_assets").select("value, is_liability"),
@@ -108,6 +111,8 @@ export default async function OverviewPage() {
     loadMonthlyBudget(admin),
     loadDisplayName(admin),
     loadDepositReviews(admin),
+    // New subscriptions, and charges after a cancel, waiting for an answer.
+    loadSubscriptions(admin),
   ]);
 
   if (acctError) console.error("Failed to load accounts for overview", acctError);
@@ -302,6 +307,7 @@ export default async function OverviewPage() {
       <GreetingHeader name={displayName} />
       <AccountNotices items={notices} />
       <DepositReviewCard deposits={toReview} reviewed={[]} charges={charges} />
+      <SubscriptionReviewCard review={subscriptions.review} variant="overview" />
       {/*
         Two columns on a wide screen, each a stack that ends level with the
         other, so rearranging never leaves a hole. On anything narrower, one

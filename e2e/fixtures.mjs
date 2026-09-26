@@ -127,6 +127,8 @@ export function buildFixtures(now = new Date()) {
   // Amazon Prime, which the bank never picked up: $7.94 a month again after a
   // long break, the latest on Freedom Flex after two on the Apple Card (below).
   tx(addDays(today, -12), IDS.freedom, 7.94, "Amazon Prime*RT4K2", "Amazon Prime", "GENERAL_MERCHANDISE", "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES");
+  // Hulu's first charge, still pending: a new subscription to ask about.
+  tx(addDays(today, -1), IDS.freedom, 9.99, "HULU 877-8244858", "Hulu", "ENTERTAINMENT", "ENTERTAINMENT_TV_AND_MOVIES", { pending: true });
   tx(today, IDS.freedom, 6.45, "STARBUCKS", "Starbucks", "FOOD_AND_DRINK", "FOOD_AND_DRINK_COFFEE", { pending: true });
   // Money in that isn't pay or interest, waiting on the Overview to be told what it was.
   tx(addDays(today, -2), IDS.checking, -45, "Zelle payment from JORDAN LEE", null, "TRANSFER_IN", "TRANSFER_IN_ACCOUNT_TRANSFER");
@@ -200,6 +202,8 @@ export function buildFixtures(now = new Date()) {
       { id: uuid("ms"), name: "Snapchat+", amount: 1.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 29)), notes: null, is_active: true },
       // Added from the Apple Card statements' suggestions.
       { id: uuid("ms"), name: "Uber One", amount: 9.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 12)), notes: "Found on your Apple Card", is_active: true },
+      // Added by hand before the bank picked it up: the bank's Spotify stands for it.
+      { id: uuid("ms"), name: "Spotify", amount: 11.99, frequency: "MONTHLY", next_billing_date: iso(addDays(today, 5)), notes: null, is_active: true },
     ],
     manual_assets: [
       // Entered on different days, so the net worth line picks each up from then.

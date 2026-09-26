@@ -7,20 +7,15 @@ import { FOUND_RECURRING_KEY, loadFoundRecurring } from "@/lib/ui-preferences";
 
 const bodySchema = z.object({
   key: z.string().min(1).max(200),
-  action: z.enum(["dismiss", "cancel", "restore"]),
-  // Cancelling: the day of its latest charge.
-  lastDate: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(),
+  action: z.enum(["dismiss", "restore"]),
 });
 
-/** Say a found recurring charge isn't one, that you cancelled it, or undo either. */
+/** Say a found recurring charge isn't a subscription, or undo that. */
 export async function PATCH(request: Request) {
   const auth = await requireApiUser();
   if ("error" in auth) return auth.error;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success || (parsed.data.action === "cancel" && !parsed.data.lastDate)) {
+  if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 

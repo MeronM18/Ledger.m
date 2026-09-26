@@ -20,7 +20,8 @@ export type AlertKind =
   | "monthly-summary"
   | "import-reminder"
   | "high-utilization"
-  | "deposit-review";
+  | "deposit-review"
+  | "subscription-review";
 
 // `href`: where tapping the push opens, when there's a page for it.
 export type Alert = { key: string; kind: AlertKind; title: string; body: string; href?: string };
@@ -67,7 +68,7 @@ export function budgetAlerts(progress: BudgetProgress[], monthKey: string, curre
 }
 
 export type RenewalCandidate = {
-  source: "plaid" | "manual";
+  source: "plaid" | "manual" | "found";
   id: string;
   name: string;
   amount: number;
@@ -277,4 +278,38 @@ export function bankSigninAlerts(banks: { id: string; name: string }[], isoDate:
     title: `Sign in to ${b.name} again`,
     body: `${b.name} stopped syncing. Open Accounts in Ledger.m and tap Reconnect.`,
   }));
+}
+
+const monthDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const plainKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Subscriptions waiting on you: a charge from one you cancelled (even one),
+ * and the first charge from a subscription service nothing tracks yet. Keyed
+ * by merchant, price and month, so a pending charge that posts days later
+ * isn't a second push.
+ */
+export function subscriptionReviewAlerts(
+  review: {
+    afterCancel: { key: string; name: string; cancelledOn: string; charge: { date: string; amount: number; accountName: string | null } }[];
+    newSubscriptions: { name: string; renewsOn: string; charge: { date: string; amount: number; accountName: string | null } }[];
+  },
+  currency: string
+): Alert[] {
+  return [
+    ...review.afterCancel.map((a) => ({
+      key: `subscription-after-cancel:${a.key}:${Math.round(a.charge.amount * 100)}:${a.charge.date.slice(0, 7)}`,
+      kind: "subscription-review" as const,
+      title: `${a.name} charged you after you cancelled`,
+      body: `${formatCurrency(a.charge.amount, currency)} on ${monthDay(a.charge.date)}${a.charge.accountName ? ` to ${a.charge.accountName}` : ""}, after you cancelled it on ${monthDay(a.cancelledOn)}.`,
+      href: "/recurring",
+    })),
+    ...review.newSubscriptions.map((n) => ({
+      key: `subscription-new:${plainKey(n.name)}:${Math.round(n.charge.amount * 100)}:${n.charge.date.slice(0, 7)}`,
+      kind: "subscription-review" as const,
+      title: `New subscription? ${n.name}`,
+      body: `${formatCurrency(n.charge.amount, currency)} on ${monthDay(n.charge.date)}${n.charge.accountName ? ` to ${n.charge.accountName}` : ""}. Track it to see it renew on ${monthDay(n.renewsOn)}.`,
+      href: "/recurring",
+    })),
+  ];
 }

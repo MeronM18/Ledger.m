@@ -10,6 +10,7 @@ import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
 import { resolveInstallmentPrefs, type InstallmentPrefs } from "@/lib/installments";
 import { resolveFoundRecurring, type FoundRecurringPrefs } from "@/lib/found-recurring";
+import { resolveSubscriptionReview, type SubscriptionReviewPrefs } from "@/lib/subscription-review";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -130,4 +131,15 @@ export const loadFoundRecurring = cache(async function loadFoundRecurring(
   const { data, error } = await admin.from("ui_preferences").select("value").eq("key", FOUND_RECURRING_KEY).maybeSingle();
   if (error) console.error("Failed to load found recurring charges", error);
   return { prefs: resolveFoundRecurring(data?.value), error: Boolean(error) };
+});
+
+export const SUBSCRIPTION_REVIEW_KEY = "subscription_review";
+
+/** When you cancelled each subscription, and your answers about new ones and charges after a cancel. */
+export const loadSubscriptionReview = cache(async function loadSubscriptionReview(
+  admin: AdminClient
+): Promise<{ prefs: SubscriptionReviewPrefs; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", SUBSCRIPTION_REVIEW_KEY).maybeSingle();
+  if (error) console.error("Failed to load subscription review", error);
+  return { prefs: resolveSubscriptionReview(data?.value), error: Boolean(error) };
 });

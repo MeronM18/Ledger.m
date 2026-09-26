@@ -3,15 +3,13 @@ import type { CalendarEvent } from "@/components/subscription-calendar";
 import type { ManualSubscription } from "@/components/manual-subscription-form";
 import { QueryErrorState } from "@/components/query-error";
 import { occurrencesBetween } from "@/lib/forecast";
-import { effectiveNextDate, subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
+import { subscriptionInsights, type InsightItem } from "@/lib/subscription-insights";
 import { loadFirstChargeAmounts } from "@/lib/subscription-data";
-import { loadManualAccounts } from "@/lib/manual-accounts";
 import { subscriptionAccount } from "@/lib/subscription-accounts";
-import { sameName } from "@/lib/recurring-detection";
-import { loadRecurringExtras } from "@/lib/recurring-extras";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { loadSubscriptions } from "@/lib/recurring-extras";
+import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { streamDisplayName } from "@/lib/transaction-display";
+import { humanizeTransactionName } from "@/lib/transaction-display";
 import { calendarNow, easternToday } from "@/lib/time";
 
 // How far ahead the renewal calendar looks: about three months of days.
@@ -28,19 +26,7 @@ export default async function SubscriptionsPage() {
 
   // Started now, used further down: they don't depend on the streams, so
   // they load alongside them instead of after.
-  const importedPromise = Promise.all([
-    fetchAllRows<{ id: string; date: string; name: string; amount: number; pfc_primary: string; manual_account_id: string | null }>((from, to) =>
-      admin
-        .from("manual_transactions")
-        .select("id, date, name, amount, pfc_primary, manual_account_id")
-        .eq("source", "apple_card_csv")
-        .order("date")
-        .order("id")
-        .range(from, to)
-    ),
-    loadManualAccounts(admin),
-    loadRecurringExtras(admin),
-  ]);
+  const extrasPromise = Promise.all([loadSubscriptions(admin), loadLedger(admin)]);
 
   // Only outflow streams: inflow streams (payroll, interest credits) are
   // money coming in, not subscriptions someone would want to cancel.
@@ -103,88 +89,32 @@ export default async function SubscriptionsPage() {
     previousCharge: recent.get(s.id)?.previous ?? null,
   }));
 
-  const streamName = (s: StreamRow) => streamDisplayName(s);
-  const activeStreams = streams.filter((s) => s.is_active && !s.user_marked_cancelled);
-  const activeManual = manualSubscriptions.filter((m) => m.is_active);
+  // Every subscription reconciled into one list (subscription-review.ts):
+  // a copy another source stands for is left out, so nothing's listed or
+  // counted twice, and totals, the calendar and insights all count the same ones.
+  const [subscriptions, ledger] = await extrasPromise;
+  const { covered, tracked } = subscriptions;
+  const shownStreams = streams.filter((s) => !covered[`plaid-${s.id}`]);
+  const shownFound = subscriptions.found.filter((f) => !covered[`found-${f.key}`]);
 
-  const [importedRes, manualAccounts, { found, installments }] = await importedPromise;
+  // A subscription you added belongs to the card its charges land on.
+  const cards = ledger.accounts.map((a) => ({ id: a.id, name: a.name }));
+  const named = ledger.transactions.filter((t) => t.amount > 0).map((t) => ({ name: humanizeTransactionName(t), accountId: t.account?.id ?? null }));
+  const manualWithCards: ManualSubscription[] = manualSubscriptions
+    .filter((m) => !covered[`manual-${m.id}`])
+    .map((m) => ({ ...m, foundOn: subscriptionAccount({ name: m.name, notes: m.notes }, named, cards) }));
 
-  if (importedRes.error) console.error("Failed to load imported card transactions", importedRes.error);
-
-  // A subscription you added that's charged to an imported card (Apple Card)
-  // belongs to that card: found by its name among the card's charges, or by
-  // the note left when it was added from them.
-  const importedCards = manualAccounts.accounts.filter((a) => a.type === "credit").map((a) => ({ id: `manual:${a.id}`, name: a.name }));
-  const importedCharges = (importedRes.data ?? []).map((t) => ({ name: t.name, accountId: t.manual_account_id ? `manual:${t.manual_account_id}` : null }));
-  const manualWithCards: ManualSubscription[] = manualSubscriptions.map((m) => ({
-    ...m,
-    foundOn: subscriptionAccount({ name: m.name, notes: m.notes }, importedCharges, importedCards),
-  }));
-  // Recurring charges found in every account that the bank's feed missed.
-  const todayIso = calendarNow().isoDate;
-  const activeFound = found.filter((f) => f.active);
-  // The bank's copy of one that stopped there but goes on elsewhere (moved
-  // to another card, or restarted) is the same subscription: the found one stands for it.
-  const shownStreams = streams.filter((s) => s.is_active || s.user_marked_cancelled || !activeFound.some((f) => sameName(f.name, streamName(s))));
-
+  const detailed = new Map(streams.map((s) => [`plaid-${s.id}`, s.pfc_detailed]));
   const insights = subscriptionInsights(
-    [
-      ...activeStreams.map((s) => ({
-        key: `plaid-${s.id}`,
-        name: streamName(s),
-        source: "plaid" as const,
-        amount: s.average_amount ?? 0,
-        frequency: s.frequency,
-        categoryDetailed: s.pfc_detailed,
-      })),
-      ...activeManual.map((m) => ({
-        key: `manual-${m.id}`,
-        name: m.name,
-        source: "manual" as const,
-        amount: m.amount,
-        frequency: m.frequency,
-      })),
-      ...activeFound.map((f) => ({
-        key: `found-${f.key}`,
-        name: f.name,
-        source: "found" as const,
-        amount: f.amount,
-        frequency: f.frequency,
-      })),
-    ] satisfies InsightItem[],
+    tracked.map((t) => ({ key: t.key, name: t.name, source: t.source, amount: t.amount, frequency: t.frequency, categoryDetailed: detailed.get(t.key) ?? null })) satisfies InsightItem[],
     "USD"
   );
 
-
+  const todayIso = calendarNow().isoDate;
   const today = easternToday();
   const end = new Date(today.getTime() + CALENDAR_DAYS * 86_400_000);
-  const calendarEvents: CalendarEvent[] = [
-    ...activeStreams.map((s) => ({
-      id: `plaid-${s.id}`,
-      name: streamName(s),
-      amount: s.average_amount ?? 0,
-      frequency: s.frequency,
-      date: effectiveNextDate(s.predicted_next_date, s.last_date, s.frequency),
-    })),
-    ...activeManual.map((m) => ({
-      id: `manual-${m.id}`,
-      name: m.name,
-      amount: m.amount,
-      frequency: m.frequency as string | null,
-      date: m.next_billing_date,
-    })),
-    ...activeFound.map((f) => ({
-      id: `found-${f.key}`,
-      name: f.name,
-      amount: f.amount,
-      frequency: f.frequency as string | null,
-      date: f.nextDate,
-    })),
-  ]
-    .filter((i) => i.amount > 0)
-    .flatMap((item) =>
-      occurrencesBetween(item, today, end).map((date) => ({ key: item.id, date, name: item.name, amount: item.amount }))
-    )
+  const calendarEvents: CalendarEvent[] = tracked
+    .flatMap((item) => occurrencesBetween({ ...item, id: item.key }, today, end).map((date) => ({ key: item.key, date, name: item.name, amount: item.amount })))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   if (error || manualError || acctError) {
@@ -199,12 +129,15 @@ export default async function SubscriptionsPage() {
   return (
     <RecurringBoard
       streams={shownStreams}
-      found={found}
+      found={shownFound}
       manualSubscriptions={manualWithCards}
+      covers={subscriptions.covers}
+      cancellations={subscriptions.cancellations}
+      review={subscriptions.review}
       accounts={accountRows.map((a) => ({ id: a.id, name: a.name, mask: a.mask }))}
       insights={insights}
       calendarEvents={calendarEvents}
-      installments={installments}
+      installments={subscriptions.installments}
       todayIso={todayIso}
     />
   );

@@ -6,6 +6,7 @@ import {
   lowBalanceAlerts,
   priceIncreaseAlerts,
   renewalAlerts,
+  subscriptionReviewAlerts,
   unusualChargeAlerts,
   type Alert,
   type RenewalCandidate,
@@ -17,6 +18,7 @@ import { summarizeUtilization } from "@/lib/credit-utilization";
 import { importReminderAlerts } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
+import { loadSubscriptions } from "@/lib/recurring-extras";
 import { monthlySummary, monthlySummaryAlert } from "@/lib/monthly-summary";
 import { loadAccountSettings, loadAlertSettings, loadAlertThresholds, loadDepositReviews, loadMonthlyBudget } from "@/lib/ui-preferences";
 import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
@@ -97,7 +99,7 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
   const now = calendarNow();
   const today = easternToday();
 
-  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget, thresholds, depositReviews] = await Promise.all([
+  const [data, budgetsRes, streamsRes, manualSubsRes, accountsRes, itemsRes, snapshotsRes, settings, manualAccounts, accountSettings, monthlyBudget, thresholds, depositReviews, subscriptions] = await Promise.all([
     loadLedger(admin),
     admin.from("budgets").select("id, category, monthly_amount"),
     admin
@@ -122,6 +124,8 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
     loadMonthlyBudget(admin),
     loadAlertThresholds(admin),
     loadDepositReviews(admin),
+    // Every subscription, each counted once, and what's waiting on you about them.
+    loadSubscriptions(admin),
   ]);
 
   // A failed read must not look like "nothing to alert about" for that
@@ -191,28 +195,24 @@ export async function runAlertChecks(admin: AdminClient = createAdminClient()): 
       frequency: s.frequency as string | null,
       date: effectiveNextDate(s.predicted_next_date as string | null, s.last_date as string | null, s.frequency as string | null),
     }));
-    const candidates: RenewalCandidate[] = [
-      ...streams.map((s) => ({
-        source: "plaid" as const,
-        id: s.id,
-        name: s.name,
-        amount: s.average_amount ?? s.last_amount ?? 0,
-        frequency: s.frequency,
-        date: s.date,
-      })),
-      ...(manualSubsRes.data ?? []).map((m) => ({
-        source: "manual" as const,
-        id: m.id as string,
-        name: m.name as string,
-        amount: Number(m.amount),
-        frequency: m.frequency as string,
-        date: m.next_billing_date as string | null,
-      })),
-    ];
-    alerts.push(
-      ...renewalAlerts(candidates, today, thresholds.renewalDaysAhead, currency),
-      ...priceIncreaseAlerts(streams, currency)
-    );
+    alerts.push(...priceIncreaseAlerts(streams, currency));
+  }
+
+  // Renewals of everything tracked (the bank's, found in your charges, or
+  // yours, each once), and subscriptions waiting on an answer.
+  if (subscriptions.error) {
+    console.error("Skipping renewal and subscription review alerts: load failed");
+  } else {
+    const candidates: RenewalCandidate[] = subscriptions.tracked.map((t) => ({
+      source: t.source,
+      // The key without its source, as renewal keys have always been.
+      id: t.key.slice(t.source.length + 1),
+      name: t.name,
+      amount: t.amount,
+      frequency: t.frequency,
+      date: t.date,
+    }));
+    alerts.push(...renewalAlerts(candidates, today, thresholds.renewalDaysAhead, currency), ...subscriptionReviewAlerts(subscriptions.review, currency));
   }
 
   if (accountsRes.error) {

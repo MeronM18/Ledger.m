@@ -9,6 +9,7 @@ export const ALERT_SETTINGS = [
   { kind: "budget-over", label: "Over budget", description: "When a category goes over its monthly budget." },
   { kind: "budget-warning", label: "Budget nearly used", description: "When a category reaches 80% of its budget." },
   { kind: "renewal", label: "Upcoming renewals", description: "A subscription charging within 3 days." },
+  { kind: "subscription-review", label: "Subscriptions to review", description: "A new subscription's first charge, and any charge from one you cancelled." },
   { kind: "price-increase", label: "Price increases", description: "A subscription charging more than it used to." },
   { kind: "low-balance", label: "Low balance", description: "A checking or savings account under $100, at most weekly." },
   { kind: "high-utilization", label: "High card utilization", description: "A card using 30% or more of its limit, and again at 50%, once a month." },

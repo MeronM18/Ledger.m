@@ -13,6 +13,9 @@ import { buildFixtures, TEST_USER } from "./fixtures.mjs";
 
 export const MOCK_PORT = Number(process.env.MOCK_SUPABASE_PORT ?? 54321);
 
+// Column defaults the real tables have, for rows inserted without them.
+const DEFAULTS = { manual_subscriptions: { is_active: true } };
+
 const b64url = (s) => Buffer.from(s).toString("base64url");
 
 export function sessionCookie(host = "localhost") {
@@ -251,7 +254,7 @@ export function startMockSupabase({ port = MOCK_PORT } = {}) {
           Object.assign(existing, r);
           inserted.push(existing);
         } else {
-          const row = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...r };
+          const row = { id: crypto.randomUUID(), created_at: new Date().toISOString(), ...DEFAULTS[table], ...r };
           rows.push(row);
           inserted.push(row);
         }

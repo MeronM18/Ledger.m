@@ -84,6 +84,11 @@ const CADENCE: Record<Frequency, { lo: number; hi: number; skip?: [number, numbe
 const KNOWN =
   /\bprime\b|netflix|spotify|hulu|disney|\bmax\b|hbo|youtube|apple\s*(services|one|music|tv|arcade)|icloud|apple\.com\/bill|paramount|peacock|audible|kindle|sirius|pandora|tidal|crunchyroll|espn|fubo|sling|chatgpt|openai|anthropic|claude|midjourney|adobe|microsoft 365|office 365|xbox|playstation|nintendo|\bsteam\b|uber one|dashpass|doordash|grubhub|instacart|walmart\+|walmart plus|patreon|onlyfans|twitch|substack|nytimes|new york times|wsj|washington post|gym|fitness|planet fitness|la fitness|crunch|equinox|peloton|strava|duolingo|headspace|\bcalm\b|nordvpn|expressvpn|surfshark|dropbox|google (one|storage|workspace)|github|notion|canva|grammarly|linkedin|hinge|tinder|bumble|zoom|slack|squarespace|wix|godaddy|shopify|hellofresh|\bfactor\b|blue apron|verizon|t-mobile|at&t|xfinity|comcast|spectrum|geico|progressive|state farm|allstate|lemonade|membership|subscription/i;
 
+/** A name that's a known subscription service (Netflix, Amazon Prime, a gym). */
+export function isKnownService(name: string): boolean {
+  return KNOWN.test(name);
+}
+
 // A price that moves each time (a utility, a phone bill) only counts in
 // categories where bills live; groceries and gas also come about weekly.
 const BILL_CATEGORIES = new Set(["RENT_AND_UTILITIES", "GENERAL_SERVICES", "LOAN_PAYMENTS", "BANK_FEES", "MEDICAL", "PERSONAL_CARE", "ENTERTAINMENT"]);
