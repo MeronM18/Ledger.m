@@ -24,4 +24,14 @@ describe("applyCardOrder", () => {
     const cards = [{ id: "x" }, { id: "y" }];
     expect(applyCardOrder(cards, (c) => c.id, ["y", "x"])).toEqual([{ id: "y" }, { id: "x" }]);
   });
+
+  it("can put a new item where it sits by default, after the one before it", () => {
+    const id = (s: string) => s;
+    // "cash" follows "worth" by default; the saved order moved "spent" first.
+    expect(applyCardOrder(["worth", "cash", "spent", "income"], id, ["spent", "worth", "income"], { fresh: "in-place" })).toEqual(["spent", "worth", "cash", "income"]);
+    // One with nothing before it goes first.
+    expect(applyCardOrder(["safe", "budget", "upcoming"], id, ["upcoming", "budget"], { fresh: "in-place" })).toEqual(["safe", "upcoming", "budget"]);
+    // Nothing saved: the default order.
+    expect(applyCardOrder(["a", "b"], id, [], { fresh: "in-place" })).toEqual(["a", "b"]);
+  });
 });

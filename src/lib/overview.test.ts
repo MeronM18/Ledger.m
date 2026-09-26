@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  budgetSuggestion,
   change,
   cumulative,
   dailySpending,
   incomeByMonth,
   incomeSoFar,
+  liquidCash,
+  monthEndPace,
   pillLevels,
   pillLevelsInRange,
   shiftMonth,
@@ -113,5 +116,44 @@ describe("the rest of the overview", () => {
   it("measures change only against something", () => {
     expect(change(120, 100)).toBeCloseTo(0.2);
     expect(change(5, 0)).toBeNull();
+  });
+});
+
+describe("liquidCash", () => {
+  it("adds bank and cash, and takes off what every card is owed", () => {
+    const r = liquidCash(
+      [
+        { type: "depository", current_balance: 1200.5 },
+        { type: "depository", current_balance: "300" },
+        { type: "credit", current_balance: 450 },
+        // A card in credit owes nothing; it isn't added to the cash either.
+        { type: "credit", current_balance: -20 },
+        { type: "investment", current_balance: 9000 },
+      ],
+      [{ type: "credit", balance: 150 }, { type: "savings", balance: 500 }],
+      [{ value: 80 }]
+    );
+    expect(r).toEqual({ bank: 1500.5, cash: 80, cards: 600, net: 980.5 });
+  });
+});
+
+describe("monthEndPace", () => {
+  it("carries the month's average a day to its end", () => {
+    expect(monthEndPace(1500, 25, 30)).toBe(1800);
+  });
+  it("waits for a few days of the month, and stops on its last day", () => {
+    expect(monthEndPace(1850, 2, 30)).toBeNull();
+    expect(monthEndPace(1850, 30, 30)).toBeNull();
+  });
+});
+
+describe("budgetSuggestion", () => {
+  it("suggests the recent average, rounded up to $50, when the budget is far below it", () => {
+    expect(budgetSuggestion([4000, 3200, 4915], 750)).toEqual({ average: 4038.33, suggested: 4050 });
+  });
+  it("stays quiet when the budget is close, missing, or there's too little history", () => {
+    expect(budgetSuggestion([1000, 1100, 900], 800)).toBeNull();
+    expect(budgetSuggestion([4000, 3200], null)).toBeNull();
+    expect(budgetSuggestion([0, 0, 4000], 750)).toBeNull();
   });
 });

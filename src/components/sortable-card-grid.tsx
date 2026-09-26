@@ -92,6 +92,7 @@ const noRef = () => {};
 // How a set of cards is laid out. Every card in a set is the same width,
 // so however they're rearranged there's never a gap:
 // - row: side by side, three across (the first takes the whole row on a phone);
+// - quad: four, two by two until the screen is wide enough for a row;
 // - stack: one above another, the last stretching so the stack ends level
 //   with whatever stands beside it.
 // - column: a stack from 1280px; below that its cards join the page's single
@@ -99,6 +100,8 @@ const noRef = () => {};
 //   narrowOrder, so stacks side by side on a wide screen interleave on a phone.
 const LAYOUT = {
   row: "grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 [&>*:first-child]:col-span-2 sm:[&>*:first-child]:col-span-1",
+  // Four figures: two by two, then four across once there's room for them.
+  quad: "grid grid-cols-2 gap-3 sm:gap-4 2xl:grid-cols-4",
   stack: "flex h-full flex-col gap-3 sm:gap-4 [&>*:last-child]:flex-1",
   column: "contents xl:flex xl:h-full xl:flex-col xl:gap-4 xl:[&>*:last-child]:flex-1",
 } as const;

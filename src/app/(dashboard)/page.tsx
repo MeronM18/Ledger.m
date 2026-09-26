@@ -3,7 +3,16 @@ import { DepositReviewCard } from "@/components/deposit-review";
 import { GreetingHeader } from "@/components/greeting-header";
 import { SubscriptionReviewCard } from "@/components/subscription-review";
 import { MonthChart } from "@/components/overview/month-chart";
-import { AccountNotices, BudgetCard, PanelSkeleton, RecentTransactionsCard, UpcomingCard, WhereItWentCard } from "@/components/overview/overview-cards";
+import {
+  AccountNotices,
+  BudgetCard,
+  GoalsCard,
+  PanelSkeleton,
+  RecentTransactionsCard,
+  SafeToSpendCard,
+  UpcomingCard,
+  WhereItWentCard,
+} from "@/components/overview/overview-cards";
 import { StatTile, type TileChange } from "@/components/overview/stat-tile";
 import { SortableCardGrid, type GridCard } from "@/components/sortable-card-grid";
 import { budgetPlan, budgetProgress, monthCategorySpending } from "@/lib/budgets";
@@ -15,10 +24,13 @@ import { chargeOptions, depositsToReview } from "@/lib/deposit-review";
 import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import {
+  budgetSuggestion,
   cumulative,
   dailySpending,
   incomeByMonth,
   incomeSoFar,
+  liquidCash,
+  monthEndPace,
   shiftMonth,
   spendingByMonth,
   spendingSoFar,
@@ -28,6 +40,7 @@ import { totalPreciousMetalsValue } from "@/lib/precious-metals";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadForecast } from "@/lib/forecast-data";
+import { loadGoals } from "@/lib/goals-data";
 import { loadSubscriptions } from "@/lib/recurring-extras";
 import { calendarNow } from "@/lib/time";
 import { describeTransactions } from "@/lib/transaction-kind";
@@ -68,14 +81,18 @@ function movement(share: number | null, against: string): TileChange | null {
   return { text: `${pct}%`, direction: up ? "up" : "down", tone: "quiet", label: `${pct}% ${up ? "more" : "less"} than ${against}` };
 }
 
+// A card added to the Overview lands where it's designed to sit, even in a layout you've rearranged.
+const IN_PLACE = { fresh: "in-place" } as const;
+
 // The newest charges sent along for "paid me back", to pick from or search.
 const CHARGES_SENT = 300;
 
 export default async function OverviewPage() {
   const admin = createAdminClient();
-  // The Upcoming card loads its forecast on its own (in Suspense); starting
-  // that read now, beside the page's, means it's ready sooner.
+  // The Safe to spend, Upcoming and Goals cards load on their own (in
+  // Suspense); starting those reads now, beside the page's, means they're ready sooner.
   void loadForecast(admin);
+  void loadGoals(admin);
 
   const [
     { data: accountsData, error: acctError },
@@ -96,7 +113,7 @@ export default async function OverviewPage() {
     subscriptions,
   ] = await Promise.all([
     admin.from("accounts").select("type, current_balance").eq("is_hidden", false),
-    admin.from("manual_assets").select("value, is_liability"),
+    admin.from("manual_assets").select("value, is_liability, category"),
     admin.from("precious_metal_holdings").select("metal, weight, weight_unit, purity"),
     admin.from("metal_prices").select("metal, price_per_troy_oz_usd"),
     loadLedger(admin),
@@ -143,6 +160,13 @@ export default async function OverviewPage() {
     now.isoDate
   );
 
+  // Money you can reach today, less what the cards are owed.
+  const liquid = liquidCash(
+    accountsData ?? [],
+    manualCards,
+    (manualData ?? []).filter((a) => a.category === "cash" && !a.is_liability)
+  );
+
   // This month: spending net of refunds, the same total Spending and Budgets show.
   const categorySpending = monthCategorySpending(ledger.spending, now.year, now.month);
   const monthTotal = Math.round(categorySpending.reduce((s, c) => s + c.amount, 0) * 100) / 100;
@@ -186,6 +210,11 @@ export default async function OverviewPage() {
     .filter((p) => p.percentUsed >= 0.8)
     .slice(0, 2)
     .map((p) => ({ category: p.category, label: p.label, spent: p.spent, budget: p.budget, percentUsed: p.percentUsed, status: p.status }));
+  // Where the month is heading, how last month ended, and a budget that fits recent months.
+  const projected = monthEndPace(spent.now, today, daily.length);
+  const lastMonthTotal = Math.round(dailySpending(ledger.spending, prev).reduce((s, v) => s + v, 0) * 100) / 100;
+  // The three months before this one (spendingByMonth ends on this month, still going).
+  const suggestion = spendingError ? null : budgetSuggestion(spendingByMonth(ledger.spending, ref, 4).slice(0, -1).map((mo) => mo.amount), plan.total);
   const incomeMonths = incomeByMonth(ledger.transactions, ref, 6);
   const months = spendingByMonth(ledger.spending, ref, 6).map((mo, i) => ({ month: mo.month, spending: mo.amount, income: incomeMonths[i].amount }));
 
@@ -208,6 +237,24 @@ export default async function OverviewPage() {
                 : `${trend.change >= 0 ? "+" : "−"}${whole(Math.abs(trend.change))} ${trend.since ? `since ${shortDate(trend.since)}` : "in 30 days"}`
           }
           shortNote={netWorthError || trend.change === null ? undefined : `${trend.change >= 0 ? "+" : "−"}${whole(Math.abs(trend.change))} ${trend.since ? `since ${shortDate(trend.since)}` : "in 30 days"}`}
+        />
+      ),
+    },
+    {
+      id: "cash-now",
+      label: "Cash after cards",
+      node: (
+        <StatTile
+          label="Cash after cards"
+          shortLabel="Cash"
+          href="/accounts"
+          value={acctError || manualError || manualCardsError ? "—" : <Amount value={liquid.net} />}
+          note={
+            acctError || manualError || manualCardsError
+              ? "Couldn't load your balances."
+              : `${whole(liquid.bank + liquid.cash)} in the bank${liquid.cash > 0 ? " and cash" : ""}, ${whole(liquid.cards)} owed on cards`
+          }
+          shortNote={acctError || manualError || manualCardsError ? undefined : `${whole(liquid.cards)} on cards`}
         />
       ),
     },
@@ -259,6 +306,8 @@ export default async function OverviewPage() {
           lastMonth={cumulative(dailySpending(ledger.spending, prev))}
           budget={plan.total}
           months={months}
+          projected={projected}
+          lastMonthTotal={lastMonthTotal}
         />
       ),
     },
@@ -267,10 +316,28 @@ export default async function OverviewPage() {
       label: "Recent transactions",
       node: <RecentTransactionsCard rows={ledger.transactions.slice(0, 7)} described={described} error={ledger.error} />,
     },
+    {
+      id: "goals-progress",
+      label: "Goals",
+      node: (
+        <Suspense fallback={<PanelSkeleton />}>
+          <GoalsCard todayIso={now.isoDate} />
+        </Suspense>
+      ),
+    },
   ];
 
   // Beside them: the month against the budget, what's due, and where the money went.
   const rail: GridCard[] = [
+    {
+      id: "safe-to-spend",
+      label: "Safe to spend",
+      node: (
+        <Suspense fallback={<PanelSkeleton />}>
+          <SafeToSpendCard todayIso={now.isoDate} />
+        </Suspense>
+      ),
+    },
     {
       id: "budget-now",
       label: "Left to spend",
@@ -283,6 +350,8 @@ export default async function OverviewPage() {
           status={m?.status ?? "ok"}
           daysLeft={daysLeft}
           watch={watch}
+          spent={monthTotal}
+          suggestion={suggestion}
         />
       ),
     },
@@ -311,22 +380,22 @@ export default async function OverviewPage() {
       {/*
         Two columns on a wide screen, each a stack that ends level with the
         other, so rearranging never leaves a hole. On anything narrower, one
-        column that leads with what's left to spend: the budget card, the
-        headline figures, the month's chart, what's due, where it went, and
-        the latest transactions (by position, so a rearranged column keeps
-        its own order).
+        column that leads with what's safe to spend: that card, the headline
+        figures, the month's chart, the budget, what's due, where it went,
+        the latest transactions and the goals (by position, so a rearranged
+        column keeps its own order).
       */}
       <div className="grid gap-3 sm:gap-4 xl:grid-cols-[minmax(0,1fr)_22rem] 2xl:grid-cols-[minmax(0,1fr)_25rem]">
         <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-4">
           <div className="order-2 min-w-0 xl:order-none">
-            <SortableCardGrid page="overview" layout="row" cards={applyCardOrder(tiles, (c) => c.id, tileOrder)} />
+            <SortableCardGrid page="overview" layout="quad" cards={applyCardOrder(tiles, (c) => c.id, tileOrder, IN_PLACE)} />
           </div>
           <div className="contents xl:block xl:min-w-0 xl:flex-1">
-            <SortableCardGrid page="overview-main" layout="column" narrowOrder={[3, 6, 7]} cards={applyCardOrder(main, (c) => c.id, mainOrder)} />
+            <SortableCardGrid page="overview-main" layout="column" narrowOrder={[3, 7, 8]} cards={applyCardOrder(main, (c) => c.id, mainOrder, IN_PLACE)} />
           </div>
         </div>
         <div className="contents xl:block xl:min-w-0">
-          <SortableCardGrid page="overview-rail" layout="column" narrowOrder={[1, 4, 5]} cards={applyCardOrder(rail, (c) => c.id, railOrder)} />
+          <SortableCardGrid page="overview-rail" layout="column" narrowOrder={[1, 4, 5, 6, 7]} cards={applyCardOrder(rail, (c) => c.id, railOrder, IN_PLACE)} />
         </div>
       </div>
     </div>

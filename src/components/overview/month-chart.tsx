@@ -2,7 +2,6 @@
 
 import { useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CARD_GRIP } from "@/components/overview/stat-tile";
 import { Segmented } from "@/components/segmented";
@@ -26,7 +25,7 @@ const usd = (n: number) => formatCurrency(n, "USD");
 const whole = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(Math.round(n));
 const HEADLINE = "font-serif text-[2.5rem] leading-none font-medium tracking-[-0.01em]";
 
-type DayPoint = { day: number; spent?: number; last?: number; pace?: number };
+type DayPoint = { day: number; spent?: number; last?: number; pace?: number; ahead?: number };
 
 function Row({ label, value, swatch }: { label: string; value: string; swatch: React.ReactNode }) {
   return (
@@ -45,12 +44,17 @@ const SWATCH = {
   income: <span className="h-0.5 w-3 rounded-full bg-moss" />,
   last: <span className="w-3 border-t border-dashed border-ash-grey/70" />,
   pace: <span className="h-0.5 w-3 rounded-full bg-moss" />,
+  ahead: <span className="w-3 border-t-2 border-dashed border-champagne/70" />,
 };
 
 /**
- * This month's spending, the headline of the Overview: how it stands against
- * the monthly budget, then day by day as a running total against an even
- * pace to the budget and against last month, or month by month.
+ * This month's spending, the headline of the Overview: where the month is
+ * heading at its pace so far, then day by day as a running total (carried
+ * on, dashed, to the month's end) against an even pace to the budget and
+ * last month by the same day, or month by month. Drawn to this month's
+ * scale: last month shows only as far as today, so a big month before
+ * doesn't flatten this one. How it stands against the budget is the
+ * Budget card's to say.
  */
 export function MonthChart({
   monthName,
@@ -61,6 +65,8 @@ export function MonthChart({
   lastMonth,
   budget,
   months,
+  projected,
+  lastMonthTotal,
 }: {
   monthName: string; // "September"
   previousMonthName: string;
@@ -75,24 +81,33 @@ export function MonthChart({
   budget: number | null;
   // Money in and spending, each of the last few months.
   months: { month: string; spending: number; income: number }[];
+  // Where the month ends at its pace so far; null early in the month.
+  projected: number | null;
+  // All of last month's spending.
+  lastMonthTotal: number;
 }) {
   const [view, setView] = useState<"days" | "months">("days");
   const days = daily.length;
   const daysLeft = days - today;
   const spent = daily[Math.min(today, days) - 1] ?? 0;
-  const ahead = budget !== null ? spent - (budget * today) / days : null;
 
   const dayData = useMemo<DayPoint[]>(
     () =>
       Array.from({ length: days }, (_, i) => ({
         day: i + 1,
         spent: i < today ? daily[i] : undefined,
-        last: i < lastMonth.length ? lastMonth[i] : undefined,
+        // Last month only as far as today: the comparison is "by this day".
+        last: i < Math.min(today, lastMonth.length) ? lastMonth[i] : undefined,
         pace: budget !== null ? Math.round(((budget * (i + 1)) / days) * 100) / 100 : undefined,
+        // From today on, the month carried to its end at its pace so far.
+        ahead: projected !== null && i >= today - 1 ? Math.round((spent + ((projected - spent) * (i + 1 - today)) / (days - today)) * 100) / 100 : undefined,
       })),
-    [days, today, daily, lastMonth, budget]
+    [days, today, daily, lastMonth, budget, projected, spent]
   );
-  const dayTicks = useMemo(() => valueTicks(0, Math.max(budget ?? 0, ...daily.slice(0, today), ...lastMonth), 4), [budget, daily, lastMonth, today]);
+  const dayTicks = useMemo(
+    () => valueTicks(0, Math.max(budget ?? 0, projected ?? 0, ...daily.slice(0, today), ...lastMonth.slice(0, today)), 4),
+    [budget, projected, daily, lastMonth, today]
+  );
   const monthTicks = useMemo(() => valueTicks(0, Math.max(budget ?? 0, ...months.flatMap((m) => [m.spending, m.income])), 4), [budget, months]);
   const ticks = view === "days" ? dayTicks : monthTicks;
   const step = ticks.length > 1 ? ticks[1] - ticks[0] : 1;
@@ -116,45 +131,50 @@ export function MonthChart({
         />
       </div>
 
-      {/* The headline is how the month is going against the budget; what's been spent is its note. */}
+      {/* The headline is where the month is heading; what's been spent, the budget and last month are its note. */}
       <div className="flex flex-col gap-1">
-        {budget === null || ahead === null ? (
-          <>
-            <span className={cn(HEADLINE, "text-bone")}>{usd(spent)}</span>
-            <Link href="/budgets" className="inline-flex items-center gap-1 self-start text-sm text-champagne hover:underline">
-              Set a monthly budget to see your pace <ArrowRight className="size-3" aria-hidden />
-            </Link>
-          </>
+        {projected !== null ? (
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className={cn(HEADLINE, budget !== null && projected > budget ? "text-oxblood-text" : "text-bone")}>{whole(projected)}</span>
+            <span className="text-base text-muted-foreground">
+              by {short} {days} at this pace
+            </span>
+          </p>
         ) : (
-          <>
-            <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              {spent > budget ? (
-                <>
-                  <span className={cn(HEADLINE, "text-oxblood-text")}>{whole(spent - budget)}</span>
-                  <span className="text-base text-oxblood-text">over your budget</span>
-                </>
-              ) : Math.abs(ahead) < budget * 0.02 ? (
-                <span className={cn(HEADLINE, "text-bone")}>On pace</span>
-              ) : (
-                <>
-                  <span className={cn(HEADLINE, "text-bone")}>{whole(Math.abs(ahead))}</span>
-                  <span className={cn("text-base", ahead > 0 ? "text-champagne" : "text-moss")}>{ahead > 0 ? "ahead of an even pace" : "under an even pace"}</span>
-                </>
-              )}
-            </p>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-mono text-bone tabular-nums">{usd(spent)}</span>
-              <span className="sm:hidden">
-                {" "}
-                of {whole(budget)} · {daysLeft} {daysLeft === 1 ? "day" : "days"} left
-              </span>
-              <span className="hidden sm:inline">
-                {" "}
-                spent of your {whole(budget)} budget, {daysLeft} {daysLeft === 1 ? "day" : "days"} to go
-              </span>
-            </p>
-          </>
+          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <span className={cn(HEADLINE, "text-bone")}>{usd(spent)}</span>
+            <span className="text-base text-muted-foreground">spent so far</span>
+          </p>
         )}
+        <p className="text-sm text-muted-foreground">
+          {projected !== null && (
+            <>
+              <span className="font-mono text-bone tabular-nums">{usd(spent)}</span> spent so far
+            </>
+          )}
+          {budget !== null ? (
+            <>
+              {projected !== null ? " · " : ""}budget <span className="font-mono tabular-nums">{whole(budget)}</span>
+            </>
+          ) : (
+            <>
+              {projected !== null ? " · " : ""}
+              <Link href="/budgets" className="text-champagne hover:underline">
+                set a budget
+              </Link>
+            </>
+          )}
+          <span className="hidden sm:inline">
+            {" "}
+            · {previousMonthName} ended at <span className="font-mono tabular-nums">{whole(lastMonthTotal)}</span>
+          </span>
+          {daysLeft > 0 && (
+            <span className="hidden md:inline">
+              {" "}
+              · {daysLeft} {daysLeft === 1 ? "day" : "days"} to go
+            </span>
+          )}
+        </p>
       </div>
 
       <div
@@ -201,6 +221,7 @@ export function MonthChart({
                       </p>
                       {p.spent !== undefined && <Row label="Spent so far" value={usd(p.spent)} swatch={SWATCH.spent} />}
                       {p.pace !== undefined && <Row label="Even pace" value={usd(p.pace)} swatch={SWATCH.pace} />}
+                      {p.ahead !== undefined && p.day > today && <Row label="At this pace" value={usd(p.ahead)} swatch={SWATCH.ahead} />}
                       {p.last !== undefined && <Row label={`${previousMonthName}, same day`} value={usd(p.last)} swatch={SWATCH.last} />}
                     </div>
                   );
@@ -212,6 +233,8 @@ export function MonthChart({
               {/* Running totals move in steps: each day's purchases land on that day. */}
               {/* Last month dashed and faint, so it reads as a second series rather than a shadow of this one. */}
               <Line type="stepAfter" dataKey="last" stroke="var(--ash-grey)" strokeOpacity={0.45} strokeWidth={1} strokeDasharray="2 3" dot={false} activeDot={false} isAnimationActive={false} />
+              {/* Where the month is heading, carried on from today. */}
+              <Line type="linear" dataKey="ahead" stroke="var(--champagne)" strokeOpacity={0.6} strokeWidth={1.5} strokeDasharray="5 4" dot={false} activeDot={false} isAnimationActive={false} />
               <Area
                 type="stepAfter"
                 dataKey="spent"
@@ -274,10 +297,11 @@ export function MonthChart({
         {view === "days" ? (
           <>
             <span className="inline-flex items-center gap-1.5">{SWATCH.spent}This month</span>
+            {projected !== null && <span className="inline-flex items-center gap-1.5">{SWATCH.ahead}At this pace</span>}
             {budget !== null && <span className="inline-flex items-center gap-1.5">{SWATCH.pace}Even pace to your budget</span>}
             <span className="inline-flex items-center gap-1.5">
               {SWATCH.last}
-              {previousMonthName}
+              {previousMonthName} by the same day
             </span>
           </>
         ) : (

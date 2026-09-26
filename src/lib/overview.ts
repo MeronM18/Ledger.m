@@ -138,3 +138,57 @@ export function pillLevelsInRange(values: number[]): number[] {
   const max = Math.max(...values);
   return values.map((v) => (max === min ? 0.6 : 0.25 + (0.75 * (v - min)) / (max - min)));
 }
+
+export type LiquidCash = {
+  // Checking and savings, as the banks report them.
+  bank: number;
+  // Cash you keep track of on Accounts.
+  cash: number;
+  // What's owed on credit cards, connected and imported.
+  cards: number;
+  // Bank and cash less what the cards are owed: what's really yours to use today.
+  net: number;
+};
+
+/**
+ * Money you can reach, net of what the cards are owed. Net worth also counts
+ * savings goals' investments, metals, a car; this is only what could pay a
+ * bill this week.
+ */
+export function liquidCash(
+  accounts: { type: string | null; current_balance: number | string | null }[],
+  manualCards: { type: string; balance: number }[],
+  cashAssets: { value: number | string | null }[]
+): LiquidCash {
+  const sum = (xs: number[]) => cents(xs.reduce((s, v) => s + v, 0));
+  const bank = sum(accounts.filter((a) => a.type === "depository").map((a) => Number(a.current_balance ?? 0)));
+  const cash = sum(cashAssets.map((a) => Number(a.value ?? 0)));
+  const cards = sum([
+    ...accounts.filter((a) => a.type === "credit").map((a) => Math.max(0, Number(a.current_balance ?? 0))),
+    ...manualCards.filter((c) => c.type === "credit").map((c) => Math.max(0, c.balance)),
+  ]);
+  return { bank, cash, cards, net: cents(bank + cash - cards) };
+}
+
+/**
+ * Where the month ends at its pace so far: what's been spent, plus the
+ * same average a day for the days left. Null in the first days, when a
+ * pace is mostly the rent.
+ */
+export function monthEndPace(spentSoFar: number, today: number, daysInMonth: number, minDays = 5): number | null {
+  if (today < minDays || today >= daysInMonth) return null;
+  return cents(spentSoFar + (spentSoFar / today) * (daysInMonth - today));
+}
+
+/**
+ * A monthly budget that fits how you actually spend, when the one set is far
+ * below it: the average of the last three complete months, rounded up to
+ * $50. Null when the budget is within reach (or there's no history yet).
+ */
+export function budgetSuggestion(completeMonths: number[], budget: number | null): { average: number; suggested: number } | null {
+  const recent = completeMonths.filter((m) => m > 0).slice(-3);
+  if (budget === null || recent.length < 2) return null;
+  const average = cents(recent.reduce((s, v) => s + v, 0) / recent.length);
+  if (budget >= average * 0.7) return null;
+  return { average, suggested: Math.ceil(average / 50) * 50 };
+}

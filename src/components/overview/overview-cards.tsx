@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { ArrowRight, CircleAlert } from "lucide-react";
+import { BudgetSuggestion } from "@/components/overview/budget-suggestion";
 import { CARD_GRIP, ChangeChip, PillStrip, type TileChange } from "@/components/overview/stat-tile";
+import { GoalBadge, accentFor } from "@/components/goal-look";
 import { QueryErrorState } from "@/components/query-error";
 import { DragHandle } from "@/components/sortable-card-list";
 import { TransactionAvatar } from "@/components/transaction-avatar";
 import { formatCurrency } from "@/lib/format";
 import { loadForecast } from "@/lib/forecast-data";
+import { verdictLine } from "@/lib/goal-copy";
+import { loadGoals } from "@/lib/goals-data";
 import { upcomingBills, type CategoryShare } from "@/lib/overview";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { LedgerTransaction } from "@/lib/spending-data";
@@ -222,6 +226,8 @@ export function BudgetCard({
   status,
   daysLeft,
   watch,
+  spent,
+  suggestion = null,
 }: {
   monthName: string;
   // Null when no monthly budget is set.
@@ -231,6 +237,9 @@ export function BudgetCard({
   status: "ok" | "warning" | "over";
   daysLeft: number;
   watch: BudgetWatch[];
+  spent: number;
+  // A budget that fits recent months, when the one set is far below them.
+  suggestion?: { average: number; suggested: number } | null;
 }) {
   if (total === null) {
     return (
@@ -269,11 +278,24 @@ export function BudgetCard({
               : `left of ${whole(total)} in ${monthName}`}
         </p>
       </div>
-      {/* Lit for what's left, so the bright part is the figure; over budget, all of it in red. */}
-      <PillStrip
-        levels={Array.from({ length: BUDGET_PILLS }, (_, i) => (status === "over" || i < Math.round(left * BUDGET_PILLS) ? 1 : null))}
-        color={STATUS_COLOR[status]}
-      />
+      {status === "over" ? (
+        // Over budget, how far over: the budget as a share of the bar, the rest past it in red.
+        <div className="flex flex-col gap-1.5">
+          <div className="flex h-3 w-full overflow-hidden rounded-full bg-bone/[0.06]" aria-hidden>
+            <span className="h-full bg-champagne/70" style={{ width: `${(total / Math.max(spent, total)) * 100}%` }} />
+            <span className="h-full bg-oxblood" style={{ width: `${(1 - total / Math.max(spent, total)) * 100}%` }} />
+          </div>
+          <p className="flex justify-between text-[11px] text-muted-foreground">
+            <span>
+              <span className="font-mono text-bone tabular-nums">{usd(spent)}</span> spent
+            </span>
+            <span>{Math.round((spent / total) * 100)}% of the budget</span>
+          </p>
+        </div>
+      ) : (
+        // Lit for what's left, so the bright part is the figure.
+        <PillStrip levels={Array.from({ length: BUDGET_PILLS }, (_, i) => (i < Math.round(left * BUDGET_PILLS) ? 1 : null))} color={STATUS_COLOR[status]} />
+      )}
       {watch.length > 0 && (
         <ul className="flex flex-col gap-2.5" aria-label="Budgets to watch">
           {watch.map((w) => (
@@ -292,6 +314,7 @@ export function BudgetCard({
           ))}
         </ul>
       )}
+      {suggestion && <BudgetSuggestion average={suggestion.average} suggested={suggestion.suggested} current={total} />}
       <div className="mt-auto flex items-center justify-between gap-3 rounded-lg bg-bone/[0.04] px-3 py-2 text-sm">
         <span className="text-muted-foreground">Monthly budget</span>
         <span className="font-mono text-bone tabular-nums">{usd(total)}</span>
@@ -409,5 +432,146 @@ export function AccountNotices({ items }: { items: { key: string; text: string; 
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * What's safe to spend over the next two weeks (income isn't predicted: it's
+ * commission, so it only counts once it lands): the cash in checking, less
+ * the bills due before then and what the cards are owed, with the sum laid
+ * out so the figure can be checked. Async, for <Suspense>, like Upcoming.
+ */
+export async function SafeToSpendCard({ todayIso }: { todayIso: string }) {
+  const data = await loadForecast(createAdminClient());
+  return (
+    <Panel title="Safe to spend" href="/accounts" linkLabel="Accounts">
+      {data.error ? (
+        <QueryErrorState message="Couldn't work out what's safe to spend." />
+      ) : !data.hasCashAccount ? (
+        <p className="text-sm text-muted-foreground">Connect a checking account to see what&apos;s safe to spend.</p>
+      ) : (
+        (() => {
+          const f = data.forecast;
+          const until = f.nextIncome ? `until your ${dayLabel(f.nextIncome.date)} paycheck` : `over the next ${f.daysToPayday} days`;
+          const [dollars, cents] = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(f.safeToSpend)).split(".");
+          const rows = [
+            { label: "In checking", amount: f.cash, sign: "" },
+            { label: `Bills before ${dayLabel(f.nextIncome?.date ?? shiftIso(todayIso, f.daysToPayday))}`, amount: -f.billsBeforePayday, sign: "−" },
+            { label: "Owed on cards", amount: -f.cardBalances, sign: "−" },
+          ];
+          return (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <span className={cn("font-serif text-[2.5rem] leading-none font-medium tracking-[-0.01em]", f.safeToSpend < 0 ? "text-oxblood-text" : "text-bone")}>
+                  {f.safeToSpend < 0 ? "−" : ""}
+                  {dollars}
+                  <span className="text-[0.55em] opacity-60">.{cents}</span>
+                </span>
+                <p className="text-sm text-muted-foreground">
+                  {f.safeToSpend < 0
+                    ? `short ${until}, once the bills and cards are paid`
+                    : `${until}${f.perDay !== null ? `, about ${whole(f.perDay)} a day` : ""}`}
+                </p>
+              </div>
+              <ul className="flex flex-col gap-1.5 rounded-lg bg-bone/[0.04] px-3 py-2.5 text-sm" aria-label="How it's worked out">
+                {rows.map((r) => (
+                  <li key={r.label} className="flex items-center justify-between gap-3">
+                    <span className="truncate text-muted-foreground">{r.label}</span>
+                    <span className={cn("shrink-0 font-mono tabular-nums", r.amount < 0 ? "text-muted-foreground" : "text-bone")}>
+                      {r.amount < 0 ? "−" : ""}
+                      {usd(Math.abs(r.amount))}
+                    </span>
+                  </li>
+                ))}
+                <li className="flex items-center justify-between gap-3 border-t border-border pt-1.5">
+                  <span className="text-bone">Safe to spend</span>
+                  <span className={cn("font-mono tabular-nums", f.safeToSpend < 0 ? "text-oxblood-text" : "text-moss")}>
+                    {f.safeToSpend < 0 ? "−" : ""}
+                    {usd(Math.abs(f.safeToSpend))}
+                  </span>
+                </li>
+              </ul>
+              {f.firstBelowThreshold && (
+                <p className="flex gap-2 text-xs text-champagne">
+                  <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                  At your usual spending, checking dips under {whole(data.lowBalanceThreshold)} around {dayLabel(f.firstBelowThreshold.date)}.
+                </p>
+              )}
+            </>
+          );
+        })()
+      )}
+    </Panel>
+  );
+}
+
+function shiftIso(iso: string, days: number): string {
+  return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+}
+
+const GOALS_SHOWN = 3;
+
+/**
+ * The savings goals that most need you, each with its mark, how far along it
+ * is and where its pace leaves it. Async, for <Suspense>.
+ */
+export async function GoalsCard({ todayIso }: { todayIso: string }) {
+  const data = await loadGoals(createAdminClient());
+  // Unfinished goals first, those furthest behind their date first; then finished ones.
+  const rank = (g: (typeof data.rows)[number]) => (g.status === "complete" ? 2 : g.insight.verdict === "behind" || g.insight.verdict === "stalled" || g.insight.verdict === "overdue" ? 0 : 1);
+  const goals = [...data.rows].sort((a, b) => rank(a) - rank(b) || a.percent - b.percent).slice(0, GOALS_SHOWN);
+  const saved = data.rows.reduce((s, g) => s + g.saved, 0);
+  const target = data.rows.reduce((s, g) => s + g.target, 0);
+  return (
+    <Panel title="Goals" href="/goals" linkLabel={data.rows.length > GOALS_SHOWN ? `All ${data.rows.length} goals` : "Goals"}>
+      {data.error ? (
+        <QueryErrorState message="Couldn't load your goals." />
+      ) : goals.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No goals yet.{" "}
+          <Link href="/goals" className="text-champagne hover:underline">
+            Start one
+          </Link>{" "}
+          for an emergency fund, a trip or anything you&apos;re saving toward.
+        </p>
+      ) : (
+        <>
+          <p className="flex flex-wrap items-baseline gap-x-2">
+            <Figure>{whole(saved)}</Figure>
+            <span className="text-sm text-muted-foreground">saved of {whole(target)} across {data.rows.length === 1 ? "your goal" : `${data.rows.length} goals`}</span>
+          </p>
+          <ul className="grid gap-3 md:grid-cols-3">
+            {goals.map((g) => {
+              const color = accentFor(g.options, g.status === "complete");
+              const line = verdictLine(g.insight, todayIso);
+              return (
+                <li key={g.id}>
+                  <Link href="/goals" className="flex h-full flex-col gap-2.5 rounded-lg border border-border px-3.5 py-3 transition-colors hover:border-bone/20 hover:bg-bone/[0.02]">
+                    <span className="flex min-w-0 items-center gap-2.5">
+                      <GoalBadge name={g.name} options={g.options} complete={g.status === "complete"} className="size-8" />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate text-sm text-bone">{g.name}</span>
+                        <span className="truncate font-mono text-xs text-muted-foreground tabular-nums">
+                          {whole(g.saved)} of {whole(g.target)}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="h-1.5 w-full overflow-hidden rounded-full bg-bone/[0.06]" aria-hidden>
+                      <span className="block h-full rounded-full" style={{ width: `${Math.max(2, g.percent * 100)}%`, background: color }} />
+                    </span>
+                    <span className="flex items-center justify-between gap-2 text-xs">
+                      <span className="truncate text-muted-foreground">{line ?? (g.targetDate ? `By ${dayLabel(g.targetDate)}` : "No date set")}</span>
+                      <span className="shrink-0 font-mono tabular-nums" style={{ color }}>
+                        {Math.round(g.percent * 100)}%
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </Panel>
   );
 }
