@@ -398,3 +398,16 @@ test("settings: the backup downloads every table and no secrets", async ({ page 
   expect(text).not.toContain("access_token");
   expect(text).not.toContain("transactions_cursor");
 });
+
+test("recurring: a subscription the bank missed is found in your charges, across cards", async ({ page }) => {
+  await page.goto("/recurring");
+  await afterWelcome(page);
+  const prime = page.getByRole("button", { name: /^Amazon Prime,/ });
+  await expect(prime).toContainText("Freedom Flex");
+  await prime.click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet).toContainText(/Found in your charges, started again/);
+  await expect(sheet.getByRole("listitem")).toHaveCount(3);
+  await sheet.getByRole("button", { name: "Not a subscription" }).click();
+  await expect(page.getByRole("button", { name: /^Amazon Prime,/ })).toHaveCount(0);
+});

@@ -15,13 +15,12 @@ import { accountLabel, type AccountOption } from "@/components/filter-bar";
 import { InstitutionAvatar } from "@/components/institution-avatar";
 import { InstallmentsCard } from "@/components/installments-card";
 import { AddManualSubscriptionButton, ManualSubscriptionDialog, type ManualSubscription } from "@/components/manual-subscription-form";
-import { DetectedSubscriptionsCard } from "@/components/detected-subscriptions-card";
 import { SubscriptionCalendar, type CalendarEvent } from "@/components/subscription-calendar";
 import { SubscriptionInsightsCard } from "@/components/subscription-insights-card";
 import { TransactionAvatar } from "@/components/transaction-avatar";
 import { formatCurrency } from "@/lib/format";
 import { humanizeFrequency, monthlyFactorForFrequency } from "@/lib/plaid-categories";
-import type { DetectedSubscription } from "@/lib/recurring-detection";
+import type { FoundRow } from "@/lib/found-recurring";
 import { costShares, dueLabel, monthOutlook, nextCharges, type RecurringCharge } from "@/lib/recurring-board";
 import { cancelSearchUrl, effectiveNextDate, isNewSubscription, trialStart, type Insight } from "@/lib/subscription-insights";
 import { chargeChange, hasLapsed, hasPriceIncrease, projectNextOccurrence, type ChargeChange, type DatedAmount } from "@/lib/subscriptions-aggregation";
@@ -55,10 +54,10 @@ export type StreamRow = {
   logoUrl: string | null;
 };
 
-/** A bank-found stream or one you added, in one shape for the list and panel. */
+/** A bank-found stream, one found in your charges, or one you added, in one shape for the list and panel. */
 type Item = {
   key: string;
-  source: "plaid" | "manual";
+  source: "plaid" | "manual" | "found";
   name: string;
   amount: number;
   frequency: string | null;
@@ -84,13 +83,16 @@ type Item = {
   lapsed: boolean;
   isNew: boolean;
   trial: { firstAmount: number } | null;
+  // You'd marked it cancelled, and it charged again.
+  chargedAfterCancel: boolean;
   stream?: StreamRow;
   manual?: ManualSubscription;
+  found?: FoundRow;
 };
 
 const MONEY = "font-mono tabular-nums";
 
-function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: string): Item[] {
+function toItems(streams: StreamRow[], manual: ManualSubscription[], found: FoundRow[], todayIso: string): Item[] {
   const fromBank = streams.map<Item>((s) => {
     const active = s.is_active && !s.user_marked_cancelled;
     const storedNext = effectiveNextDate(s.predicted_next_date, s.last_date, s.frequency);
@@ -119,6 +121,7 @@ function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: s
       lapsed: active && hasLapsed(storedNext),
       isNew: s.is_active && isNewSubscription(s.first_date, todayIso),
       trial: trialStart(s.firstChargeAmount, s.average_amount),
+      chargedAfterCancel: false,
       stream: s,
     };
   });
@@ -146,9 +149,40 @@ function toItems(streams: StreamRow[], manual: ManualSubscription[], todayIso: s
     lapsed: m.is_active && hasLapsed(m.next_billing_date),
     isNew: false,
     trial: null,
+    chargedAfterCancel: false,
     manual: m,
   }));
-  return [...fromBank, ...added];
+  const fromCharges = found.map<Item>((f) => {
+    const [last, previous] = f.charges;
+    return {
+      key: `found-${f.key}`,
+      source: "found",
+      name: f.name,
+      amount: f.amount,
+      frequency: f.frequency,
+      active: f.active,
+      lastDate: f.lastDate,
+      lastAmount: last?.amount ?? null,
+      storedNext: f.nextDate,
+      next: f.active ? projectNextOccurrence(f.nextDate, f.frequency) : null,
+      firstDate: f.firstDate,
+      accountId: f.accountId,
+      account: f.accountName ?? "Unknown account",
+      institution: f.institution,
+      logoUrl: null,
+      pfcPrimary: null,
+      pfcDetailed: null,
+      notes: null,
+      priceIncrease: false,
+      change: f.active && previous ? chargeChange(previous, last) : null,
+      lapsed: f.active && hasLapsed(f.nextDate),
+      isNew: f.active && isNewSubscription(f.firstDate, todayIso),
+      trial: null,
+      chargedAfterCancel: f.chargedAfterCancel,
+      found: f,
+    };
+  });
+  return [...fromBank, ...added, ...fromCharges];
 }
 
 function charge(item: Item): RecurringCharge {
@@ -216,6 +250,12 @@ function Flags({ item }: { item: Item }) {
         <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
           <AlertTriangle className="size-3" />
           Hasn&apos;t charged
+        </Badge>
+      )}
+      {item.chargedAfterCancel && (
+        <Badge variant="secondary" className="gap-1 border-oxblood/40 bg-oxblood/10 text-oxblood-text">
+          <AlertTriangle className="size-3" />
+          Charged again
         </Badge>
       )}
       {item.isNew && (
@@ -364,11 +404,20 @@ function Panel({ item, todayIso, onClose }: { item: Item; todayIso: string; onCl
     }
   }
 
-  const cancelled = item.source === "plaid" ? Boolean(item.stream?.user_marked_cancelled) : !item.active;
+  const cancelled = item.source === "plaid" ? Boolean(item.stream?.user_marked_cancelled) : item.found ? item.found.cancelledByYou : !item.active;
   function setCancelled(next: boolean) {
     const done = next ? "Marked as cancelled" : "Marked as active again";
-    if (item.stream) void send(`/api/recurring-streams/${item.stream.id}`, { method: "PATCH", body: JSON.stringify({ user_marked_cancelled: next }) }, done);
+    if (item.found) {
+      const body = next ? { key: item.found.key, action: "cancel", lastDate: item.found.lastDate } : { key: item.found.key, action: "restore" };
+      void send("/api/found-recurring", { method: "PATCH", body: JSON.stringify(body) }, done);
+    } else if (item.stream) void send(`/api/recurring-streams/${item.stream.id}`, { method: "PATCH", body: JSON.stringify({ user_marked_cancelled: next }) }, done);
     else if (item.manual) void send(`/api/manual-subscriptions/${item.manual.id}`, { method: "PATCH", body: JSON.stringify({ is_active: !next }) }, done);
+  }
+
+  async function dismiss() {
+    if (!item.found) return;
+    const body = JSON.stringify({ key: item.found.key, action: "dismiss" });
+    if (await send("/api/found-recurring", { method: "PATCH", body }, `${item.name} won't be listed`)) onClose();
   }
 
   async function remove() {
@@ -420,6 +469,18 @@ function Panel({ item, todayIso, onClose }: { item: Item; todayIso: string; onCl
             {shortDate(item.change.from.date)}.
           </p>
         )}
+        {item.chargedAfterCancel && item.lastDate && (
+          <p className="rounded-lg border border-oxblood/30 bg-oxblood/8 px-3 py-2.5 text-xs text-bone/90">
+            You&apos;d marked {item.name} as cancelled, but it charged again on {shortDate(item.lastDate)}
+            {item.lastAmount !== null && (
+              <>
+                {" "}
+                (<span className={MONEY}>{formatCurrency(item.lastAmount, "USD")}</span>)
+              </>
+            )}
+            . If you meant to stop it, it&apos;s still going.
+          </p>
+        )}
         {((item.change && item.change.diff > 0) || item.priceIncrease || item.lapsed || item.trial) && (
           <div className="flex flex-col gap-2 rounded-lg border border-oxblood/30 bg-oxblood/8 px-3 py-2.5 text-xs text-bone/90">
             {item.change && item.change.diff > 0 && (
@@ -463,10 +524,33 @@ function Panel({ item, todayIso, onClose }: { item: Item; todayIso: string; onCl
             </span>
           </Detail>
           <Detail label="Source">
-            {item.source === "plaid" ? "Found by your bank" : item.manual?.foundOn ? `Added by you, charged to ${item.manual.foundOn.name}` : "Added by you"}
+            {item.source === "plaid"
+              ? "Found by your bank"
+              : item.found
+                ? `Found in your charges${item.found.restarted ? `, started again ${shortDate(item.found.firstDate)}` : ""}`
+                : item.manual?.foundOn
+                  ? `Added by you, charged to ${item.manual.foundOn.name}`
+                  : "Added by you"}
           </Detail>
           {item.notes && <Detail label="Notes">{item.notes}</Detail>}
         </dl>
+
+        {item.found && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-medium tracking-[0.08em] text-muted-foreground uppercase">Recent charges</p>
+            <ul className="flex flex-col divide-y divide-border rounded-lg border border-border px-3 text-sm">
+              {item.found.charges.slice(0, 6).map((c, i) => (
+                <li key={c.id ?? `${c.date}-${i}`} className="flex items-center justify-between gap-3 py-2">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-bone">{longDate(c.date)}</span>
+                    {c.accountName && <span className="truncate text-xs text-muted-foreground">{c.accountName}</span>}
+                  </span>
+                  <span className={cn(MONEY, "shrink-0 text-bone")}>{formatCurrency(c.amount, "USD")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {(item.active || cancelled) && (
           <div className="flex flex-col gap-3">
@@ -486,6 +570,11 @@ function Panel({ item, todayIso, onClose }: { item: Item; todayIso: string; onCl
                     <ExternalLink className="size-3.5" aria-hidden />
                     <span className="sr-only"> {item.name} (opens a web search in a new tab)</span>
                   </a>
+                </Button>
+              )}
+              {item.found && (
+                <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={saving} onClick={dismiss}>
+                  Not a subscription
                 </Button>
               )}
               {item.manual && (
@@ -646,19 +735,19 @@ type Sort = "next" | "amount" | "name";
 
 export function RecurringBoard({
   streams,
+  found,
   manualSubscriptions,
   accounts,
   insights,
-  suggestions,
   calendarEvents,
   installments,
   todayIso,
 }: {
   streams: StreamRow[];
+  found: FoundRow[];
   manualSubscriptions: ManualSubscription[];
   accounts: AccountOption[];
   insights: Insight[];
-  suggestions: DetectedSubscription[];
   calendarEvents: CalendarEvent[];
   installments: InstallmentPlan[];
   todayIso: string;
@@ -670,7 +759,7 @@ export function RecurringBoard({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [openCount, setOpenCount] = useState(0);
 
-  const all = useMemo(() => toItems(streams, manualSubscriptions, todayIso), [streams, manualSubscriptions, todayIso]);
+  const all = useMemo(() => toItems(streams, manualSubscriptions, found, todayIso), [streams, manualSubscriptions, found, todayIso]);
   const active = all.filter((i) => i.active);
   const perMonth = active.reduce((s, i) => s + monthly(i), 0);
   const outlook = monthOutlook(active.map(charge), todayIso);
@@ -702,8 +791,15 @@ export function RecurringBoard({
   const openItem = openKey ? (all.find((i) => i.key === openKey) ?? null) : null;
   // Accounts something is charged to: the bank's, and imported cards subscriptions you added are on.
   const usedAccounts = [
-    ...accounts.filter((a) => streams.some((s) => s.account?.id === a.id)),
-    ...Array.from(new Map(manualSubscriptions.flatMap((m) => (m.foundOn ? [[m.foundOn.id, { id: m.foundOn.id, name: m.foundOn.name, mask: null }] as const] : []))).values()),
+    ...accounts.filter((a) => streams.some((s) => s.account?.id === a.id) || found.some((f) => f.accountId === a.id)),
+    ...Array.from(
+      new Map(
+        [
+          ...manualSubscriptions.flatMap((m) => (m.foundOn ? [{ id: m.foundOn.id, name: m.foundOn.name }] : [])),
+          ...found.flatMap((f) => (f.accountId && !accounts.some((a) => a.id === f.accountId) ? [{ id: f.accountId, name: f.accountName ?? "Account" }] : [])),
+        ].map((a) => [a.id, { ...a, mask: null }] as const)
+      ).values()
+    ),
   ];
 
   return (
@@ -812,7 +908,6 @@ export function RecurringBoard({
           <ComingUp items={active} todayIso={todayIso} onOpen={open} />
           <WhereItGoes items={active} onOpen={open} />
           <SubscriptionInsightsCard insights={insights} />
-          <DetectedSubscriptionsCard suggestions={suggestions} />
           {active.length > 0 && (
             <p className="flex items-start gap-2 px-1 text-xs text-muted-foreground">
               <Wallet className="mt-0.5 size-3.5 shrink-0" aria-hidden />

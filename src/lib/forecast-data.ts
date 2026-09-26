@@ -4,6 +4,7 @@ import { accountName } from "@/lib/account-settings";
 import { buildForecast, nextDueDate, typicalDailySpend, type CardPayment, type Forecast, type RecurringItem } from "@/lib/forecast";
 import { loadSpendingData } from "@/lib/spending-data";
 import { loadManualAccounts } from "@/lib/manual-accounts";
+import { loadRecurringExtras } from "@/lib/recurring-extras";
 import { effectiveNextDate } from "@/lib/subscription-insights";
 import { streamDisplayName } from "@/lib/transaction-display";
 import type { createAdminClient } from "@/lib/supabase/admin";
@@ -32,7 +33,7 @@ function amountOf(...values: (number | string | null)[]): number {
 }
 
 export const loadForecast = cache(async function loadForecast(admin: AdminClient): Promise<ForecastData> {
-  const [spending, accountsRes, streamsRes, manualRes, manualCardsRes, accountSettings, thresholds] = await Promise.all([
+  const [spending, accountsRes, streamsRes, manualRes, manualCardsRes, accountSettings, thresholds, extras] = await Promise.all([
     loadSpendingData(admin),
     admin
       .from("accounts")
@@ -48,6 +49,7 @@ export const loadForecast = cache(async function loadForecast(admin: AdminClient
     loadManualAccounts(admin),
     loadAccountSettings(admin),
     loadAlertThresholds(admin),
+    loadRecurringExtras(admin),
   ]);
 
   if (accountsRes.error) console.error("Failed to load accounts for forecast", accountsRes.error);
@@ -104,6 +106,10 @@ export const loadForecast = cache(async function loadForecast(admin: AdminClient
       frequency: m.frequency as string,
       date: m.next_billing_date as string | null,
     })),
+    // Found in your charges: ones the bank's feed missed.
+    ...extras.found
+      .filter((f) => f.active)
+      .map((f) => ({ id: `found-${f.key}`, name: f.name, amount: f.amount, frequency: f.frequency as string, date: f.nextDate })),
   ].filter((b) => b.amount > 0);
 
   const forecast = buildForecast({

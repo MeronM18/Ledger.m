@@ -124,6 +124,9 @@ export function buildFixtures(now = new Date()) {
 
   // Far above what Kroger usually costs: the unusual-charge alert's case.
   tx(addDays(today, -1), IDS.freedom, 486.2, "KROGER", "Kroger", "FOOD_AND_DRINK", "FOOD_AND_DRINK_GROCERIES");
+  // Amazon Prime, which the bank never picked up: $7.94 a month again after a
+  // long break, the latest on Freedom Flex after two on the Apple Card (below).
+  tx(addDays(today, -12), IDS.freedom, 7.94, "Amazon Prime*RT4K2", "Amazon Prime", "GENERAL_MERCHANDISE", "GENERAL_MERCHANDISE_ONLINE_MARKETPLACES");
   tx(today, IDS.freedom, 6.45, "STARBUCKS", "Starbucks", "FOOD_AND_DRINK", "FOOD_AND_DRINK_COFFEE", { pending: true });
   // Money in that isn't pay or interest, waiting on the Overview to be told what it was.
   tx(addDays(today, -2), IDS.checking, -45, "Zelle payment from JORDAN LEE", null, "TRANSFER_IN", "TRANSFER_IN_ACCOUNT_TRANSFER");
@@ -155,6 +158,9 @@ export function buildFixtures(now = new Date()) {
     mtx(at(28), "Interest", -between(0.9, 1.2), "INCOME", IDS.appleSavings);
   }
   mtx(addDays(today, -6), "Farmers market", 24, "FOOD_AND_DRINK");
+  mtx(addDays(today, -42), "Amazon Prime", 7.94, "GENERAL_SERVICES", IDS.appleCard);
+  mtx(addDays(today, -73), "Amazon Prime", 7.94, "GENERAL_SERVICES", IDS.appleCard);
+  mtx(addDays(today, -290), "Amazon Prime", 15.89, "GENERAL_SERVICES", IDS.appleCard);
 
   // Spotify's price went up with its latest charge.
   const spotify = transactions.filter((t) => t.merchant_name === "Spotify").sort((a, b) => a.date.localeCompare(b.date));

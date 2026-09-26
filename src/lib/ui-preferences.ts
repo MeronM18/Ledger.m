@@ -9,6 +9,7 @@ import { resolveDepositReviews, type DepositReviews } from "@/lib/deposit-review
 import { cardOrderKey, type CardOrderPage } from "@/lib/card-order";
 import { resolveImportLog, type ImportLog } from "@/lib/import-reminders";
 import { resolveInstallmentPrefs, type InstallmentPrefs } from "@/lib/installments";
+import { resolveFoundRecurring, type FoundRecurringPrefs } from "@/lib/found-recurring";
 import type { createAdminClient } from "@/lib/supabase/admin";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
@@ -118,4 +119,15 @@ export const loadInstallmentPrefs = cache(async function loadInstallmentPrefs(
   const { data, error } = await admin.from("ui_preferences").select("value").eq("key", INSTALLMENTS_KEY).maybeSingle();
   if (error) console.error("Failed to load installment plans", error);
   return { prefs: resolveInstallmentPrefs(data?.value), error: Boolean(error) };
+});
+
+export const FOUND_RECURRING_KEY = "found_recurring";
+
+/** Recurring charges found on their own that you've dismissed or cancelled. */
+export const loadFoundRecurring = cache(async function loadFoundRecurring(
+  admin: AdminClient
+): Promise<{ prefs: FoundRecurringPrefs; error: boolean }> {
+  const { data, error } = await admin.from("ui_preferences").select("value").eq("key", FOUND_RECURRING_KEY).maybeSingle();
+  if (error) console.error("Failed to load found recurring charges", error);
+  return { prefs: resolveFoundRecurring(data?.value), error: Boolean(error) };
 });

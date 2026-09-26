@@ -55,7 +55,7 @@ export function cancelSearchUrl(name: string): string {
 export type InsightItem = {
   key: string;
   name: string;
-  source: "plaid" | "manual";
+  source: "plaid" | "manual" | "found";
   amount: number;
   frequency: string | null;
   // Plaid's detailed category, when there is one (manual entries have none).
