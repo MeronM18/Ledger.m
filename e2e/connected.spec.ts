@@ -49,7 +49,8 @@ async function spendingEverywhere(page: Page) {
 
   await page.goto("/");
   await afterWelcome(page);
-  const overviewTotal = money(await page.getByRole("region", { name: /^Spent in / }).locator(".font-serif").first().textContent());
+  // The Spending card opens on the month.
+  const overviewTotal = money(await page.getByRole("region", { name: "Spending", exact: true }).locator(".font-serif").first().textContent());
 
   await page.goto("/budgets");
   const budgetsTotal = money(await page.getByText(/spent of \$2,500/).locator(".font-mono").first().textContent());
