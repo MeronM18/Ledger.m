@@ -17,6 +17,7 @@ import type { IncomeKind } from "@/lib/income";
 import {
   filtersOn,
   incomeReport,
+  matches,
   NO_FILTERS,
   runningTotals,
   type IncomeEntry,
@@ -24,7 +25,7 @@ import {
   type IncomeMonthRow,
   type SpendingPoint,
 } from "@/lib/income-report";
-import { monthSpanLabel, PERIOD_PRESETS, periodRange, rangeLabel } from "@/lib/spending-report";
+import { inRange, monthSpanLabel, PERIOD_PRESETS, periodRange, rangeLabel } from "@/lib/spending-report";
 import { cn } from "@/lib/utils";
 
 const KIND: Record<IncomeKind, { label: string; plural: string; color: string }> = {
@@ -183,12 +184,15 @@ const SHOWN_DEPOSITS = 25;
  */
 export function IncomeReport({
   entries,
+  pending = [],
   spending,
   accounts,
   todayIso,
   countOn,
 }: {
   entries: IncomeEntry[];
+  // Income still pending: listed with the deposits, counted once it posts (as spending is).
+  pending?: IncomeEntry[];
   spending: SpendingPoint[];
   // Accounts income landed in, by id, as labels.
   accounts: { id: string; label: string }[];
@@ -220,6 +224,7 @@ export function IncomeReport({
   const thisMonth = todayIso.slice(0, 7);
   const year = Number(todayIso.slice(0, 4));
   const deposits = showAll ? r.entries : r.entries.slice(0, SHOWN_DEPOSITS);
+  const pendingShown = pending.filter((e) => inRange(e.date, range) && matches(e, filters));
   const lastCheck = r.entries.find((e) => e.kind === "paycheck" && e.amount > 0) ?? null;
   const tableMonths = [...r.months].reverse();
   const kindsInPeriod = KINDS.filter((k) => r.byKind[k] !== 0);
@@ -635,6 +640,7 @@ export function IncomeReport({
             <CardTitle>Deposits</CardTitle>
             <p className="text-xs text-muted-foreground">
               {r.count} over {periodLabel}
+              {pendingShown.length > 0 && ` · ${pendingShown.length} pending, counted once ${pendingShown.length === 1 ? "it posts" : "they post"}`}
             </p>
           </div>
           <Button size="sm" variant="ghost" className="text-champagne hover:text-champagne" onClick={exportCsv} disabled={r.count === 0}>
@@ -643,8 +649,27 @@ export function IncomeReport({
           </Button>
         </CardHeader>
         <CardContent className="flex flex-col">
+          {pendingShown.length > 0 && (
+            <ul aria-label="Pending income" className={cn("flex flex-col", deposits.length > 0 && "mb-2.5 border-b border-border pb-2.5")}>
+              {pendingShown.map((e) => (
+                <li key={e.id} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
+                  <span className="flex min-w-0 flex-col">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full border border-dashed" style={{ borderColor: KIND[e.kind].color }} aria-hidden />
+                      <span className="truncate text-sm font-medium">{e.source}</span>
+                      <span className="shrink-0 text-[11px] text-champagne">Pending</span>
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {shortDay(e.date, todayIso)} · {KIND[e.kind].label} · {e.accountId ? (accountLabel.get(e.accountId) ?? "Account") : "Cash / Manual"} · counted once it posts
+                    </span>
+                  </span>
+                  <Money amount={e.amount} currency="USD" showSign className="text-sm font-medium text-muted-foreground" />
+                </li>
+              ))}
+            </ul>
+          )}
           {deposits.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing came in over this period.</p>
+            pendingShown.length === 0 && <p className="text-sm text-muted-foreground">Nothing came in over this period.</p>
           ) : (
             <ul className="flex flex-col">
               {deposits.map((e) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,8 +10,10 @@ import {
   Banknote,
   Check,
   CircleCheck,
+  CircleHelp,
   HandCoins,
   Landmark,
+  Loader2,
   Plus,
   Receipt,
   Search,
@@ -25,6 +27,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { suggestCharges, type ChargeOption, type DepositToReview, type ReviewedDeposit } from "@/lib/deposit-review";
@@ -110,6 +113,12 @@ export function DepositReviewCard({
   // Answered here: hidden at once, before the page refreshes.
   const [answered, setAnswered] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  // The button tapped on a row, lit until the row is answered or the dialog is closed;
+  // `done` shows its check for a moment before the row goes.
+  const [picked, setPicked] = useState<{ id: string; action: Action } | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  // The row's hide after its check, by deposit id; an undo cancels it.
+  const hiding = useRef(new Map<string, number>());
   const [showAll, setShowAll] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
 
@@ -121,15 +130,33 @@ export function DepositReviewCard({
     setBusy(deposit.id);
     try {
       const message = await save(deposit.id, parts, replace);
-      setAnswered((s) => new Set(s).add(deposit.id));
       setEditing(null);
+      setDone(deposit.id);
+      // A moment on the lit button's check, then the row goes.
+      hiding.current.set(
+        deposit.id,
+        window.setTimeout(() => {
+          hiding.current.delete(deposit.id);
+          setAnswered((s) => new Set(s).add(deposit.id));
+          setDone(null);
+          setPicked(null);
+        }, 550)
+      );
       toast.success(message, replace ? undefined : { action: { label: "Undo", onClick: () => void undo(deposit, false) } });
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Couldn't save your answer");
+      if (!editing) setPicked(null);
     } finally {
       setBusy(null);
     }
+  }
+
+  function pick(d: DepositToReview, action: Action) {
+    if (busy || done) return;
+    setPicked({ id: d.id, action });
+    if (action === "income") void answer(d, [{ answer: "income", amount: d.amount }]);
+    else startEditing(d, action === "paid-back" ? ["charge"] : action === "own" ? ["cash"] : ["cash", "income"]);
   }
 
   async function undo(deposit: DepositToReview, announce = true) {
@@ -137,6 +164,10 @@ export function DepositReviewCard({
     try {
       const res = await fetch(`/api/deposits/${deposit.id}/review`, { method: "DELETE" });
       if (!res.ok) throw new Error();
+      window.clearTimeout(hiding.current.get(deposit.id));
+      hiding.current.delete(deposit.id);
+      setDone((d) => (d === deposit.id ? null : d));
+      setPicked((p) => (p?.id === deposit.id ? null : p));
       setAnswered((s) => {
         const next = new Set(s);
         next.delete(deposit.id);
@@ -173,7 +204,14 @@ export function DepositReviewCard({
   const shown = showAll || onPage ? open : open.slice(0, SHOWN);
 
   const editor = (
-    <Dialog open={editing !== null} onOpenChange={(v) => !v && setEditing(null)}>
+    <Dialog
+      open={editing !== null}
+      onOpenChange={(v) => {
+        if (v) return;
+        setEditing(null);
+        if (!done) setPicked(null);
+      }}
+    >
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
         {editing && (
           <DepositEditor
@@ -202,6 +240,7 @@ export function DepositReviewCard({
             </h2>
             <p className="text-xs text-muted-foreground">Money that came in and isn&apos;t a paycheck or interest. Say what it was so income and spending stay right.</p>
           </div>
+          <AnswersHelp />
           {!onPage && (
             <Link href="/transactions/deposits" className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne">
               All deposits <ArrowRight className="size-3" aria-hidden />
@@ -210,13 +249,30 @@ export function DepositReviewCard({
         </div>
         <ul aria-label="To review" className="border-t border-border">
           {shown.map((d) => (
-            <li key={d.id} className="flex flex-col gap-3 border-b border-border px-5 py-3 last:border-b-0 lg:flex-row lg:items-center">
+            <li
+              key={d.id}
+              className={cn(
+                "flex flex-col gap-3 border-b border-border px-5 py-3 transition-[opacity,background-color] duration-300 last:border-b-0 lg:flex-row lg:items-center",
+                picked?.id === d.id && "bg-champagne/[0.03]",
+                done === d.id && "opacity-50"
+              )}
+            >
               <DepositLine deposit={d} />
               <div className="flex flex-wrap gap-1.5 lg:shrink-0" role="group" aria-label={`What was ${usd(d.amount)} from ${d.name}?`}>
-                <AnswerButton Icon={TrendingUp} label="Income" disabled={busy === d.id} onClick={() => answer(d, [{ answer: "income", amount: d.amount }])} />
-                <AnswerButton Icon={HandCoins} label="Paid me back" disabled={busy === d.id} onClick={() => startEditing(d, ["charge"])} />
-                <AnswerButton Icon={ArrowLeftRight} label="My own money" disabled={busy === d.id} onClick={() => startEditing(d, ["cash"])} />
-                <AnswerButton Icon={Split} label="Split" disabled={busy === d.id} onClick={() => startEditing(d, ["cash", "income"])} />
+                {ACTIONS.map((a) => {
+                  const selected = picked?.id === d.id && picked.action === a.action;
+                  return (
+                    <AnswerButton
+                      key={a.action}
+                      Icon={a.Icon}
+                      label={a.label}
+                      selected={selected}
+                      state={selected ? (done === d.id ? "done" : busy === d.id ? "saving" : "open") : null}
+                      locked={Boolean(busy || done)}
+                      onClick={() => pick(d, a.action)}
+                    />
+                  );
+                })}
               </div>
             </li>
           ))}
@@ -310,12 +366,136 @@ function DepositLine({ deposit: d }: { deposit: DepositToReview }) {
   );
 }
 
-function AnswerButton({ Icon, label, disabled, onClick }: { Icon: LucideIcon; label: string; disabled: boolean; onClick: () => void }) {
+type Action = "income" | "paid-back" | "own" | "split";
+
+const ACTIONS: { action: Action; label: string; Icon: LucideIcon; help: string }[] = [
+  { action: "income", label: "Income", Icon: TrendingUp, help: "Money you earned or were given: a side job, something you sold, a gift. It counts toward your income." },
+  {
+    action: "paid-back",
+    label: "Paid me back",
+    Icon: HandCoins,
+    help: "Someone repaying you for something you covered, on a card or in cash. It comes off that spending instead of counting as income.",
+  },
+  {
+    action: "own",
+    label: "My own money",
+    Icon: ArrowLeftRight,
+    help: "Money that was already yours: cash you deposited or handed over in exchange, or a transfer from another account of yours. Neither income nor spending.",
+  },
+  {
+    action: "split",
+    label: "Split",
+    Icon: Split,
+    help: "Part of it was one thing and part another. A $150 Zelle from Mom that was $100 for cash you gave her and $50 as a gift: $100 from your cash, $50 income.",
+  },
+];
+
+/**
+ * One answer on a deposit's row. The one tapped stays lit (champagne, with
+ * a spinner while it saves and a check once it has) and the others keep
+ * their look, only ignoring taps until it's done.
+ */
+function AnswerButton({
+  Icon,
+  label,
+  selected,
+  state,
+  locked,
+  onClick,
+}: {
+  Icon: LucideIcon;
+  label: string;
+  selected: boolean;
+  state: "open" | "saving" | "done" | null;
+  locked: boolean;
+  onClick: () => void;
+}) {
+  const Mark = state === "saving" ? Loader2 : state === "done" ? Check : Icon;
   return (
-    <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={onClick} className="hover:border-champagne/40 hover:text-champagne">
-      <Icon aria-hidden />
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      aria-pressed={selected}
+      aria-disabled={locked && !selected}
+      onClick={onClick}
+      className={cn(
+        "transition-[background-color,border-color,color,transform] duration-200",
+        selected
+          ? "scale-[1.04] border-champagne bg-champagne/15 text-champagne shadow-[0_0_0_3px_color-mix(in_oklch,var(--champagne),transparent_85%)] hover:bg-champagne/20 hover:text-champagne"
+          : "hover:border-champagne/40 hover:text-champagne",
+        locked && !selected && "pointer-events-none"
+      )}
+    >
+      <Mark className={cn(state === "saving" && "animate-spin")} aria-hidden />
       {label}
     </Button>
+  );
+}
+
+/**
+ * The ? beside the title: what each answer means, in a card below it.
+ * Hovering shows it; clicking keeps it open until clicked again or away.
+ */
+function AnswersHelp() {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  // Closing waits a beat, so the pointer can cross from the ? to the card.
+  const closing = useRef<number | undefined>(undefined);
+  const hover = (next: boolean) => (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse" || pinned) return;
+    window.clearTimeout(closing.current);
+    if (next) setOpen(true);
+    else closing.current = window.setTimeout(() => setOpen(false), 150);
+  };
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) setPinned(false);
+      }}
+    >
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="What the answers mean"
+          onPointerEnter={hover(true)}
+          onPointerLeave={hover(false)}
+          onClick={(e) => {
+            e.preventDefault();
+            const next = !pinned;
+            setPinned(next);
+            setOpen(next);
+          }}
+          className={cn(
+            "flex size-7 items-center justify-center rounded-full border transition-colors",
+            open ? "border-champagne/50 bg-champagne/12 text-champagne" : "border-border text-muted-foreground hover:border-champagne/40 hover:text-champagne"
+          )}
+        >
+          <CircleHelp className="size-4" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-[22rem] p-0" onPointerEnter={hover(true)} onPointerLeave={hover(false)} onOpenAutoFocus={(e) => e.preventDefault()}>
+        <p className="border-b border-border px-4 py-3 text-sm font-medium text-bone">What each answer means</p>
+        <ul className="flex flex-col">
+          {ACTIONS.map(({ action, label, Icon, help }) => (
+            <li key={action} className="flex gap-3 border-b border-border px-4 py-3 last:border-b-0">
+              <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-champagne/12 text-champagne">
+                <Icon className="size-3.5" aria-hidden />
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-sm text-bone">{label}</span>
+                <span className="text-xs leading-relaxed text-muted-foreground">{help}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="border-t border-border bg-muted/30 px-4 py-2.5 text-xs text-muted-foreground">
+          Paychecks and interest are never asked about. You can change or undo any answer under Reviewed on Transactions → Deposits.
+        </p>
+      </PopoverContent>
+    </Popover>
   );
 }
 

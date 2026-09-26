@@ -14,7 +14,16 @@ test("a deposit that isn't pay or interest is asked about on the Overview, and i
   await expect(card).toContainText("Zelle payment from JORDAN LEE");
   await expect(card).not.toContainText("Paycheck");
 
-  await card.getByRole("group", { name: /\$200\.00/ }).getByRole("button", { name: "Income" }).click();
+  // The ? explains each answer.
+  await card.getByRole("button", { name: "What the answers mean" }).click();
+  await expect(page.getByText("What each answer means")).toBeVisible();
+  await expect(page.getByText(/Money that was already yours/)).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  const income = card.getByRole("group", { name: /\$200\.00/ }).getByRole("button", { name: "Income" });
+  await income.click();
+  // The one tapped stays lit.
+  await expect(income).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByText("$200.00 counted as income")).toBeVisible();
   await expect(card.getByRole("listitem")).toHaveCount(1);
 
@@ -50,15 +59,16 @@ test("a Zelle paying back a charge comes off that charge, and can be undone", as
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(page.getByText(/comes off Kroger/)).toBeVisible();
 
-  let writes = await mockWrites(page);
+  const writes = await mockWrites(page);
   expect(writes.some((w) => w.table === "transaction_overrides" && body(w).reimbursed_amount === 45)).toBe(true);
   expect(writes.some((w) => w.table === "transaction_overrides" && body(w).category === "TRANSFER_IN")).toBe(true);
 
   // Undo puts it back to be asked again, and takes the $45 off the charge.
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(card.getByRole("group", { name: /\$45\.00/ })).toBeVisible();
-  writes = await mockWrites(page);
-  expect(writes.some((w) => w.table === "transaction_overrides" && w.method !== "GET" && body(w).reimbursed_amount === null)).toBe(true);
+  await expect
+    .poll(async () => (await mockWrites(page)).some((w) => w.table === "transaction_overrides" && w.method !== "GET" && body(w).reimbursed_amount === null))
+    .toBe(true);
 });
 
 test("paid back for something paid in cash records the cash purchase", async ({ page }) => {

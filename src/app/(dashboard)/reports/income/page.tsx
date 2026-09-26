@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { incomeKind, incomeStats, isIncomeDeposit, type IncomeMonth } from "@/lib/income";
 import type { IncomeEntry } from "@/lib/income-report";
-import { humanizeTransactionName, prettyName } from "@/lib/transaction-display";
+import { effectiveCategory, humanizeTransactionName, prettyName } from "@/lib/transaction-display";
 import { loadLedger } from "@/lib/spending-data";
 import { incomeAmount } from "@/lib/spending-aggregation";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -157,7 +157,11 @@ export default async function IncomePage() {
     kind: incomeKind(t),
     accountId: t.account?.id ?? null,
   }));
-  const landedIn = new Set(entries.map((e) => e.accountId).filter(Boolean));
+  // Income still pending, listed but not counted until it posts, the way pending charges aren't spending yet.
+  const pending: IncomeEntry[] = ledger.transactions
+    .filter((t) => t.pending && t.amount < 0 && effectiveCategory(t) === "INCOME")
+    .map((t) => ({ id: t.id, date: t.date, amount: incomeAmount(t), source: humanizeTransactionName(t), kind: incomeKind(t), accountId: t.account?.id ?? null }));
+  const landedIn = new Set([...entries, ...pending].map((e) => e.accountId).filter(Boolean));
   const accounts = ledger.accounts
     .filter((a) => landedIn.has(a.id))
     .map((a) => ({ id: a.id, label: `${prettyName(a.name)}${a.mask ? ` ••${a.mask}` : ""}` }));
@@ -165,6 +169,7 @@ export default async function IncomePage() {
   return (
     <IncomeReport
       entries={entries}
+      pending={pending}
       spending={ledger.spending.map((t) => ({ date: t.date, amount: t.amount }))}
       accounts={accounts}
       todayIso={now.isoDate}
