@@ -38,6 +38,7 @@ import type { GoalInsight, PaySummary } from "@/lib/goal-insights";
 import { GOAL_COLORS, GOAL_ICONS, colorVar, type GoalColor, type GoalIcon, type GoalOptions } from "@/lib/goal-options";
 import { GoalBadge, ICON_COMPONENTS, accentFor, iconFor } from "@/components/goal-look";
 import { monthsUntil, type GoalProgress } from "@/lib/goals";
+import { projectGoal } from "@/lib/goal-projection";
 import { cn } from "@/lib/utils";
 
 export type GoalRow = GoalProgress & {
@@ -1200,43 +1201,44 @@ function featuredGoal(goals: GoalRow[]): GoalRow | null {
   return open.sort((a, b) => rank(a) - rank(b) || (a.targetDate ?? "9999").localeCompare(b.targetDate ?? "9999") || b.percent - a.percent)[0] ?? null;
 }
 
-function addMonthsIso(iso: string, months: number): string {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
+const monthShort = (key: string) => new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", timeZone: "UTC" });
+const monthLong = (key: string) => new Date(`${key}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const up5 = (n: number) => Math.ceil(n / 5) * 5;
 
 /**
- * Drag to try a monthly amount: when it would finish, against the goal's
- * date, drawn as the road from today to the target next to what's saved so far.
+ * Drag (or pick) a monthly amount and see the goal fill month by month:
+ * each month a track as tall as the target, filled to what would be there
+ * by then (what's saved now, what you add, and interest). Your date's month
+ * is marked, with what it would still be short, and the month it's reached
+ * gets a check.
  */
 function WhatIf({ goal, today }: { goal: GoalRow; today: string }) {
-  const { plan, pace, interestPerMonth, history } = goal.insight;
+  const { plan, pace, interestPerMonth } = goal.insight;
   const interest = interestPerMonth ?? 0;
-  const suggested = plan?.perMonth ?? (pace && pace.perMonth > 0 ? pace.perMonth : goal.remaining / 12);
-  const max = Math.max(250, Math.ceil((Math.max(suggested, pace?.perMonth ?? 0) * 2) / 50) * 50);
-  const [amount, setAmount] = useState(() => Math.min(max, Math.max(25, Math.round(suggested / 25) * 25)));
+  const onTime = plan && plan.perMonth > 0 ? up5(plan.perMonth) : null;
+  // The pace counts interest; what you've been adding is the rest.
+  const yourPace = pace && pace.perMonth - interest > 5 ? Math.round((pace.perMonth - interest) / 5) * 5 : null;
+  const suggested = onTime ?? yourPace ?? up5(goal.remaining / 12);
+  const max = Math.max(250, Math.ceil((Math.max(suggested, yourPace ?? 0, onTime ?? 0) * 1.6) / 50) * 50);
+  const [amount, setAmount] = useState(() => Math.min(max, Math.max(0, yourPace ?? suggested)));
+  const [focus, setFocus] = useState<number | null>(null);
 
-  const perMonth = amount + interest;
-  const months = perMonth > 0 ? Math.ceil(goal.remaining / perMonth) : null;
-  const finish = months !== null ? addMonthsIso(today, months) : null;
-  const diff = finish && goal.targetDate ? Math.round(daysBetween(goal.targetDate, finish) / 30.44) : null;
+  const p = useMemo(
+    () => projectGoal({ saved: goal.saved, target: goal.target, perMonth: amount, interestPerMonth: interest, todayIso: today, targetDate: goal.targetDate }),
+    [goal.saved, goal.target, amount, interest, today, goal.targetDate]
+  );
   const color = accentFor(goal.options);
+  const cols = p.columns;
+  const active = focus ?? p.dueIndex ?? p.finishIndex ?? cols.length - 1;
+  const col = cols[active];
+  const dense = cols.length > 14;
+  const labelShown = (k: number) => k === 0 || !dense || k % 2 === 0 || k === p.dueIndex || k === p.finishIndex;
+  const pct = (v: number) => `${(v / goal.target) * 100}%`;
 
-  // The picture: saved so far (last six months), then the road at this amount.
-  const W = 320;
-  const H = 110;
-  const past = history ? history.values.slice(-180).filter((_, i, all) => i % 7 === 0 || i === all.length - 1) : [goal.saved];
-  const futureMonths = Math.min(months ?? 24, 60);
-  const totalSteps = past.length - 1 + futureMonths;
-  const top = goal.target * 1.08;
-  const x = (i: number) => (totalSteps > 0 ? (i / totalSteps) * W : 0);
-  const y = (v: number) => H - (Math.max(0, v) / top) * H;
-  const pastPath = past.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
-  const nowX = x(past.length - 1);
-  const endV = Math.min(goal.target, goal.saved + perMonth * futureMonths);
-  const endX = x(past.length - 1 + (months !== null && goal.saved + perMonth * futureMonths >= goal.target ? Math.min(months, futureMonths) : futureMonths));
-  const dueX = goal.targetDate && monthsUntil(today, goal.targetDate) !== null ? x(past.length - 1 + Math.min(monthsUntil(today, goal.targetDate)!, futureMonths)) : null;
+  const presets = [
+    ...(yourPace !== null ? [{ label: "Your pace", value: yourPace }] : []),
+    ...(onTime !== null ? [{ label: "On time", value: onTime }] : []),
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -1247,51 +1249,197 @@ function WhatIf({ goal, today }: { goal: GoalRow; today: string }) {
           <span className="font-sans text-sm font-normal text-muted-foreground"> a month</span>
         </span>
       </div>
-      <input
-        type="range"
-        min={0}
-        max={max}
-        step={25}
-        value={amount}
-        onChange={(e) => setAmount(Number(e.target.value))}
-        aria-label="Monthly amount to try"
-        className="w-full cursor-pointer"
-        style={{ accentColor: color }}
-      />
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-28 w-full overflow-visible" aria-hidden>
-        <line x1={0} x2={W} y1={y(goal.target)} y2={y(goal.target)} stroke="var(--bone)" strokeOpacity={0.3} strokeDasharray="2 4" vectorEffect="non-scaling-stroke" />
-        {dueX !== null && <line x1={dueX} x2={dueX} y1={0} y2={H} stroke="var(--bone)" strokeOpacity={0.2} strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
-        <path d={`${pastPath} L${nowX},${H} L0,${H} Z`} fill={color} fillOpacity={0.1} />
-        <path d={pastPath} fill="none" stroke={color} strokeWidth={2} vectorEffect="non-scaling-stroke" />
-        <path
-          d={`M${nowX},${y(goal.saved)} L${endX},${y(endV)}`}
-          fill="none"
-          stroke={color}
-          strokeWidth={2}
-          strokeDasharray="5 5"
-          vectorEffect="non-scaling-stroke"
-          className="transition-all duration-300"
+      <div className="flex flex-col gap-2.5">
+        <input
+          type="range"
+          min={0}
+          max={max}
+          step={5}
+          value={amount}
+          onChange={(e) => {
+            setAmount(Number(e.target.value));
+            setFocus(null);
+          }}
+          aria-label="Monthly amount to try"
+          className="w-full cursor-pointer"
+          style={{ accentColor: color }}
         />
-      </svg>
-      <div className="flex flex-wrap justify-between gap-2 text-[11px] text-muted-foreground">
-        <span>Saved so far</span>
-        {goal.targetDate && <span>┊ your date, {shortDate(goal.targetDate, today)}</span>}
-        <span>Target {dollars(goal.target)}</span>
+        {presets.length > 0 && (
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Try an amount">
+            {presets.map((pr) => (
+              <button
+                key={pr.label}
+                type="button"
+                aria-pressed={amount === pr.value}
+                onClick={() => {
+                  setAmount(Math.min(max, pr.value));
+                  setFocus(null);
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ring-1 transition-colors ring-inset",
+                  amount === pr.value ? "bg-bone/12 text-bone ring-bone/15" : "text-muted-foreground ring-border hover:bg-bone/6 hover:text-bone"
+                )}
+              >
+                {pr.label}
+                <span className="font-mono tabular-nums">{dollars(pr.value)}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* The month being read: your date's by default, or the one pointed at. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-sm" aria-live="polite">
+        <span className="whitespace-nowrap text-muted-foreground">
+          {active === p.dueIndex && goal.targetDate ? (
+            <>
+              By {fullDate(goal.targetDate)}
+              <span className="text-bone"> (your date)</span>
+            </>
+          ) : col.month === null ? (
+            "Today"
+          ) : (
+            `End of ${monthLong(col.month)}`
+          )}
+        </span>
+        <span className="ml-auto text-right whitespace-nowrap">
+          <span className="font-mono text-bone tabular-nums">{dollars(col.total)}</span>
+          {col.reached ? (
+            <span className="text-moss"> · reached</span>
+          ) : (
+            <span className={active === p.dueIndex ? "text-oxblood-text" : "text-muted-foreground"}>
+              {" "}
+              · <span className="font-mono tabular-nums">{dollars(goal.target - col.total)}</span> {active === p.dueIndex ? "short" : "to go"}
+            </span>
+          )}
+        </span>
+      </div>
+
+      <div className="flex flex-col gap-1.5" onMouseLeave={() => setFocus(null)}>
+        {/* Marks above the tracks: your date, and the month it's reached. */}
+        <div className="flex h-6 items-end gap-[3px] sm:gap-1.5" aria-hidden>
+          {cols.map((c, k) => (
+            <span key={k} className="flex max-w-7 min-w-0 flex-1 justify-center">
+              {k === p.dueIndex ? (
+                <span className="relative flex justify-center">
+                  <span className="absolute bottom-0 inline-flex items-center gap-1 rounded-full bg-bone/10 px-1.5 py-px text-[10px] whitespace-nowrap text-bone ring-1 ring-bone/15 ring-inset">
+                    {k === p.finishIndex && <Check className="size-2.5 text-moss" strokeWidth={3} />}
+                    Your date
+                  </span>
+                </span>
+              ) : k === p.finishIndex ? (
+                <span className="flex size-4 items-center justify-center rounded-full bg-moss/20 text-moss">
+                  <Check className="size-2.5" strokeWidth={3} />
+                </span>
+              ) : null}
+            </span>
+          ))}
+        </div>
+        <div className="relative flex h-40 items-stretch gap-[3px] sm:h-44 sm:gap-1.5" role="img" aria-label={`${goal.name}, month by month at ${dollars(amount)} a month`}>
+          {cols.map((c, k) => {
+            const due = k === p.dueIndex;
+            const lit = k === active;
+            return (
+              <span
+                key={k}
+                onMouseEnter={() => setFocus(k)}
+                onClick={() => setFocus(k)}
+                className={cn(
+                  "relative max-w-7 min-w-0 flex-1 cursor-default overflow-hidden rounded-[6px] transition-[box-shadow,background-color] duration-200",
+                  "bg-bone/[0.06]",
+                  due && "ring-1 ring-bone/40 ring-offset-2 ring-offset-card",
+                  lit && !due && "ring-1 ring-bone/20 ring-offset-2 ring-offset-card"
+                )}
+              >
+                {/* What your date's month would still be short: hatched, so the gap reads as missing money. */}
+                {due && !c.reached && (
+                  <span
+                    className="absolute inset-x-0 top-0 transition-[bottom] duration-300 ease-out"
+                    style={{
+                      bottom: pct(c.total),
+                      backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--oxblood) 55%, transparent) 0 2px, transparent 2px 6px)",
+                      backgroundColor: "color-mix(in oklab, var(--oxblood) 12%, transparent)",
+                    }}
+                  />
+                )}
+                <span className="absolute inset-x-0 bottom-0 flex flex-col-reverse transition-[height] duration-300 ease-out" style={{ height: pct(c.total) }}>
+                  <span className="w-full" style={{ height: `${(c.saved / Math.max(c.total, 0.01)) * 100}%`, backgroundColor: color, opacity: 0.32 }} />
+                  <span className="w-full" style={{ height: `${(c.added / Math.max(c.total, 0.01)) * 100}%`, backgroundColor: color }} />
+                  {c.interest > 0 && <span className="w-full bg-moss/70" style={{ height: `${(c.interest / Math.max(c.total, 0.01)) * 100}%` }} />}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+        <div className="flex gap-[3px] sm:gap-1.5" aria-hidden>
+          {cols.map((c, k) => (
+            <span
+              key={k}
+              className={cn(
+                "max-w-7 min-w-0 flex-1 overflow-visible text-center text-[10px] whitespace-nowrap tabular-nums",
+                k === p.dueIndex || k === active ? "text-bone" : "text-muted-foreground"
+              )}
+            >
+              {labelShown(k) ? (c.month === null ? "Now" : monthShort(c.month)) : ""}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground" aria-hidden>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-sm" style={{ backgroundColor: color, opacity: 0.32 }} />
+          Saved now
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-2 rounded-sm" style={{ backgroundColor: color }} />
+          You add
+        </span>
+        {interest >= 0.5 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2 rounded-sm bg-moss/70" />
+            Interest
+          </span>
+        )}
+        {p.shortAtDue !== null && p.shortAtDue > 0 && (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="size-2 rounded-sm"
+              style={{ backgroundImage: "repeating-linear-gradient(135deg, color-mix(in oklab, var(--oxblood) 70%, transparent) 0 1.5px, transparent 1.5px 3.5px)" }}
+            />
+            Short on your date
+          </span>
+        )}
+        <span className="ml-auto">Full track = {dollars(goal.target)}</span>
+      </div>
+
       <p className="rounded-lg border border-border bg-muted/20 px-3.5 py-3 text-sm text-muted-foreground">
-        {finish === null ? (
-          <>At $0 a month{interest > 0.5 ? " and only interest" : ""}, it won&apos;t get there. Slide to try an amount.</>
+        {p.finishMonth === null ? (
+          <>At $0 a month{interest > 0.5 ? " and only interest" : ""}, it won&apos;t get there. Slide or pick an amount.</>
         ) : (
           <>
-            You&apos;d reach {dollars(goal.target)} around <span className="text-bone">{roughDate(finish, today)}</span>
-            {diff === null ? (
+            You&apos;d reach {dollars(goal.target)} in <span className="text-bone">{monthLong(p.finishMonth)}</span>
+            {p.monthsLate === null ? (
               "."
-            ) : diff < 0 ? (
-              <span className="text-moss">, {-diff} month{diff === -1 ? "" : "s"} before your date.</span>
-            ) : diff === 0 ? (
+            ) : p.monthsLate < 0 ? (
+              <span className="text-moss">
+                , {-p.monthsLate} month{p.monthsLate === -1 ? "" : "s"} before your date.
+              </span>
+            ) : p.monthsLate === 0 ? (
               <span className="text-moss">, right on time.</span>
             ) : (
-              <span className="text-oxblood-text">, {diff} month{diff === 1 ? "" : "s"} after your date.</span>
+              <>
+                <span className="text-oxblood-text">
+                  , {p.monthsLate} month{p.monthsLate === 1 ? "" : "s"} after your date.
+                </span>
+                {p.atDue !== null && goal.targetDate && (
+                  <>
+                    {" "}
+                    By {shortDate(goal.targetDate, today)} you&apos;d have {dollars(p.atDue)}
+                    {onTime !== null ? `; ${dollars(onTime)} a month makes it on time.` : "."}
+                  </>
+                )}
+              </>
             )}
             {interest >= 0.5 ? ` That counts about ${dollars(interest)} a month of interest.` : ""}
           </>

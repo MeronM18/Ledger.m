@@ -203,6 +203,11 @@ test("goals: each goal says its next step, and its panel says where it stands an
   await slider.focus();
   await page.keyboard.press("End");
   await expect(card.getByText(/months? before your date\./)).toBeVisible();
+  // The on-time amount lands on the date, with nothing short on it.
+  await card.getByRole("button", { name: /^On time/ }).click();
+  await expect(card.getByText(/right on time\./)).toBeVisible();
+  await expect(card.getByText(/\(your date\)/)).toBeVisible();
+  await expect(card.getByText(/· reached$/)).toBeVisible();
 
   // Its panel has the rest.
   await card.getByRole("button", { name: "Open Start a business" }).click();
