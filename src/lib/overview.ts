@@ -31,13 +31,20 @@ export function upcomingBills(events: ForecastEvent[], todayIso: string, days = 
 
 export type CategoryShare = CategoryTotal & { share: number };
 
-/** The month's biggest categories and each one's share of what was spent; the rest summed. */
-export function whereItWent(categories: CategoryTotal[], count = 4): { top: CategoryShare[]; rest: { count: number; amount: number } } {
+/**
+ * The month's categories and each one's share of what was spent, biggest
+ * first: all of them (for the ring, each in its own color), the biggest few
+ * (for the legend), and the rest summed.
+ */
+export function whereItWent(
+  categories: CategoryTotal[],
+  count = 4
+): { all: CategoryShare[]; top: CategoryShare[]; rest: { count: number; amount: number } } {
   const positive = categories.filter((c) => c.amount > 0).sort((a, b) => b.amount - a.amount);
   const total = positive.reduce((s, c) => s + c.amount, 0);
-  const top = positive.slice(0, count).map((c) => ({ ...c, share: total > 0 ? c.amount / total : 0 }));
+  const all = positive.map((c) => ({ ...c, share: total > 0 ? c.amount / total : 0 }));
   const others = positive.slice(count);
-  return { top, rest: { count: others.length, amount: cents(others.reduce((s, c) => s + c.amount, 0)) } };
+  return { all, top: all.slice(0, count), rest: { count: others.length, amount: cents(others.reduce((s, c) => s + c.amount, 0)) } };
 }
 
 export type ActivityBar = { key: string; label: string; amount: number; current: boolean };

@@ -116,12 +116,12 @@ export async function NextPaymentCard({ todayIso }: { todayIso: string }) {
 
 const RING = 2 * Math.PI * 42;
 
-/** The month's spending as a ring: each top category its share, the rest in grey, the total in the middle. */
+/** The month's spending as a ring: every category its share, in its own color, the total at the very middle. */
 function Donut({ parts, total, label }: { parts: { key: string; share: number; color: string }[]; total: number; label: string }) {
   // Where each slice starts around the ring: the shares before it, added up.
   const starts = parts.map((_, i) => parts.slice(0, i).reduce((s, p) => s + p.share, 0) * RING);
   return (
-    <div className="relative mx-auto size-36 shrink-0">
+    <div className="relative mx-auto size-40 shrink-0">
       <svg viewBox="0 0 100 100" className="size-full -rotate-90" role="img" aria-label={label}>
         <circle cx="50" cy="50" r="42" fill="none" stroke="var(--bone)" strokeOpacity={0.06} strokeWidth="9" />
         {parts.map((p, i) => (
@@ -139,31 +139,34 @@ function Donut({ parts, total, label }: { parts: { key: string; share: number; c
           />
         ))}
       </svg>
-      <span className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-serif text-xl leading-none font-medium text-bone">{whole(total)}</span>
-        <span className="mt-1 text-[11px] text-muted-foreground">spent</span>
-      </span>
+      {/* The total sits on the ring's exact center; "spent" hangs just below it. */}
+      <span className="absolute inset-0 flex items-center justify-center font-serif text-[1.35rem] leading-none font-medium text-bone">{whole(total)}</span>
+      <span className="absolute inset-x-0 top-1/2 mt-3.5 text-center text-[11px] leading-none text-muted-foreground">spent</span>
     </div>
   );
 }
 
-/** This month's biggest categories as a ring and a legend, in the colors Spending uses. */
+/**
+ * This month's categories as a ring, each in the color it has on Spending
+ * and everywhere else, and the biggest few in a legend with the rest summed.
+ */
 export function WhereItWentCard({
   monthName,
+  all,
   top,
   rest,
   error,
 }: {
   monthName: string;
+  all: CategoryShare[];
   top: CategoryShare[];
   rest: { count: number; amount: number };
   error: boolean;
 }) {
-  const total = top.reduce((s, c) => s + c.amount, 0) + rest.amount;
-  const parts = [
-    ...top.map((c) => ({ key: c.category, share: total > 0 ? c.amount / total : 0, color: `var(--viz-${c.colorSlot})` })),
-    ...(rest.amount > 0 ? [{ key: "rest", share: rest.amount / total, color: "var(--ash-grey)" }] : []),
-  ];
+  const total = all.reduce((s, c) => s + c.amount, 0);
+  const color = (c: CategoryShare) => `var(--viz-${c.colorSlot})`;
+  const parts = all.map((c) => ({ key: c.category, share: c.share, color: color(c) }));
+  const others = all.slice(top.length);
   return (
     <Panel title="Where it went" href="/reports/spending" linkLabel="Spending" center>
       {error ? (
@@ -172,12 +175,12 @@ export function WhereItWentCard({
         <p className="text-sm text-muted-foreground">No spending in {monthName} yet.</p>
       ) : (
         <div className="flex flex-col gap-4">
-          <Donut parts={parts} total={total} label={`${monthName} spending by category: ${top.map((c) => `${c.label} ${Math.round(c.share * 100)}%`).join(", ")}`} />
+          <Donut parts={parts} total={total} label={`${monthName} spending by category: ${all.map((c) => `${c.label} ${Math.round(c.share * 100)}%`).join(", ")}`} />
           <ul className="flex flex-col gap-2 text-sm">
             {top.map((c) => (
               <li key={c.category} className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2">
-                  <span className="size-2 shrink-0 rounded-full" style={{ background: `var(--viz-${c.colorSlot})` }} aria-hidden />
+                  <span className="size-2 shrink-0 rounded-full" style={{ background: color(c) }} aria-hidden />
                   <span className="truncate text-bone">{c.label}</span>
                 </span>
                 <span className="shrink-0 font-mono tabular-nums">
@@ -187,9 +190,14 @@ export function WhereItWentCard({
               </li>
             ))}
             {rest.count > 0 && (
-              <li className="flex items-center justify-between gap-3 text-muted-foreground">
+              <li className="flex items-center justify-between gap-3 text-muted-foreground" title={others.map((c) => c.label).join(", ")}>
                 <span className="flex items-center gap-2">
-                  <span className="size-2 shrink-0 rounded-full bg-ash-grey" aria-hidden />
+                  {/* One dot per category left, in their colors, overlapping. */}
+                  <span className="flex shrink-0 -space-x-1" aria-hidden>
+                    {others.map((c) => (
+                      <span key={c.category} className="size-2 rounded-full ring-1 ring-card" style={{ background: color(c) }} />
+                    ))}
+                  </span>
                   {rest.count} more {rest.count === 1 ? "category" : "categories"}
                 </span>
                 <span className="shrink-0 font-mono tabular-nums">

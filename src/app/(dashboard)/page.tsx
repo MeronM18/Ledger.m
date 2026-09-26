@@ -120,7 +120,7 @@ export default async function OverviewPage() {
     {
       id: "where-it-went",
       label: "Where it went",
-      node: <WhereItWentCard monthName={monthName} top={where.top} rest={where.rest} error={ledger.error} />,
+      node: <WhereItWentCard monthName={monthName} all={where.all} top={where.top} rest={where.rest} error={ledger.error} />,
     },
   ];
 
