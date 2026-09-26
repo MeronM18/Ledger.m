@@ -1,12 +1,10 @@
 import type { ForecastEvent } from "@/lib/forecast";
-import { incomeAmount, type CategoryTotal, type SpendingTransaction } from "@/lib/spending-aggregation";
-import { effectiveCategory } from "@/lib/transaction-display";
+import type { CategoryTotal, SpendingTransaction } from "@/lib/spending-aggregation";
 
-// Pure. The Overview's figures: this month day by day, the same point last
-// month to compare with, income month by month, what's due soon and where
-// the month's money went. Spending is the ledger's spending list (net of
-// refunds and paid-back shares), so every figure matches Budgets, Spending
-// and Transactions.
+// Pure. The Overview's figures: spending by the day, week and month, what's
+// due soon and where the month's money went. Spending is the ledger's
+// spending list (net of refunds and paid-back shares), so every figure
+// matches Budgets, Spending and Transactions.
 
 export type MonthRef = { year: number; month: number }; // month 0-indexed
 
@@ -20,84 +18,6 @@ export function daysIn({ year, month }: MonthRef): number {
 export function shiftMonth({ year, month }: MonthRef, by: number): MonthRef {
   const d = new Date(Date.UTC(year, month + by, 1));
   return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
-}
-
-/** Each day's spending in a month, net: index 0 is the 1st. */
-export function dailySpending(spending: SpendingTransaction[], ref: MonthRef): number[] {
-  const key = keyOf(ref);
-  const days = new Array<number>(daysIn(ref)).fill(0);
-  for (const t of spending) {
-    if (t.date.slice(0, 7) !== key) continue;
-    days[Number(t.date.slice(8, 10)) - 1] += t.amount;
-  }
-  return days.map(cents);
-}
-
-/** Money in categorized as income, posted, by day of one month. */
-function dailyIncome(all: SpendingTransaction[], ref: MonthRef): number[] {
-  const key = keyOf(ref);
-  const days = new Array<number>(daysIn(ref)).fill(0);
-  for (const t of all) {
-    if (t.pending || t.date.slice(0, 7) !== key || effectiveCategory(t) !== "INCOME") continue;
-    days[Number(t.date.slice(8, 10)) - 1] += incomeAmount(t);
-  }
-  return days;
-}
-
-const sumThrough = (days: number[], day: number) => cents(days.slice(0, Math.min(day, days.length)).reduce((s, v) => s + v, 0));
-
-/** The change from `before` to `now` as a share of `before`; null with nothing to compare against. */
-export function change(now: number, before: number): number | null {
-  if (before <= 0) return null;
-  return (now - before) / before;
-}
-
-export type MonthSoFar = {
-  // Through `day` of this month.
-  now: number;
-  // Last month through the same day (its last day, when it's shorter).
-  before: number;
-  change: number | null;
-  // Last month's whole total.
-  beforeTotal: number;
-};
-
-/** This month's spending so far against last month at the same point. */
-export function spendingSoFar(spending: SpendingTransaction[], ref: MonthRef, day: number): MonthSoFar {
-  const last = dailySpending(spending, shiftMonth(ref, -1));
-  const now = sumThrough(dailySpending(spending, ref), day);
-  const before = sumThrough(last, day);
-  return { now, before, change: change(now, before), beforeTotal: sumThrough(last, last.length) };
-}
-
-/** This month's income so far against last month at the same point. */
-export function incomeSoFar(all: SpendingTransaction[], ref: MonthRef, day: number): MonthSoFar {
-  const last = dailyIncome(all, shiftMonth(ref, -1));
-  const now = sumThrough(dailyIncome(all, ref), day);
-  const before = sumThrough(last, day);
-  return { now, before, change: change(now, before), beforeTotal: sumThrough(last, last.length) };
-}
-
-/** Income for each of the `count` months ending with `ref`, oldest first. */
-export function incomeByMonth(all: SpendingTransaction[], ref: MonthRef, count = 12): { month: string; amount: number }[] {
-  return Array.from({ length: count }, (_, i) => {
-    const m = shiftMonth(ref, i - count + 1);
-    return { month: keyOf(m), amount: sumThrough(dailyIncome(all, m), 31) };
-  });
-}
-
-/** Spending for each of the `count` months ending with `ref`, oldest first. */
-export function spendingByMonth(spending: SpendingTransaction[], ref: MonthRef, count = 6): { month: string; amount: number }[] {
-  return Array.from({ length: count }, (_, i) => {
-    const m = shiftMonth(ref, i - count + 1);
-    return { month: keyOf(m), amount: sumThrough(dailySpending(spending, m), 31) };
-  });
-}
-
-/** Running totals, day by day. */
-export function cumulative(days: number[]): number[] {
-  let total = 0;
-  return days.map((d) => (total = cents(total + d)));
 }
 
 export type Upcoming = { items: ForecastEvent[]; total: number };
@@ -120,75 +40,52 @@ export function whereItWent(categories: CategoryTotal[], count = 4): { top: Cate
   return { top, rest: { count: others.length, amount: cents(others.reduce((s, c) => s + c.amount, 0)) } };
 }
 
-/**
- * A strip of pills for a series: each value's height against the largest,
- * on a square-root scale so one big day (rent on the 1st) doesn't flatten
- * the rest, and at least a sliver when it's above zero. Values that haven't
- * happened yet are null and stay unlit.
- */
-export function pillLevels(values: (number | null)[]): (number | null)[] {
-  const max = Math.max(0, ...values.map((v) => v ?? 0));
-  return values.map((v) => (v === null ? null : max > 0 && v > 0 ? Math.max(0.12, Math.sqrt(v / max)) : 0));
-}
+export type ActivityBar = { key: string; label: string; amount: number; current: boolean };
+export type SpendingActivity = { day: ActivityBar[]; week: ActivityBar[]; month: ActivityBar[] };
 
-/** Pills for a series that moves within a band (net worth): lowest a quarter full, highest full. */
-export function pillLevelsInRange(values: number[]): number[] {
-  if (values.length === 0) return [];
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  return values.map((v) => (max === min ? 0.6 : 0.25 + (0.75 * (v - min)) / (max - min)));
-}
-
-export type LiquidCash = {
-  // Checking and savings, as the banks report them.
-  bank: number;
-  // Cash you keep track of on Accounts.
-  cash: number;
-  // What's owed on credit cards, connected and imported.
-  cards: number;
-  // Bank and cash less what the cards are owed: what's really yours to use today.
-  net: number;
-};
+const DAY = 86_400_000;
+const isoPlus = (iso: string, days: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+const shortLabel = (iso: string, opts: Intl.DateTimeFormatOptions) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-US", { ...opts, timeZone: "UTC" });
 
 /**
- * Money you can reach, net of what the cards are owed. Net worth also counts
- * savings goals' investments, metals, a car; this is only what could pay a
- * bill this week.
+ * Spending by the day (the last 7), the week (the last 8, Sunday to
+ * Saturday) and the month (the last 6), each ending on the one in progress.
+ * Net of refunds and paid-back shares like every spending total, and never
+ * below zero for a bar (a week of refunds is an empty week, not a hole).
  */
-export function liquidCash(
-  accounts: { type: string | null; current_balance: number | string | null }[],
-  manualCards: { type: string; balance: number }[],
-  cashAssets: { value: number | string | null }[]
-): LiquidCash {
-  const sum = (xs: number[]) => cents(xs.reduce((s, v) => s + v, 0));
-  const bank = sum(accounts.filter((a) => a.type === "depository").map((a) => Number(a.current_balance ?? 0)));
-  const cash = sum(cashAssets.map((a) => Number(a.value ?? 0)));
-  const cards = sum([
-    ...accounts.filter((a) => a.type === "credit").map((a) => Math.max(0, Number(a.current_balance ?? 0))),
-    ...manualCards.filter((c) => c.type === "credit").map((c) => Math.max(0, c.balance)),
-  ]);
-  return { bank, cash, cards, net: cents(bank + cash - cards) };
+export function spendingActivity(spending: SpendingTransaction[], todayIso: string): SpendingActivity {
+  const byDay = new Map<string, number>();
+  for (const t of spending) byDay.set(t.date, (byDay.get(t.date) ?? 0) + t.amount);
+  const sumDays = (from: string, to: string) => {
+    let total = 0;
+    for (const [d, v] of byDay) if (d >= from && d <= to) total += v;
+    return Math.max(0, cents(total));
+  };
+
+  const day = Array.from({ length: 7 }, (_, i) => {
+    const d = isoPlus(todayIso, i - 6);
+    return { key: d, label: shortLabel(d, { weekday: "short" }), amount: sumDays(d, d), current: i === 6 };
+  });
+
+  const weekday = new Date(`${todayIso}T00:00:00Z`).getUTCDay();
+  const thisWeek = isoPlus(todayIso, -weekday);
+  const week = Array.from({ length: 8 }, (_, i) => {
+    const from = isoPlus(thisWeek, (i - 7) * 7);
+    return { key: from, label: shortLabel(from, { month: "short", day: "numeric" }), amount: sumDays(from, isoPlus(from, 6)), current: i === 7 };
+  });
+
+  const [y, m] = todayIso.split("-").map(Number);
+  const month = Array.from({ length: 6 }, (_, i) => {
+    const ref = shiftMonth({ year: y, month: m - 1 }, i - 5);
+    const from = `${keyOf(ref)}-01`;
+    return { key: keyOf(ref), label: shortLabel(from, { month: "short" }), amount: sumDays(from, `${keyOf(ref)}-${String(daysIn(ref)).padStart(2, "0")}`), current: i === 5 };
+  });
+
+  return { day, week, month };
 }
 
-/**
- * Where the month ends at its pace so far: what's been spent, plus the
- * same average a day for the days left. Null in the first days, when a
- * pace is mostly the rent.
- */
-export function monthEndPace(spentSoFar: number, today: number, daysInMonth: number, minDays = 5): number | null {
-  if (today < minDays || today >= daysInMonth) return null;
-  return cents(spentSoFar + (spentSoFar / today) * (daysInMonth - today));
-}
-
-/**
- * A monthly budget that fits how you actually spend, when the one set is far
- * below it: the average of the last three complete months, rounded up to
- * $50. Null when the budget is within reach (or there's no history yet).
- */
-export function budgetSuggestion(completeMonths: number[], budget: number | null): { average: number; suggested: number } | null {
-  const recent = completeMonths.filter((m) => m > 0).slice(-3);
-  if (budget === null || recent.length < 2) return null;
-  const average = cents(recent.reduce((s, v) => s + v, 0) / recent.length);
-  if (budget >= average * 0.7) return null;
-  return { average, suggested: Math.ceil(average / 50) * 50 };
+/** The usual for a set of bars: the average of the ones before the current one, or null with none. */
+export function usualOf(bars: ActivityBar[]): number | null {
+  const before = bars.filter((b) => !b.current);
+  return before.length ? cents(before.reduce((s, b) => s + b.amount, 0) / before.length) : null;
 }

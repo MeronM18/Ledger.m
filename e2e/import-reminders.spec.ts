@@ -30,6 +30,6 @@ test("an Apple account two weeks past its last import is flagged until it's impo
 
   await page.goto("/");
   await afterWelcome(page);
-  await expect(page.getByRole("region", { name: "Left to spend" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Net worth" })).toBeVisible();
   await expect(page.getByText(/Your Apple Savings statement is/)).toHaveCount(0);
 });

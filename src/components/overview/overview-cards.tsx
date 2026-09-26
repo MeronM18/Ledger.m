@@ -1,15 +1,11 @@
 import Link from "next/link";
 import { ArrowRight, CircleAlert } from "lucide-react";
-import { BudgetSuggestion } from "@/components/overview/budget-suggestion";
-import { CARD_GRIP, ChangeChip, PillStrip, type TileChange } from "@/components/overview/stat-tile";
-import { GoalBadge, accentFor } from "@/components/goal-look";
+import { CARD_GRIP } from "@/components/overview/stat-tile";
 import { QueryErrorState } from "@/components/query-error";
 import { DragHandle } from "@/components/sortable-card-list";
 import { TransactionAvatar } from "@/components/transaction-avatar";
 import { formatCurrency } from "@/lib/format";
 import { loadForecast } from "@/lib/forecast-data";
-import { verdictLine } from "@/lib/goal-copy";
-import { loadGoals } from "@/lib/goals-data";
 import { installmentPaymentLabel, installmentPaymentsBetween } from "@/lib/installments";
 import { loadSubscriptions } from "@/lib/recurring-extras";
 import { upcomingBills, type CategoryShare } from "@/lib/overview";
@@ -55,17 +51,13 @@ export function PanelSkeleton() {
 }
 
 const UPCOMING_DAYS = 14;
-const UPCOMING_SHOWN = 5;
 
-/**
- * Bills, subscriptions and card payments due in the next two weeks. Async,
- * for <Suspense>: the forecast it reads loads on its own, so the rest of the
- * page doesn't wait on it.
- */
-export async function UpcomingCard({ todayIso }: { todayIso: string }) {
+/** Bills, subscriptions, card payments and installment payments due in the next two weeks, soonest first. */
+async function loadUpcoming(todayIso: string) {
   const admin = createAdminClient();
   const [data, subscriptions] = await Promise.all([loadForecast(admin), loadSubscriptions(admin)]);
-  // Installment payments due too, listed with the bills (plans paid off have none).
+  if (data.error) return null;
+  // Installment payments too (plans paid off have none).
   const through = new Date(Date.parse(`${todayIso}T00:00:00Z`) + UPCOMING_DAYS * 86_400_000).toISOString().slice(0, 10);
   const installments = subscriptions.error
     ? []
@@ -76,53 +68,45 @@ export async function UpcomingCard({ todayIso }: { todayIso: string }) {
         kind: "bill" as const,
         installment: true,
       }));
-  const upcoming = data.error ? null : upcomingBills([...data.forecast.events, ...installments], todayIso, UPCOMING_DAYS);
+  return upcomingBills([...data.forecast.events, ...installments], todayIso, UPCOMING_DAYS);
+}
+
+const daysAway = (iso: string, todayIso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse(`${todayIso}T00:00:00Z`)) / 86_400_000);
+const whenText = (n: number) => (n <= 0 ? "today" : n === 1 ? "tomorrow" : `in ${n} days`);
+
+/**
+ * The next payment due, large, and what else is due in the next two weeks.
+ * Async, for <Suspense>: the forecast it reads loads on its own.
+ */
+export async function NextPaymentCard({ todayIso }: { todayIso: string }) {
+  const upcoming = await loadUpcoming(todayIso);
+  const next = upcoming?.items[0] ?? null;
+  const rest = upcoming ? upcoming.items.slice(1) : [];
+  const kind = next ? (next.kind === "card" ? "Card payment" : "installment" in next ? "Installment" : "Bill") : null;
   return (
-    <Panel title="Upcoming" href="/recurring" linkLabel="Recurring">
+    <Panel title="Next payment" href="/recurring" linkLabel="Recurring">
       {upcoming === null ? (
         <QueryErrorState message="Couldn't load what's coming up." />
+      ) : next === null ? (
+        <p className="text-sm text-muted-foreground">Nothing is due in the next two weeks.</p>
       ) : (
         <>
-          <p className="flex flex-wrap items-baseline gap-x-2">
-            <Figure>{usd(upcoming.total)}</Figure>
-            <span className="text-sm text-muted-foreground">due in the next {UPCOMING_DAYS} days</span>
-          </p>
-          {upcoming.items.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nothing is due in the next two weeks.</p>
-          ) : (
-            <ul className="flex flex-col">
-              {upcoming.items.slice(0, UPCOMING_SHOWN).map((e, i) => (
-                <li key={`${e.date}:${e.name}:${i}`} className="flex items-center justify-between gap-3 border-t border-border py-2 text-sm first:border-t-0 first:pt-0">
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    {/* The same marks as the transactions below: a card payment as money moving, a bill by its name. */}
-                    <TransactionAvatar
-                      transaction={{
-                        name: e.name,
-                        merchant_name: e.name,
-                        pfc_primary: e.kind === "card" ? "LOAN_PAYMENTS" : null,
-                        pfc_detailed: e.kind === "card" ? "LOAN_PAYMENTS_CREDIT_CARD_PAYMENT" : null,
-                        amount: 1,
-                      }}
-                      className="size-7"
-                    />
-                    <span className="flex min-w-0 flex-col">
-                      {/* A card payment names the card, with "Card payment" on the line beneath, so the name fits whole. */}
-                      <span className="truncate text-bone" title={e.name}>
-                        {e.kind === "card" ? e.name.replace(/\s+payment$/i, "") : e.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {e.kind === "card" ? "Card payment · " : "installment" in e ? "Installment · " : ""}
-                        {dayLabel(e.date)}
-                      </span>
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono tabular-nums">{usd(Math.abs(e.amount))}</span>
-                </li>
-              ))}
-              {upcoming.items.length > UPCOMING_SHOWN && (
-                <li className="border-t border-border pt-2 text-xs text-muted-foreground">and {upcoming.items.length - UPCOMING_SHOWN} more</li>
-              )}
-            </ul>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <Figure>{usd(Math.abs(next.amount))}</Figure>
+              <span className="truncate text-sm text-bone" title={next.name}>
+                {next.kind === "card" ? next.name.replace(/\s+payment$/i, "") : next.name}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {dayLabel(next.date)} · {whenText(daysAway(next.date, todayIso))}
+              </span>
+            </div>
+            <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] text-champagne ring-1 ring-champagne/35 ring-inset">{kind}</span>
+          </div>
+          {rest.length > 0 && (
+            <p className="border-t border-border pt-3 text-xs text-muted-foreground">
+              Then {rest.length} more, <span className="font-mono text-bone tabular-nums">{usd(upcoming.total - Math.abs(next.amount))}</span>, in the next {UPCOMING_DAYS} days
+            </p>
           )}
         </>
       )}
@@ -221,123 +205,6 @@ export function WhereItWentCard({
   );
 }
 
-export type BudgetWatch = { category: string; label: string; spent: number; budget: number; percentUsed: number; status: "ok" | "warning" | "over" };
-
-const BUDGET_PILLS = 30;
-const STATUS_COLOR = { ok: "var(--moss)", warning: "var(--champagne)", over: "var(--oxblood)" } as const;
-const STATUS_TEXT = { ok: "text-moss", warning: "text-champagne", over: "text-oxblood-text" } as const;
-
-/**
- * The month against the monthly budget, the Overview's lead: what's left,
- * a strip of pills lit for what's left (all red once it's over), the
- * categories closest to their own budgets, and the limit itself.
- */
-export function BudgetCard({
-  monthName,
-  total,
-  remaining,
-  percentUsed,
-  status,
-  daysLeft,
-  watch,
-  spent,
-  suggestion = null,
-}: {
-  monthName: string;
-  // Null when no monthly budget is set.
-  total: number | null;
-  remaining: number;
-  percentUsed: number;
-  status: "ok" | "warning" | "over";
-  daysLeft: number;
-  watch: BudgetWatch[];
-  spent: number;
-  // A budget that fits recent months, when the one set is far below them.
-  suggestion?: { average: number; suggested: number } | null;
-}) {
-  if (total === null) {
-    return (
-      <Panel title="Left to spend" href="/budgets" linkLabel="Budgets">
-        <span className="font-serif text-[2rem] leading-none font-medium text-bone">No budget yet</span>
-        <p className="text-sm text-muted-foreground">Set one on Budgets to see what&apos;s left to spend each day of {monthName}.</p>
-        <PillStrip levels={new Array(BUDGET_PILLS).fill(null)} color={STATUS_COLOR.ok} />
-        <Link href="/budgets" className="inline-flex items-center gap-1 self-start text-sm text-champagne hover:underline">
-          Set a monthly budget <ArrowRight className="size-3" aria-hidden />
-        </Link>
-      </Panel>
-    );
-  }
-  const left = Math.max(0, 1 - percentUsed);
-  const chip: TileChange =
-    status === "over"
-      ? { text: "Over", direction: null, tone: "bad", label: "Over budget" }
-      : { text: `${Math.round(left * 100)}% left`, direction: null, tone: "quiet", label: `${Math.round(left * 100)}% of the budget left` };
-  const [dollars, cents] = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(remaining)).split(".");
-  return (
-    <Panel title="Left to spend" href="/budgets" linkLabel="Budgets">
-      <div className="flex flex-col gap-1.5">
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className={cn("font-serif text-[2.5rem] leading-none font-medium tracking-[-0.01em]", remaining < 0 ? "text-oxblood-text" : "text-bone")}>
-            {remaining < 0 ? "−" : ""}
-            {dollars}
-            <span className="text-[0.55em] opacity-60">.{cents}</span>
-          </span>
-          <ChangeChip change={chip} />
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {remaining < 0
-            ? `over your ${whole(total)} budget for ${monthName}`
-            : daysLeft > 0
-              ? `about ${whole(remaining / daysLeft)} a day for the last ${daysLeft} ${daysLeft === 1 ? "day" : "days"}`
-              : `left of ${whole(total)} in ${monthName}`}
-        </p>
-      </div>
-      {status === "over" ? (
-        // Over budget, how far over: the budget as a share of the bar, the rest past it in red.
-        <div className="flex flex-col gap-1.5">
-          <div className="flex h-3 w-full overflow-hidden rounded-full bg-bone/[0.06]" aria-hidden>
-            <span className="h-full bg-champagne/70" style={{ width: `${(total / Math.max(spent, total)) * 100}%` }} />
-            <span className="h-full bg-oxblood" style={{ width: `${(1 - total / Math.max(spent, total)) * 100}%` }} />
-          </div>
-          <p className="flex justify-between text-[11px] text-muted-foreground">
-            <span>
-              <span className="font-mono text-bone tabular-nums">{usd(spent)}</span> spent
-            </span>
-            <span>{Math.round((spent / total) * 100)}% of the budget</span>
-          </p>
-        </div>
-      ) : (
-        // Lit for what's left, so the bright part is the figure.
-        <PillStrip levels={Array.from({ length: BUDGET_PILLS }, (_, i) => (i < Math.round(left * BUDGET_PILLS) ? 1 : null))} color={STATUS_COLOR[status]} />
-      )}
-      {watch.length > 0 && (
-        <ul className="flex flex-col gap-2.5" aria-label="Budgets to watch">
-          {watch.map((w) => (
-            <li key={w.category} className="flex flex-col gap-1">
-              <span className="flex items-baseline justify-between gap-3 text-sm">
-                <span className="truncate text-bone">{w.label}</span>
-                <span className="shrink-0 font-mono text-xs tabular-nums">
-                  <span className={STATUS_TEXT[w.status]}>{usd(w.spent)}</span>
-                  <span className="text-muted-foreground"> of {whole(w.budget)}</span>
-                </span>
-              </span>
-              <span className="h-1 w-full overflow-hidden rounded-full bg-bone/[0.06]" aria-hidden>
-                <span className="block h-full rounded-full" style={{ width: `${Math.min(1, w.percentUsed) * 100}%`, background: STATUS_COLOR[w.status] }} />
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {suggestion && <BudgetSuggestion average={suggestion.average} suggested={suggestion.suggested} current={total} />}
-      <div className="mt-auto flex items-center justify-between gap-3 rounded-lg bg-bone/[0.04] px-3 py-2 text-sm">
-        <span className="text-muted-foreground">Monthly budget</span>
-        <span className="font-mono text-bone tabular-nums">{usd(total)}</span>
-      </div>
-    </Panel>
-  );
-}
-
-// Money moving between your own accounts is greyed, as on Transactions: it isn't spending or income.
 const KIND: Record<TransactionKind, { label: string; className: string }> = {
   spending: { label: "Spending", className: "bg-bone/[0.07] text-bone/80 ring-bone/10" },
   refund: { label: "Refund", className: "bg-moss/12 text-moss ring-moss/25" },
@@ -446,146 +313,5 @@ export function AccountNotices({ items }: { items: { key: string; text: string; 
         </li>
       ))}
     </ul>
-  );
-}
-
-/**
- * What's safe to spend over the next two weeks (income isn't predicted: it's
- * commission, so it only counts once it lands): the cash in checking, less
- * the bills due before then and what the cards are owed, with the sum laid
- * out so the figure can be checked. Async, for <Suspense>, like Upcoming.
- */
-export async function SafeToSpendCard({ todayIso }: { todayIso: string }) {
-  const data = await loadForecast(createAdminClient());
-  return (
-    <Panel title="Safe to spend" href="/accounts" linkLabel="Accounts">
-      {data.error ? (
-        <QueryErrorState message="Couldn't work out what's safe to spend." />
-      ) : !data.hasCashAccount ? (
-        <p className="text-sm text-muted-foreground">Connect a checking account to see what&apos;s safe to spend.</p>
-      ) : (
-        (() => {
-          const f = data.forecast;
-          const until = f.nextIncome ? `until your ${dayLabel(f.nextIncome.date)} paycheck` : `over the next ${f.daysToPayday} days`;
-          const [dollars, cents] = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Math.abs(f.safeToSpend)).split(".");
-          const rows = [
-            { label: "In checking", amount: f.cash, sign: "" },
-            { label: `Bills before ${dayLabel(f.nextIncome?.date ?? shiftIso(todayIso, f.daysToPayday))}`, amount: -f.billsBeforePayday, sign: "−" },
-            { label: "Owed on cards", amount: -f.cardBalances, sign: "−" },
-          ];
-          return (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <span className={cn("font-serif text-[2.5rem] leading-none font-medium tracking-[-0.01em]", f.safeToSpend < 0 ? "text-oxblood-text" : "text-bone")}>
-                  {f.safeToSpend < 0 ? "−" : ""}
-                  {dollars}
-                  <span className="text-[0.55em] opacity-60">.{cents}</span>
-                </span>
-                <p className="text-sm text-muted-foreground">
-                  {f.safeToSpend < 0
-                    ? `short ${until}, once the bills and cards are paid`
-                    : `${until}${f.perDay !== null ? `, about ${whole(f.perDay)} a day` : ""}`}
-                </p>
-              </div>
-              <ul className="flex flex-col gap-1.5 rounded-lg bg-bone/[0.04] px-3 py-2.5 text-sm" aria-label="How it's worked out">
-                {rows.map((r) => (
-                  <li key={r.label} className="flex items-center justify-between gap-3">
-                    <span className="truncate text-muted-foreground">{r.label}</span>
-                    <span className={cn("shrink-0 font-mono tabular-nums", r.amount < 0 ? "text-muted-foreground" : "text-bone")}>
-                      {r.amount < 0 ? "−" : ""}
-                      {usd(Math.abs(r.amount))}
-                    </span>
-                  </li>
-                ))}
-                <li className="flex items-center justify-between gap-3 border-t border-border pt-1.5">
-                  <span className="text-bone">Safe to spend</span>
-                  <span className={cn("font-mono tabular-nums", f.safeToSpend < 0 ? "text-oxblood-text" : "text-moss")}>
-                    {f.safeToSpend < 0 ? "−" : ""}
-                    {usd(Math.abs(f.safeToSpend))}
-                  </span>
-                </li>
-              </ul>
-              {f.firstBelowThreshold && (
-                <p className="flex gap-2 text-xs text-champagne">
-                  <CircleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-                  At your usual spending, checking dips under {whole(data.lowBalanceThreshold)} around {dayLabel(f.firstBelowThreshold.date)}.
-                </p>
-              )}
-            </>
-          );
-        })()
-      )}
-    </Panel>
-  );
-}
-
-function shiftIso(iso: string, days: number): string {
-  return new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
-}
-
-const GOALS_SHOWN = 3;
-
-/**
- * The savings goals that most need you, each with its mark, how far along it
- * is and where its pace leaves it. Async, for <Suspense>.
- */
-export async function GoalsCard({ todayIso }: { todayIso: string }) {
-  const data = await loadGoals(createAdminClient());
-  // Unfinished goals first, those furthest behind their date first; then finished ones.
-  const rank = (g: (typeof data.rows)[number]) => (g.status === "complete" ? 2 : g.insight.verdict === "behind" || g.insight.verdict === "stalled" || g.insight.verdict === "overdue" ? 0 : 1);
-  const goals = [...data.rows].sort((a, b) => rank(a) - rank(b) || a.percent - b.percent).slice(0, GOALS_SHOWN);
-  const saved = data.rows.reduce((s, g) => s + g.saved, 0);
-  const target = data.rows.reduce((s, g) => s + g.target, 0);
-  return (
-    <Panel title="Goals" href="/goals" linkLabel={data.rows.length > GOALS_SHOWN ? `All ${data.rows.length} goals` : "Goals"}>
-      {data.error ? (
-        <QueryErrorState message="Couldn't load your goals." />
-      ) : goals.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No goals yet.{" "}
-          <Link href="/goals" className="text-champagne hover:underline">
-            Start one
-          </Link>{" "}
-          for an emergency fund, a trip or anything you&apos;re saving toward.
-        </p>
-      ) : (
-        <>
-          <p className="flex flex-wrap items-baseline gap-x-2">
-            <Figure>{whole(saved)}</Figure>
-            <span className="text-sm text-muted-foreground">saved of {whole(target)} across {data.rows.length === 1 ? "your goal" : `${data.rows.length} goals`}</span>
-          </p>
-          <ul className="grid gap-3 md:grid-cols-3">
-            {goals.map((g) => {
-              const color = accentFor(g.options, g.status === "complete");
-              const line = verdictLine(g.insight, todayIso);
-              return (
-                <li key={g.id}>
-                  <Link href="/goals" className="flex h-full flex-col gap-2.5 rounded-lg border border-border px-3.5 py-3 transition-colors hover:border-bone/20 hover:bg-bone/[0.02]">
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <GoalBadge name={g.name} options={g.options} complete={g.status === "complete"} className="size-8" />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate text-sm text-bone">{g.name}</span>
-                        <span className="truncate font-mono text-xs text-muted-foreground tabular-nums">
-                          {whole(g.saved)} of {whole(g.target)}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="h-1.5 w-full overflow-hidden rounded-full bg-bone/[0.06]" aria-hidden>
-                      <span className="block h-full rounded-full" style={{ width: `${Math.max(2, g.percent * 100)}%`, background: color }} />
-                    </span>
-                    <span className="flex items-center justify-between gap-2 text-xs">
-                      <span className="truncate text-muted-foreground">{line ?? (g.targetDate ? `By ${dayLabel(g.targetDate)}` : "No date set")}</span>
-                      <span className="shrink-0 font-mono tabular-nums" style={{ color }}>
-                        {Math.round(g.percent * 100)}%
-                      </span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
-    </Panel>
   );
 }

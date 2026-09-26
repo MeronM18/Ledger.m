@@ -3,7 +3,7 @@ import { test, expect } from "./test";
 // Every page renders its real content, with no error state, no thrown or
 // logged errors (checked by the fixture) and nothing wider than the screen.
 const PAGES = [
-  { path: "/", heading: /Good (morning|afternoon|evening)/, shows: "Left to spend" },
+  { path: "/", heading: /Good (morning|afternoon|evening)/, shows: "Net worth" },
   { path: "/transactions", heading: "Transactions", shows: "Kroger" },
   { path: "/recurring", heading: "Recurring", shows: "Netflix" },
   { path: "/reports/spending", heading: "Reports", shows: "Spending by category" },
