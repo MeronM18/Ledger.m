@@ -228,6 +228,29 @@ export async function answerDeposit(admin: AdminClient, id: string, input: Depos
   return { ok: true, message: messageFor(parts) };
 }
 
+/**
+ * A pending deposit that posts arrives as a new transaction: its answer
+ * moves with it (what the answer did, to charges and Cash, stays as it is).
+ * `settled` pairs the internal ids.
+ */
+export async function carryDepositReviews(admin: AdminClient, settled: { pending: string; posted: string }[]) {
+  const { reviews, error } = await readReviews(admin);
+  if (error) {
+    console.error("Failed to read deposit reviews to carry over", error);
+    return;
+  }
+  let moved = false;
+  for (const { pending, posted } of settled) {
+    if (!reviews[pending] || reviews[posted]) continue;
+    reviews[posted] = reviews[pending];
+    delete reviews[pending];
+    moved = true;
+  }
+  if (!moved) return;
+  const writeError = await writeReviews(admin, reviews);
+  if (writeError) console.error("Failed to carry deposit reviews over to posted deposits", writeError);
+}
+
 /** Takes an answer back: everything it changed goes back to how it was, and the deposit is asked about again. */
 export async function undoDepositAnswer(admin: AdminClient, id: string): Promise<Result> {
   const { reviews, error: readError } = await readReviews(admin);

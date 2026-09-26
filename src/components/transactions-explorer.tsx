@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeftRight, CalendarDays, ChevronRight, CreditCard, Download, PiggyBank, Search, StickyNote } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeftRight, CalendarDays, ChevronRight, CreditCard, Download, HandCoins, PiggyBank, Search, StickyNote } from "lucide-react";
 import { InstitutionAvatar } from "@/components/institution-avatar";
 import { TransactionAvatar } from "@/components/transaction-avatar";
 import { TransactionFiltersMenu } from "@/components/transaction-filters-menu";
@@ -218,7 +219,7 @@ function Badges({ t }: { t: TransactionRow }) {
         </Badge>
       ) : null}
       {t.depositReview && (
-        <Badge variant="secondary" className="max-w-64 truncate text-[10px] text-champagne" title={`You said: ${t.depositReview}. Change it under Reviewed on the Overview.`}>
+        <Badge variant="secondary" className="max-w-64 truncate text-[10px] text-champagne" title={`You said: ${t.depositReview}. Change it on Transactions → Deposits.`}>
           {t.depositReview}
         </Badge>
       )}
@@ -754,6 +755,7 @@ export function TransactionsExplorer({
   initialMonth = "all",
   initialCategory = "all",
   initialKind = "all",
+  depositsToReview = 0,
 }: {
   transactions: TransactionRow[];
   accounts: AccountOption[];
@@ -771,6 +773,8 @@ export function TransactionsExplorer({
   initialMonth?: string;
   initialCategory?: string;
   initialKind?: KindFilter;
+  // Deposits waiting to be told what they were, for the Deposits button.
+  depositsToReview?: number;
 }) {
   const [search, setSearch] = useState("");
   const [accountFilter, setAccountFilter] = useState<string>(initialAccount);
@@ -912,6 +916,15 @@ export function TransactionsExplorer({
               account={{ options: accountOptions, value: accountFilter, onChange: setAccountFilter }}
               category={{ options: categories, value: categoryFilter, onChange: setCategoryFilter }}
             />
+            <Button asChild size="sm" variant="outline">
+              <Link href="/transactions/deposits" aria-label={depositsToReview ? `Deposits, ${depositsToReview} to review` : "Deposits"}>
+                <HandCoins className="size-3.5" aria-hidden />
+                Deposits
+                {depositsToReview > 0 && (
+                  <span className="rounded-full bg-champagne/15 px-1.5 font-mono text-[10px] text-champagne tabular-nums">{depositsToReview}</span>
+                )}
+              </Link>
+            </Button>
             <MerchantRulesButton rules={rules} />
             <AddManualTransactionButton />
           </div>

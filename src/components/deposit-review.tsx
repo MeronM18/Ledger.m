@@ -1,9 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowDownLeft,
+  ArrowRight,
   ArrowLeftRight,
   Banknote,
   Check,
@@ -20,7 +22,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Segmented } from "@/components/segmented";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -89,21 +90,32 @@ type Editing = { deposit: DepositToReview; parts: Part[]; replace: boolean };
  * Deposits that aren't a paycheck or interest, each asking what it was:
  * income, someone paying you back, or your own money, or a mix of them
  * (a $150 Zelle that's $100 for cash you handed over and $50 income).
- * Answered ones stay under Reviewed, to change or undo.
+ *
+ * On the Overview ("overview") only while something is waiting, with a link
+ * to the Deposits page; there ("page") the ones waiting and, below them,
+ * every one answered, to change or undo.
  */
-export function DepositReviewCard({ deposits, reviewed, charges }: { deposits: DepositToReview[]; reviewed: ReviewedDeposit[]; charges: ChargeOption[] }) {
+export function DepositReviewCard({
+  deposits,
+  reviewed,
+  charges,
+  variant = "overview",
+}: {
+  deposits: DepositToReview[];
+  reviewed: ReviewedDeposit[];
+  charges: ChargeOption[];
+  variant?: "overview" | "page";
+}) {
   const router = useRouter();
   // Answered here: hidden at once, before the page refreshes.
   const [answered, setAnswered] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const [tab, setTab] = useState<"open" | "reviewed" | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
 
   const open = deposits.filter((d) => !answered.has(d.id));
-  if (open.length === 0 && reviewed.length === 0) return null;
-  // With nothing waiting, one quiet line that opens the reviewed list.
-  const view = tab ?? (open.length > 0 ? "open" : null);
+  const onPage = variant === "page";
+  if (!onPage && open.length === 0) return null;
 
   async function answer(deposit: DepositToReview, parts: Body[], replace = false) {
     setBusy(deposit.id);
@@ -158,105 +170,123 @@ export function DepositReviewCard({ deposits, reviewed, charges }: { deposits: D
     setEditing({ deposit: r, parts, replace: true });
   }
 
-  const shown = showAll ? open : open.slice(0, SHOWN);
+  const shown = showAll || onPage ? open : open.slice(0, SHOWN);
 
-  return (
-    <section id="deposits-to-review" aria-label="Deposits to review" className={cn("scroll-mt-6 rounded-xl border bg-card", view === "open" ? "border-champagne/25" : "border-border")}>
-      <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
-        <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-full", open.length ? "bg-champagne/12 text-champagne" : "bg-moss/12 text-moss")}>
-          {open.length ? <HandCoins className="size-4" aria-hidden /> : <CircleCheck className="size-4" aria-hidden />}
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h2 className="flex items-center gap-2 text-sm font-medium text-bone">
-            {open.length ? "Deposits to review" : "Every deposit is reviewed"}
-            {open.length > 0 && <span className="rounded-full bg-champagne/15 px-1.5 py-px font-mono text-[11px] text-champagne tabular-nums">{open.length}</span>}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {open.length ? "Money that came in and isn't a paycheck or interest. Say what it was so income and spending stay right." : "Zelle transfers, checks and other deposits you've told Ledger about."}
-          </p>
-        </div>
-        {open.length > 0 && reviewed.length > 0 ? (
-          <Segmented
-            label="Deposits"
-            value={view ?? "open"}
-            onChange={setTab}
-            options={[
-              { value: "open", label: `To review · ${open.length}` },
-              { value: "reviewed", label: `Reviewed · ${reviewed.length}` },
-            ]}
+  const editor = (
+    <Dialog open={editing !== null} onOpenChange={(v) => !v && setEditing(null)}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+        {editing && (
+          <DepositEditor
+            key={editing.deposit.id}
+            editing={editing}
+            charges={charges}
+            busy={busy === editing.deposit.id}
+            onSave={(parts) => answer(editing.deposit, parts, editing.replace)}
           />
-        ) : (
-          open.length === 0 && (
-            <button type="button" aria-expanded={view === "reviewed"} onClick={() => setTab(view === "reviewed" ? null : "reviewed")} className="text-xs text-muted-foreground transition-colors hover:text-champagne">
-              {view === "reviewed" ? "Hide" : `Reviewed (${reviewed.length})`}
-            </button>
-          )
         )}
-      </div>
+      </DialogContent>
+    </Dialog>
+  );
 
-      {view === "open" && (
-        <>
-          <ul aria-label="To review" className="border-t border-border">
-            {shown.map((d) => (
-              <li key={d.id} className="flex flex-col gap-3 border-b border-border px-5 py-3 last:border-b-0 lg:flex-row lg:items-center">
-                <DepositLine deposit={d} />
-                <div className="flex flex-wrap gap-1.5 lg:shrink-0" role="group" aria-label={`What was ${usd(d.amount)} from ${d.name}?`}>
-                  <AnswerButton Icon={TrendingUp} label="Income" disabled={busy === d.id} onClick={() => answer(d, [{ answer: "income", amount: d.amount }])} />
-                  <AnswerButton Icon={HandCoins} label="Paid me back" disabled={busy === d.id} onClick={() => startEditing(d, ["charge"])} />
-                  <AnswerButton Icon={ArrowLeftRight} label="My own money" disabled={busy === d.id} onClick={() => startEditing(d, ["cash"])} />
-                  <AnswerButton Icon={Split} label="Split" disabled={busy === d.id} onClick={() => startEditing(d, ["cash", "income"])} />
-                </div>
-              </li>
-            ))}
-          </ul>
-          {open.length > SHOWN && (
-            <button type="button" onClick={() => setShowAll((v) => !v)} className="w-full border-t border-border px-5 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-champagne">
-              {showAll ? "Show fewer" : `Show all ${open.length}`}
-            </button>
+  const toReview =
+    open.length > 0 ? (
+      <section id="deposits-to-review" aria-label="Deposits to review" className="scroll-mt-6 rounded-xl border border-champagne/25 bg-card">
+        <div className="flex flex-wrap items-center gap-3 px-5 py-3.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-champagne/12 text-champagne">
+            <HandCoins className="size-4" aria-hidden />
+          </span>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <h2 className="flex items-center gap-2 text-sm font-medium text-bone">
+              Deposits to review
+              <span className="rounded-full bg-champagne/15 px-1.5 py-px font-mono text-[11px] text-champagne tabular-nums">{open.length}</span>
+            </h2>
+            <p className="text-xs text-muted-foreground">Money that came in and isn&apos;t a paycheck or interest. Say what it was so income and spending stay right.</p>
+          </div>
+          {!onPage && (
+            <Link href="/transactions/deposits" className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-champagne">
+              All deposits <ArrowRight className="size-3" aria-hidden />
+            </Link>
           )}
-        </>
-      )}
-
-      {view === "reviewed" && (
-        <ul aria-label="Reviewed" className="max-h-[28rem] overflow-y-auto border-t border-border">
-          {reviewed.map((r) => (
-            <li key={r.id} className="flex flex-col gap-2.5 border-b border-border px-5 py-3 last:border-b-0 lg:flex-row lg:items-center">
-              <DepositLine deposit={r} />
-              <div className="flex flex-wrap items-center gap-1.5 lg:max-w-[22rem] lg:justify-end">
-                {r.parts.map((p, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 rounded-full bg-bone/6 px-2 py-0.5 text-[11px] text-bone/85 ring-1 ring-bone/10 ring-inset">
-                    {p.label}
-                    {r.parts.length > 1 && <span className="font-mono text-muted-foreground tabular-nums">{usd(p.amount)}</span>}
-                  </span>
-                ))}
-              </div>
-              <div className="flex gap-1 lg:shrink-0" role="group" aria-label={`${usd(r.amount)} from ${r.name}`}>
-                <Button type="button" variant="ghost" size="sm" disabled={busy === r.id} onClick={() => change(r)}>
-                  Change
-                </Button>
-                <Button type="button" variant="ghost" size="sm" disabled={busy === r.id} onClick={() => undo(r)} className="text-muted-foreground">
-                  Undo
-                </Button>
+        </div>
+        <ul aria-label="To review" className="border-t border-border">
+          {shown.map((d) => (
+            <li key={d.id} className="flex flex-col gap-3 border-b border-border px-5 py-3 last:border-b-0 lg:flex-row lg:items-center">
+              <DepositLine deposit={d} />
+              <div className="flex flex-wrap gap-1.5 lg:shrink-0" role="group" aria-label={`What was ${usd(d.amount)} from ${d.name}?`}>
+                <AnswerButton Icon={TrendingUp} label="Income" disabled={busy === d.id} onClick={() => answer(d, [{ answer: "income", amount: d.amount }])} />
+                <AnswerButton Icon={HandCoins} label="Paid me back" disabled={busy === d.id} onClick={() => startEditing(d, ["charge"])} />
+                <AnswerButton Icon={ArrowLeftRight} label="My own money" disabled={busy === d.id} onClick={() => startEditing(d, ["cash"])} />
+                <AnswerButton Icon={Split} label="Split" disabled={busy === d.id} onClick={() => startEditing(d, ["cash", "income"])} />
               </div>
             </li>
           ))}
         </ul>
-      )}
+        {!onPage && open.length > SHOWN && (
+          <button type="button" onClick={() => setShowAll((v) => !v)} className="w-full border-t border-border px-5 py-2.5 text-left text-xs text-muted-foreground transition-colors hover:text-champagne">
+            {showAll ? "Show fewer" : `Show all ${open.length}`}
+          </button>
+        )}
+      </section>
+    ) : (
+      <div role="status" className="flex items-center gap-3 rounded-xl border border-border bg-card px-5 py-3.5">
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-moss/12 text-moss">
+          <CircleCheck className="size-4" aria-hidden />
+        </span>
+        <p className="text-sm text-bone">
+          Every deposit is reviewed. <span className="text-muted-foreground">New ones that aren&apos;t pay or interest show up here and on the Overview.</span>
+        </p>
+      </div>
+    );
 
-      <Dialog open={editing !== null} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
-          {editing && (
-            <DepositEditor
-              key={editing.deposit.id}
-              editing={editing}
-              charges={charges}
-              busy={busy === editing.deposit.id}
-              onSave={(parts) => answer(editing.deposit, parts, editing.replace)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-    </section>
+  if (!onPage) {
+    return (
+      <>
+        {toReview}
+        {editor}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {toReview}
+      <section aria-label="Reviewed" className="rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-0.5 px-5 py-3.5">
+          <h2 className="text-sm font-medium text-bone">
+            Reviewed <span className="font-mono text-xs text-muted-foreground tabular-nums">{reviewed.length}</span>
+          </h2>
+          <p className="text-xs text-muted-foreground">What you said each deposit was. Change or undo any of them; undoing puts it back up top.</p>
+        </div>
+        {reviewed.length === 0 ? (
+          <p className="border-t border-border px-5 py-6 text-center text-sm text-muted-foreground">Nothing reviewed yet.</p>
+        ) : (
+          <ul aria-label="Reviewed deposits" className="border-t border-border">
+            {reviewed.map((r) => (
+              <li key={r.id} className="flex flex-col gap-2.5 border-b border-border px-5 py-3 last:border-b-0 lg:flex-row lg:items-center">
+                <DepositLine deposit={r} />
+                <div className="flex flex-wrap items-center gap-1.5 lg:max-w-[22rem] lg:justify-end">
+                  {r.parts.map((p, i) => (
+                    <span key={i} className="inline-flex items-center gap-1 rounded-full bg-bone/6 px-2 py-0.5 text-[11px] text-bone/85 ring-1 ring-bone/10 ring-inset">
+                      {p.label}
+                      {r.parts.length > 1 && <span className="font-mono text-muted-foreground tabular-nums">{usd(p.amount)}</span>}
+                    </span>
+                  ))}
+                </div>
+                <div className="flex gap-1 lg:shrink-0" role="group" aria-label={`${usd(r.amount)} from ${r.name}`}>
+                  <Button type="button" variant="ghost" size="sm" disabled={busy === r.id} onClick={() => change(r)}>
+                    Change
+                  </Button>
+                  <Button type="button" variant="ghost" size="sm" disabled={busy === r.id} onClick={() => undo(r)} className="text-muted-foreground">
+                    Undo
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {editor}
+    </>
   );
 }
 
@@ -267,7 +297,10 @@ function DepositLine({ deposit: d }: { deposit: DepositToReview }) {
         <ArrowDownLeft className="size-4" aria-hidden />
       </span>
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm text-bone">{d.name}</span>
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-sm text-bone">{d.name}</span>
+          {d.pending && <span className="shrink-0 text-[11px] text-champagne">Pending</span>}
+        </span>
         <span className="truncate text-xs text-muted-foreground" title={d.detail ?? undefined}>
           {[d.detail, accountLabel(d.account), dayLabel(d.date)].filter(Boolean).join(" · ")}
         </span>

@@ -6,6 +6,7 @@ import { sendNotification } from "@/lib/notify";
 import { plaidClient } from "@/lib/plaid";
 import { selectTransactionsToNotify, formatTransactionNotification, isLargeCharge } from "@/lib/plaid-notify-format";
 import { runAlertChecks } from "@/lib/alerts";
+import { carryDepositReviews } from "@/lib/deposit-review-store";
 import { loadAlertSettings, loadAlertThresholds } from "@/lib/ui-preferences";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -217,6 +218,15 @@ async function carryEditsToPosted(admin: AdminClient, settled: { posted: string;
   const internalIdOf = new Map(rows.map((r) => [r.plaid_transaction_id as string, r.id as string]));
   const pendingIds = settled.flatMap((s) => internalIdOf.get(s.pending) ?? []);
   if (pendingIds.length === 0) return;
+  // A pending deposit already said to be income, paid back or your own keeps its answer.
+  await carryDepositReviews(
+    admin,
+    settled.flatMap((s) => {
+      const pending = internalIdOf.get(s.pending);
+      const posted = internalIdOf.get(s.posted);
+      return pending && posted ? [{ pending, posted }] : [];
+    })
+  );
   const { data: overrides, error: overridesError } = await admin.from("transaction_overrides").select("*").in("transaction_id", pendingIds);
   if (overridesError) {
     console.error("Failed to read edits on pending charges", overridesError);

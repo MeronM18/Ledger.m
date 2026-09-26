@@ -129,6 +129,7 @@ export type DepositToReview = {
   // The bank's own description, which usually names who sent it.
   detail: string | null;
   account: { id: string; name: string; mask: string | null } | null;
+  pending: boolean;
 };
 
 const DAY_MS = 86_400_000;
@@ -140,8 +141,8 @@ export function isPayOrInterest(t: SpendingTransaction): boolean {
 }
 
 /**
- * Deposits waiting for an answer, newest first: settled money into a bank
- * account (not a card) in the last REVIEW_WINDOW_DAYS that isn't a
+ * Deposits waiting for an answer, newest first: money into a bank
+ * account, pending or posted, (not a card) in the last REVIEW_WINDOW_DAYS that isn't a
  * paycheck, interest or a refund from a store, hasn't been given a
  * category by hand or by a rule, hasn't been answered, and isn't the other
  * side of a transfer out of one of your own accounts.
@@ -163,7 +164,8 @@ export function depositsToReview(
 
   const out: DepositToReview[] = [];
   for (const t of transactions) {
-    if (t.amount >= 0 || t.pending || t.isManual || !t.account || cardIds.has(t.account.id)) continue;
+    // Pending ones too: an answer moves to the posted deposit when it settles (plaid-sync).
+    if (t.amount >= 0 || t.isManual || !t.account || cardIds.has(t.account.id)) continue;
     const age = today - dayOf(t.date);
     if (age < 0 || age > REVIEW_WINDOW_DAYS) continue;
     if (reviews[t.id] || t.category_override) continue;
@@ -189,6 +191,7 @@ function asDeposit(t: ReviewableTx): DepositToReview {
     name,
     detail: raw && raw.toLowerCase() !== name.toLowerCase() ? raw : null,
     account: t.account,
+    pending: t.pending,
   };
 }
 
@@ -310,6 +313,6 @@ export function depositReviewAlerts(deposits: DepositToReview[], todayIso: strin
       kind: "deposit-review" as const,
       title: `${formatCurrency(d.amount, currency)} came in: what was it?`,
       body: `${d.name}${d.account ? ` to ${d.account.name}` : ""}. Say if it's income, someone paying you back, or your own money, so it counts right.`,
-      href: "/#deposits-to-review",
+      href: "/transactions/deposits",
     }));
 }

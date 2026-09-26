@@ -1,9 +1,12 @@
 import { TransactionsExplorer } from "@/components/transactions-explorer";
 import { QueryErrorState } from "@/components/query-error";
+import { depositsToReview } from "@/lib/deposit-review";
 import { loadInstitutions } from "@/lib/institutions";
 import { loadLedger } from "@/lib/spending-data";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calendarNow } from "@/lib/time";
 import type { KindFilter } from "@/lib/transaction-kind";
+import { loadDepositReviews } from "@/lib/ui-preferences";
 
 export const metadata = { title: "Transactions" };
 
@@ -16,10 +19,11 @@ export default async function TransactionsPage({
   searchParams: Promise<{ account?: string | string[]; month?: string | string[]; category?: string | string[]; kind?: string | string[] }>;
 }) {
   const admin = createAdminClient();
-  const [ledger, params, { data: goalRows, error: goalError }] = await Promise.all([
+  const [ledger, params, { data: goalRows, error: goalError }, depositReviews] = await Promise.all([
     loadLedger(admin),
     searchParams,
     admin.from("savings_goals").select("name, account_refs").order("created_at"),
+    loadDepositReviews(admin),
   ]);
 
   if (ledger.error) {
@@ -48,6 +52,7 @@ export default async function TransactionsPage({
   const account = one(params.account);
   const month = one(params.month);
   const kind = one(params.kind) as KindFilter | undefined;
+  const waiting = depositReviews.error ? 0 : depositsToReview(ledger.transactions, new Set(ledger.cards.map((c) => c.id)), depositReviews.reviews, calendarNow().isoDate).length;
 
   return (
     <TransactionsExplorer
@@ -62,6 +67,7 @@ export default async function TransactionsPage({
       initialMonth={month && /^\d{4}-\d{2}$/.test(month) ? month : "all"}
       initialCategory={one(params.category) ?? "all"}
       initialKind={kind && KINDS.includes(kind) ? kind : "all"}
+      depositsToReview={waiting}
     />
   );
 }

@@ -10,7 +10,7 @@ import { applyCardOrder } from "@/lib/card-order";
 import { importStatus } from "@/lib/import-reminders";
 import { isDisconnected } from "@/lib/item-status";
 import { loadManualAccounts } from "@/lib/manual-accounts";
-import { chargeOptions, depositsToReview, reviewedDeposits } from "@/lib/deposit-review";
+import { chargeOptions, depositsToReview } from "@/lib/deposit-review";
 import { computeNetWorth, manualAccountsAsAccounts } from "@/lib/net-worth";
 import { netWorthTrend } from "@/lib/net-worth-trend";
 import {
@@ -155,9 +155,8 @@ export default async function OverviewPage() {
   // Deposits that aren't pay or interest, waiting to be told what they were,
   // and the charges one of them could be paying back.
   const toReview = ledger.error || depositReviews.error ? [] : depositsToReview(ledger.transactions, cardIds, depositReviews.reviews, now.isoDate);
-  const reviewed = ledger.error || depositReviews.error ? [] : reviewedDeposits(ledger.transactions, depositReviews.reviews);
-  const earliest = [...toReview, ...reviewed].reduce<string | null>((min, d) => (min === null || d.date < min ? d.date : min), null);
-  const charges = earliest ? chargeOptions(ledger.transactions, earliest, ledger.connectedCardIssuers).slice(0, CHARGES_SENT) : [];
+  // Only while something's waiting; answered ones are on Transactions → Deposits.
+  const charges = toReview.length ? chargeOptions(ledger.transactions, toReview[toReview.length - 1].date, ledger.connectedCardIssuers).slice(0, CHARGES_SENT) : [];
 
   // The only things the Overview asks you to do: sign in to a bank again, or import a statement.
   const notices = [
@@ -302,7 +301,7 @@ export default async function OverviewPage() {
     <div className="flex flex-col gap-6">
       <GreetingHeader name={displayName} />
       <AccountNotices items={notices} />
-      <DepositReviewCard deposits={toReview} reviewed={reviewed} charges={charges} />
+      <DepositReviewCard deposits={toReview} reviewed={[]} charges={charges} />
       {/*
         Two columns on a wide screen, each a stack that ends level with the
         other, so rearranging never leaves a hole. On anything narrower, one

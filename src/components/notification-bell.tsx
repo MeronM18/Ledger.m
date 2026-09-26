@@ -40,7 +40,7 @@ const KIND: Record<string, { Icon: LucideIcon; className: string }> = {
 };
 // Where an alert of each kind takes you, for the ones with something to do.
 const HREF: Record<string, string> = {
-  "deposit-review": "/#deposits-to-review",
+  "deposit-review": "/transactions/deposits",
 };
 const FALLBACK = { Icon: Bell, className: "text-muted-foreground" };
 

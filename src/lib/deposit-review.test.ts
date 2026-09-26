@@ -44,15 +44,19 @@ describe("depositsToReview", () => {
     expect(d).toMatchObject({ id: zelle.id, amount: 50, name: "Zelle Transfer", detail: "Zelle payment from JORDAN LEE", account: checking });
   });
 
-  it("leaves out pay, interest, charges, refunds and pending deposits", () => {
+  it("leaves out pay, interest, charges and refunds", () => {
     const list = [
       tx({ name: "UNITED MORTGAGE PAYROLL 9256", pfc_primary: "INCOME", pfc_detailed: "INCOME_WAGES" }),
       tx({ name: "INTEREST PAYMENT", pfc_primary: "INCOME", pfc_detailed: "INCOME_INTEREST_EARNED", account: savings }),
       tx({ amount: 20, name: "KROGER", pfc_primary: "FOOD_AND_DRINK" }),
       tx({ name: "AMAZON REFUND", merchant_name: "Amazon", pfc_primary: "GENERAL_MERCHANDISE" }),
-      tx({ pending: true }),
     ];
     expect(depositsToReview(list, cardIds, {}, TODAY)).toEqual([]);
+  });
+
+  it("asks about a pending deposit too, marked pending", () => {
+    const [d] = depositsToReview([tx({ pending: true })], cardIds, {}, TODAY);
+    expect(d).toMatchObject({ pending: true, amount: 50 });
   });
 
   it("leaves out money onto a card and entries made by hand", () => {
@@ -112,7 +116,7 @@ describe("depositReviewAlerts", () => {
     const deposits = depositsToReview([tx({ date: "2026-09-24" }), tx({ date: "2026-09-10" })], cardIds, {}, TODAY);
     const alerts = depositReviewAlerts(deposits, TODAY, "USD");
     expect(alerts).toHaveLength(1);
-    expect(alerts[0]).toMatchObject({ kind: "deposit-review", title: "$50.00 came in: what was it?", href: "/#deposits-to-review" });
+    expect(alerts[0]).toMatchObject({ kind: "deposit-review", title: "$50.00 came in: what was it?", href: "/transactions/deposits" });
   });
 });
 

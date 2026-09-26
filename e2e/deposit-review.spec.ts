@@ -25,6 +25,14 @@ test("a deposit that isn't pay or interest is asked about on the Overview, and i
   // Answered for good: it stays gone after a reload.
   await page.reload();
   await expect(page.getByRole("region", { name: "Deposits to review" }).getByRole("listitem")).toHaveCount(1);
+
+  // With every deposit answered, the card leaves the Overview.
+  await page.getByRole("region", { name: "Deposits to review" }).getByRole("button", { name: "Income" }).click();
+  await expect(page.getByText("$45.00 counted as income")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Deposits to review" })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Deposits to review" })).toHaveCount(0);
 });
 
 test("a Zelle paying back a charge comes off that charge, and can be undone", async ({ page }) => {
@@ -110,9 +118,11 @@ test("a deposit split between cash handed over and income, then changed and undo
   expect(writes.some((w) => w.table === "transaction_overrides" && body(w).category === "INCOME")).toBe(true);
   expect(writes.some((w) => w.table === "manual_assets" && w.method === "PATCH")).toBe(true);
 
-  // It's under Reviewed, with both parts.
-  await card.getByRole("radio", { name: /^Reviewed/ }).click();
-  const reviewed = card.getByRole("list", { name: "Reviewed" });
+  // It's on Transactions → Deposits, under Reviewed, with both parts.
+  await page.goto("/transactions");
+  await page.getByRole("link", { name: /^Deposits, 1 to review/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Deposits" })).toBeVisible();
+  const reviewed = page.getByRole("list", { name: "Reviewed deposits" });
   const row = reviewed.getByRole("listitem").filter({ hasText: "Zelle Transfer" });
   await expect(row).toContainText("From my cash");
   await expect(row).toContainText("$30.00");
@@ -131,6 +141,7 @@ test("a deposit split between cash handed over and income, then changed and undo
   // And undo it: it goes back to be reviewed.
   await row.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByText("Zelle Transfer is back in Deposits to review")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Deposits to review" }).getByRole("group", { name: /\$45\.00/ })).toBeVisible();
   writes = await mockWrites(page);
   expect(writes.filter((w) => w.table === "manual_assets" && w.method === "PATCH").length).toBeGreaterThanOrEqual(2);
 });
